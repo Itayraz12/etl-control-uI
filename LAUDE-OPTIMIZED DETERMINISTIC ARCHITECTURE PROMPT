@@ -1,0 +1,168 @@
+You are a Principal Frontend Architect writing an internal technical design document (TDD) for an enterprise ETL configuration UI.
+
+Do NOT provide generic advice.
+Do NOT provide high-level summaries.
+Do NOT skip implementation details.
+Do NOT explain obvious React basics.
+
+Your output must be structured, deterministic, and engineering-ready.
+
+The goal is to design a production-grade, scalable, modular ETL Wizard UI.
+
+========================================
+REQUIRED OUTPUT STRUCTURE
+========================================
+
+Use the exact section headings below:
+
+1. System Overview
+2. Architectural Decisions (with tradeoffs)
+3. Frontend Module Structure
+4. Folder Structure
+5. Global State Design
+6. Data Models (TypeScript Interfaces)
+7. Step-by-Step Screen Architecture
+8. Mapping Engine Architecture (Detailed)
+9. Validation Architecture
+10. Performance Strategy
+11. API Contract Design
+12. Persistence & Draft Strategy
+13. Error Handling & Resilience
+14. Testing Strategy
+15. Extensibility & Plugin Architecture
+16. Known Risks & Mitigations
+
+For every architectural decision:
+- Explain why it was chosen
+- List at least one alternative
+- Explain why the alternative was rejected
+
+========================================
+SYSTEM DESCRIPTION
+========================================
+
+The system is a wizard-based ETL configuration UI built with:
+
+- React 18
+- TypeScript
+- Enterprise internal tool
+- Backend provides schema registry + entity definitions
+
+The wizard includes:
+
+STEP 1 – File Upload
+- Upload JSON or CSV via drag & drop
+- Detect file type
+- Extract schema only (do NOT render raw JSON)
+- Preserve JSON hierarchy
+- Infer CSV schema
+- Must handle very large files efficiently
+- Use streaming parsing and Web Workers if needed
+
+STEP 2 – Metadata Configuration
+- productSource
+- productType
+- team
+- environment
+- extensible key-value metadata
+- Common format config:
+  - File Encoding
+  - Date Default Format
+- If JSON:
+  - Root Path selector
+- If CSV:
+  - Column Delimiter (required)
+  - Row Delimiter (required)
+  - Presets + custom input
+- Must validate conditionally based on fileType
+
+STEP 3 – Field Mapping (MOST COMPLEX PART)
+
+This is a visual canvas-based mapping system.
+
+UI layout:
+- Left: Source hierarchical tree (virtualized)
+- Right: Target entity tree
+- Center: Interactive canvas with nodes and edges
+
+Requirements:
+
+- Source and Target fields become draggable nodes
+- Mapping is represented as directional edge (source → target)
+- Each edge has independent rule properties
+- Right-click context menu with cascading submenus
+- Support array handling rules
+- Support null handling rules
+- Support validation constraints
+- Support notes per mapping
+- Auto-map suggestions
+- Required field validation
+- Type mismatch detection
+- Zoom + pan
+- Edge redraw only on node movement
+- Clean memory handling
+
+STEP 4 – Transformations
+- Ordered per field
+- Type aware
+- Support custom expressions
+- Must integrate with mapping output model
+
+STEP 5 – Filters
+- Rule builder with nested AND/OR groups
+- Type aware operators
+- Tree-based filter model
+
+STEP 6 – Summary
+- Display full ETL JSON definition
+- Draft vs Published
+- Final validation gate
+
+========================================
+STRICT REQUIREMENTS
+========================================
+
+- Provide exact TypeScript interfaces for:
+  - ETLDefinition
+  - MappingRule
+  - MappingRuleProperties
+  - TransformationRule
+  - FilterGroup
+  - FormatConfiguration
+
+- Provide a clear state management choice:
+  - Pick ONE (Redux Toolkit / Zustand / XState / Other)
+  - Justify deeply
+  - Define state slices
+
+- Provide detailed Mapping Engine architecture:
+  - Node model
+  - Edge model
+  - Rule property storage
+  - Canvas rendering strategy
+  - Virtualization strategy
+  - Cleanup strategy
+
+- Provide performance plan for:
+  - Large JSON (10MB+)
+  - 5,000+ source fields
+  - 1,000+ mappings
+
+- Provide API contract examples (request/response JSON)
+
+- Provide validation architecture using a specific library (Zod/Yup/custom)
+  - Include example schema
+
+- Provide testing strategy:
+  - Unit
+  - Integration
+  - Canvas interaction testing
+  - Contract testing
+
+- Do not skip implementation detail.
+- Avoid generic sentences like “use best practices”.
+- Assume senior engineers are reading this document.
+
+========================================
+END OF PROMPT
+========================================
