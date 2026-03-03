@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ETL Wizard – Prototype</title>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a; --border: #2e3450;
+    --accent: #4f6ef7; --accent2: #7c3aed; --success: #22c55e;
+    --warning: #f59e0b; --danger: #ef4444; --text: #e2e8f0; --muted: #64748b; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  /* NAV */
+  .topnav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 32px; display: flex; align-items: center; height: 56px; gap: 16px; }
+  .logo { font-weight: 700; font-size: 18px; color: var(--accent); letter-spacing: 1px; }
+  .logo span { color: var(--text); }
+  .nav-badge { background: var(--accent2); color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+  .nav-spacer { flex: 1; }
+  .nav-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .nav-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* STEP BAR */
+  .wizard-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 32px; }
+  .step-bar { display: flex; align-items: center; overflow-x: auto; gap: 0; }
+  .step-item { display: flex; align-items: center; gap: 7px; cursor: pointer; padding: 5px 10px; border-radius: 8px; transition: background .15s; white-space: nowrap; }
+  .step-item:hover { background: var(--surface2); }
+  .step-item.active { background: rgba(79,110,247,.13); }
+  .step-circle { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; border: 2px solid var(--border); background: var(--surface2); color: var(--muted); flex-shrink: 0; }
+  .step-item.done .step-circle { background: var(--success); border-color: var(--success); color: #fff; }
+  .step-item.active .step-circle { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .step-label { font-size: 12px; color: var(--muted); }
+  .step-item.active .step-label { color: var(--text); font-weight: 600; }
+  .step-item.done .step-label { color: var(--success); }
+  .step-sep { width: 20px; height: 2px; background: var(--border); flex-shrink: 0; }
+  .step-sep.done { background: var(--success); }
+
+  /* LAYOUT */
+  .wizard-body { display: flex; height: calc(100vh - 56px - 76px - 68px); }
+  .screen { display: none; }
+  .screen.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+  .screen-inner { flex: 1; overflow-y: auto; padding: 24px 30px; }
+  .side-panel { width: 260px; background: var(--surface); border-left: 1px solid var(--border); padding: 18px; overflow-y: auto; flex-shrink: 0; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 18px; }
+  .card-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  /* FORMS */
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+  input, select, textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 8px 11px; font-size: 13px; outline: none; transition: border-color .15s; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  select option { background: var(--surface2); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .form-group { margin-bottom: 14px; }
+  .required { color: var(--danger); margin-left: 2px; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* SOURCE / SINK TYPE GRID */
+  .source-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+  .source-card { background: var(--surface2); border: 2px solid var(--border); border-radius: 10px; padding: 16px 12px; text-align: center; cursor: pointer; transition: all .18s; }
+  .source-card:hover { border-color: var(--accent); background: rgba(79,110,247,.07); }
+  .source-card.selected { border-color: var(--accent); background: rgba(79,110,247,.12); }
+  .source-card .sc-icon { font-size: 28px; margin-bottom: 6px; }
+  .source-card .sc-name { font-size: 12px; font-weight: 700; color: var(--text); }
+  .source-card .sc-sub  { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .source-card .sc-badge { display:inline-block; margin-top:6px; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700; }
+  .source-card.selected .sc-badge { background: rgba(79,110,247,.2); color: var(--accent); }
+  .source-card .sc-badge { background: var(--surface); color: var(--muted); }
+
+  /* CONFIG PANELS */
+  .cfg-panel { background: rgba(79,110,247,.05); border: 1px solid rgba(79,110,247,.25); border-radius: 10px; padding: 18px; margin-top: 4px; }
+  .cfg-panel-title { font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; margin-bottom: 14px; }
+  .cfg-panel.kafka   { border-color: rgba(34,197,94,.3); background: rgba(34,197,94,.04); }
+  .cfg-panel.kafka .cfg-panel-title   { color: #22c55e; }
+  .cfg-panel.file    { border-color: rgba(79,110,247,.3); background: rgba(79,110,247,.05); }
+  .cfg-panel.file .cfg-panel-title    { color: var(--accent); }
+  .cfg-panel.db      { border-color: rgba(245,158,11,.3); background: rgba(245,158,11,.04); }
+  .cfg-panel.db .cfg-panel-title      { color: var(--warning); }
+  .cfg-panel.http    { border-color: rgba(124,58,237,.3); background: rgba(124,58,237,.04); }
+  .cfg-panel.http .cfg-panel-title    { color: #a78bfa; }
+  .cfg-panel.rabbitmq { border-color: rgba(239,68,68,.3); background: rgba(239,68,68,.04); }
+  .cfg-panel.rabbitmq .cfg-panel-title { color: var(--danger); }
+  .cfg-panel.s3      { border-color: rgba(251,146,60,.3); background: rgba(251,146,60,.04); }
+  .cfg-panel.s3 .cfg-panel-title      { color: #fb923c; }
+
+  /* UPLOAD ZONE */
+  .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 40px; text-align: center; cursor: pointer; transition: all .2s; background: var(--surface2); }
+  .upload-zone:hover { border-color: var(--accent); background: rgba(79,110,247,.07); }
+  .upload-icon { font-size: 42px; margin-bottom: 10px; }
+  .upload-title { font-size: 15px; font-weight: 600; margin-bottom: 5px; }
+  .upload-sub { font-size: 12px; color: var(--muted); }
+  .upload-types { display: flex; justify-content: center; gap: 10px; margin-top: 14px; }
+  .type-badge { background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 3px 10px; font-size: 11px; font-weight: 600; color: var(--accent); }
+  .upload-success { border-color: var(--success); background: rgba(34,197,94,.07); }
+
+  /* MAPPING */
+  .mapping-layout { display: grid; grid-template-columns: 210px 1fr 210px; gap: 0; height: 400px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .map-panel { background: var(--surface2); border-right: 1px solid var(--border); overflow-y: auto; }
+  .map-panel.right { border-right: none; border-left: 1px solid var(--border); }
+  .map-panel-header { padding: 9px 13px; font-size: 10px; font-weight: 700; letter-spacing: .5px; color: var(--muted); background: var(--surface); border-bottom: 1px solid var(--border); text-transform: uppercase; }
+  .tree-node { padding: 6px 13px 6px 26px; font-size: 12px; cursor: grab; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid rgba(255,255,255,.03); transition: background .1s; }
+  .tree-node:hover { background: rgba(79,110,247,.13); }
+  .tree-node.child { padding-left: 40px; }
+  .tree-node .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .dot-string { background: #22c55e; } .dot-number { background: #f59e0b; }
+  .dot-bool { background: #7c3aed; } .dot-object { background: #4f6ef7; } .dot-required { background: #ef4444; }
+  .map-canvas { background: var(--bg); position: relative; overflow: hidden; }
+  .canvas-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: var(--muted); font-size: 12px; pointer-events: none; }
+  .map-edge { position: absolute; display: flex; align-items: center; gap: 6px; background: rgba(79,110,247,.1); border: 1px solid rgba(79,110,247,.3); border-radius: 20px; padding: 3px 10px; font-size: 11px; color: var(--accent); cursor: pointer; white-space: nowrap; }
+  .map-edge:hover { background: rgba(79,110,247,.2); }
+
+  /* TOOLBAR */
+  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .toolbar-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+  .toolbar-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .toolbar-btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* FILTER */
+  .filter-group { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+  .filter-group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .logic-toggle { display: flex; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .logic-btn { padding: 4px 13px; font-size: 12px; cursor: pointer; font-weight: 600; }
+  .logic-btn.active { background: var(--accent); color: #fff; }
+  .filter-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .filter-row input, .filter-row select { margin-bottom: 0; }
+  .filter-row select { flex: 1; } .filter-row input { flex: 1.5; }
+  .remove-btn { background: none; border: 1px solid var(--border); color: var(--muted); width: 28px; height: 28px; border-radius: 5px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .remove-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* TRANSFORMS */
+  .transform-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 11px 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .transform-handle { color: var(--muted); cursor: grab; font-size: 16px; }
+  .transform-tag { background: rgba(79,110,247,.15); color: var(--accent); border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .transform-field { flex: 1; font-size: 13px; }
+  .transform-expr { color: var(--muted); font-size: 12px; font-family: monospace; }
+
+  /* STATUS */
+  .status-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .status-card { flex: 1; min-width: 90px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
+  .status-card .val { font-size: 20px; font-weight: 800; color: var(--accent); }
+  .status-card .lbl { font-size: 10px; color: var(--muted); margin-top: 3px; }
+  .status-card.ok .val { color: var(--success); } .status-card.warn .val { color: var(--warning); }
+
+  /* VALIDATION */
+  .validation-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; margin-bottom: 5px; font-size: 12px; }
+  .validation-item.ok { background: rgba(34,197,94,.08); color: var(--success); }
+  .validation-item.err { background: rgba(239,68,68,.08); color: var(--danger); }
+  .validation-item.warn { background: rgba(245,158,11,.08); color: var(--warning); }
+  .v-icon { font-size: 14px; flex-shrink: 0; }
+
+  /* TAGS + CHIPS */
+  .tag { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; }
+  .tag-json { background: rgba(79,110,247,.2); color: var(--accent); }
+  .tag-req { background: rgba(239,68,68,.15); color: var(--danger); }
+  .tag-opt { background: rgba(100,116,139,.15); color: var(--muted); }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .chip-blue { background: rgba(79,110,247,.15); color: var(--accent); }
+  .chip-green { background: rgba(34,197,94,.15); color: var(--success); }
+  .chip-red { background: rgba(239,68,68,.15); color: var(--danger); }
+  .chip-purple { background: rgba(124,58,237,.15); color: var(--accent2); }
+  .chip-orange { background: rgba(251,146,60,.15); color: #fb923c; }
+
+  /* SIDE */
+  .side-title { font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
+  .side-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .side-item:last-child { border-bottom: none; }
+  .side-key { color: var(--muted); }
+  .side-val { color: var(--text); font-weight: 500; max-width: 130px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* FOOTER */
+  .wizard-footer { background: var(--surface); border-top: 1px solid var(--border); padding: 14px 30px; display: flex; align-items: center; gap: 12px; }
+  .btn { padding: 8px 20px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #3d5ce6; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-spacer { flex: 1; }
+  .draft-badge { background: rgba(245,158,11,.15); color: var(--warning); border: 1px solid rgba(245,158,11,.3); padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+
+  /* YAML */
+  .yaml-view { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; font-family: 'Cascadia Code','Fira Code',monospace; font-size: 11.5px; line-height: 1.85; overflow-x: auto; max-height: 340px; overflow-y: auto; }
+  .yaml-key { color: #79c0ff; } .yaml-str { color: #a5d6ff; } .yaml-val { color: #ffa657; }
+  .yaml-bool { color: #ff7b72; } .yaml-comment { color: #484f58; font-style: italic; }
+
+  /* FLINK FLOW */
+  .flink-wrap { overflow-x: auto; padding: 4px 0 8px; }
+  .flink-flow { display: flex; align-items: stretch; gap: 0; min-width: 820px; }
+  .flink-node { flex: 1; min-width: 120px; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 13px 11px; position: relative; display: flex; flex-direction: column; gap: 5px; }
+  .flink-node.source    { border-color: #22c55e; background: rgba(34,197,94,.06); }
+  .flink-node.mapping   { border-color: #4f6ef7; background: rgba(79,110,247,.07); }
+  .flink-node.transform { border-color: #f59e0b; background: rgba(245,158,11,.07); }
+  .flink-node.filter    { border-color: #7c3aed; background: rgba(124,58,237,.07); }
+  .flink-node.sink      { border-color: #ef4444; background: rgba(239,68,68,.06); }
+  .flink-node-header { font-size: 9px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; margin-bottom: 1px; }
+  .flink-node.source    .flink-node-header { color: #22c55e; }
+  .flink-node.mapping   .flink-node-header { color: #4f6ef7; }
+  .flink-node.transform .flink-node-header { color: #f59e0b; }
+  .flink-node.filter    .flink-node-header { color: #7c3aed; }
+  .flink-node.sink      .flink-node-header { color: #ef4444; }
+  .flink-node-icon { font-size: 20px; text-align: center; margin-bottom: 3px; }
+  .flink-node-name { font-size: 12px; font-weight: 700; color: var(--text); }
+  .flink-node-detail { font-size: 10px; color: var(--muted); line-height: 1.5; }
+  .flink-pill { display: inline-flex; align-items: center; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 10px; margin-top: 4px; }
+  .flink-node.source    .flink-pill { background: rgba(34,197,94,.15); color: #22c55e; }
+  .flink-node.mapping   .flink-pill { background: rgba(79,110,247,.15); color: #4f6ef7; }
+  .flink-node.transform .flink-pill { background: rgba(245,158,11,.15); color: #f59e0b; }
+  .flink-node.filter    .flink-pill { background: rgba(124,58,237,.15); color: #d2a8ff; }
+  .flink-node.sink      .flink-pill { background: rgba(239,68,68,.15); color: #ef4444; }
+  .flink-arrow { display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; }
+  .flink-arrow-line { width: 24px; height: 2px; background: var(--border); position: relative; }
+  .flink-arrow-line::after { content:''; position: absolute; right: -5px; top: -4px; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid var(--border); }
+  .flink-arrow-label { font-size: 8px; color: var(--muted); margin-top: 4px; letter-spacing: .3px; text-transform: uppercase; white-space: nowrap; }
+  .flink-parallelism { position: absolute; top: 7px; right: 7px; font-size: 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--muted); }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="topnav">
+  <div class="logo">ETL<span>Wizard</span></div>
+  <span class="nav-badge">ENTERPRISE</span>
+  <div class="nav-spacer"></div>
+  <button class="nav-btn">⟳ Load Draft</button>
+  <button class="nav-btn">⚙ Settings</button>
+  <button class="nav-btn">?</button>
+</div>
+
+<div class="wizard-header">
+  <div class="step-bar" id="stepBar"></div>
+</div>
+
+<div class="wizard-body" id="mainBody">
+
+  <!-- ══════════════════════════════════════════
+       STEP 1 – FILE UPLOAD
+  ══════════════════════════════════════════ -->
+  <div class="screen active" id="screen-0">
+    <div class="screen-inner" style="display:flex;gap:22px;">
+      <div style="flex:1;">
+        <div class="card">
+          <div class="card-title">📁 Upload Source File</div>
+          <div class="upload-zone" id="dropZone" onclick="simulateUpload()">
+            <div class="upload-icon" id="uploadIcon">☁️</div>
+            <div class="upload-title" id="uploadTitle">Drag & Drop your file here</div>
+            <div class="upload-sub" id="uploadSub">or click to browse from your machine</div>
+            <div class="upload-types"><span class="type-badge">JSON</span><span class="type-badge">CSV</span></div>
+          </div>
+        </div>
+        <div class="card" id="schemaCard" style="display:none;">
+          <div class="card-title">🔍 Detected Schema <span class="tag tag-json">JSON</span></div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Extracted from <code style="color:var(--accent)">products_export.json</code> — 18 fields</div>
+          <div class="tree-node"><span class="dot dot-object"></span><b>root</b></div>
+          <div class="tree-node child"><span class="dot dot-string"></span>id<span class="tag tag-req" style="margin-left:auto">req</span></div>
+          <div class="tree-node child"><span class="dot dot-string"></span>productName<span class="tag tag-req" style="margin-left:auto">req</span></div>
+          <div class="tree-node child"><span class="dot dot-number"></span>price</div>
+          <div class="tree-node child"><span class="dot dot-number"></span>stockQty</div>
+          <div class="tree-node child"><span class="dot dot-string"></span>category</div>
+          <div class="tree-node child"><span class="dot dot-bool"></span>isActive</div>
+          <div class="tree-node child"><span class="dot dot-object"></span>metadata</div>
+          <div class="tree-node child" style="padding-left:54px;"><span class="dot dot-string"></span>createdAt</div>
+        </div>
+      </div>
+      <div class="side-panel" style="width:240px;border-left:1px solid var(--border);">
+        <div class="side-title">File Info</div>
+        <div class="side-item"><span class="side-key">Status</span><span class="side-val" id="fileStatus">Waiting…</span></div>
+        <div class="side-item"><span class="side-key">Type</span><span class="side-val" id="fileType">—</span></div>
+        <div class="side-item"><span class="side-key">Size</span><span class="side-val" id="fileSize">—</span></div>
+        <div class="side-item"><span class="side-key">Fields</span><span class="side-val" id="fieldCount">—</span></div>
+        <div class="side-item"><span class="side-key">Encoding</span><span class="side-val" id="fileEnc">—</span></div>
+        <br/>
+        <div class="side-title">Worker</div>
+        <div class="validation-item" id="workerStatus" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       STEP 2 – INPUT CONFIGURATION  ★ NEW ★
+  ══════════════════════════════════════════ -->
+  <div class="screen" id="screen-1">
+    <div class="screen-inner" style="display:flex;gap:22px;">
+      <div style="flex:1;">
+
+        <div class="card">
+          <div class="card-title">🔌 Select Input Source Type</div>
+
+          <!-- SOURCE TYPE CARDS -->
+          <div class="source-grid">
+            <div class="source-card" id="src-file" onclick="selectSource('file')">
+              <div class="sc-icon">📂</div>
+              <div class="sc-name">File / Object</div>
+              <div class="sc-sub">JSON · CSV · Parquet</div>
+              <span class="sc-badge">Batch</span>
+            </div>
+            <div class="source-card selected" id="src-kafka" onclick="selectSource('kafka')">
+              <div class="sc-icon">☕</div>
+              <div class="sc-name">Kafka</div>
+              <div class="sc-sub">Consumer stream</div>
+              <span class="sc-badge">Streaming</span>
+            </div>
+            <div class="source-card" id="src-db" onclick="selectSource('db')">
+              <div class="sc-icon">🗄️</div>
+              <div class="sc-name">Database</div>
+              <div class="sc-sub">PostgreSQL · MySQL · MSSQL</div>
+              <span class="sc-badge">Batch</span>
+            </div>
+            <div class="source-card" id="src-http" onclick="selectSource('http')">
+              <div class="sc-icon">🌐</div>
+              <div class="sc-name">HTTP / REST API</div>
+              <div class="sc-sub">Polling or webhook</div>
+              <span class="sc-badge">Hybrid</span>
+            </div>
+            <div class="source-card" id="src-rabbitmq" onclick="selectSource('rabbitmq')">
+              <div class="sc-icon">🐇</div>
+              <div class="sc-name">RabbitMQ</div>
+              <div class="sc-sub">Queue consumer</div>
+              <span class="sc-badge">Streaming</span>
+            </div>
+            <div class="source-card" id="src-s3" onclick="selectSource('s3')">
+              <div class="sc-icon">☁️</div>
+              <div class="sc-name">S3 / Blob Storage</div>
+              <div class="sc-sub">AWS S3 · Azure Blob</div>
+              <span class="sc-badge">Batch</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── CONFIG PANELS (one per source) ── -->
+
+        <!-- FILE -->
+        <div class="cfg-panel file" id="cfg-file" style="display:none;">
+          <div class="cfg-panel-title">📂 File / Object Storage Config</div>
+          <div class="form-row">
+            <div class="form-group"><label>File Format <span class="required">*</span></label><select><option>JSON</option><option>CSV</option><option>Parquet</option><option>Avro</option></select></div>
+            <div class="form-group"><label>File Encoding</label><select><option selected>UTF-8</option><option>ISO-8859-1</option><option>UTF-16</option></select></div>
+          </div>
+          <div class="form-group"><label>File Path / Glob Pattern <span class="required">*</span></label><input type="text" value="/data/input/products_*.json" /><div class="hint">Supports glob patterns e.g. /data/*.json</div></div>
+          <div class="form-row">
+            <div class="form-group"><label>Root Path (JSON only)</label><input type="text" value="$.data.products[*]" /></div>
+            <div class="form-group"><label>Watch Mode</label><select><option>One-shot</option><option>Continuous poll</option></select></div>
+          </div>
+        </div>
+
+        <!-- KAFKA (default selected) -->
+        <div class="cfg-panel kafka" id="cfg-kafka">
+          <div class="cfg-panel-title">☕ Kafka Consumer Config</div>
+          <div class="form-row">
+            <div class="form-group"><label>Bootstrap Servers <span class="required">*</span></label><input type="text" value="kafka-broker-1:9092,kafka-broker-2:9092" /></div>
+            <div class="form-group"><label>Topic <span class="required">*</span></label><input type="text" value="source.products.raw" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Consumer Group <span class="required">*</span></label><input type="text" value="etl-wizard-group-01" /></div>
+            <div class="form-group"><label>Auto Offset Reset</label><select><option>earliest</option><option selected>latest</option><option>none</option></select></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Deserialization</label><select><option selected>JSON</option><option>Avro</option><option>Protobuf</option><option>String</option></select></div>
+            <div class="form-group"><label>Schema Registry URL <span class="tag tag-opt">optional</span></label><input type="text" placeholder="http://schema-registry:8081" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Max Poll Records</label><input type="number" value="500" /></div>
+            <div class="form-group"><label>Session Timeout (ms)</label><input type="number" value="30000" /></div>
+          </div>
+          <div class="validation-item ok" style="margin-top:4px;"><span class="v-icon">✔</span> Connection test passed — 3 partitions available</div>
+        </div>
+
+        <!-- DATABASE -->
+        <div class="cfg-panel db" id="cfg-db" style="display:none;">
+          <div class="cfg-panel-title">🗄️ Database Source Config</div>
+          <div class="form-row">
+            <div class="form-group"><label>Driver <span class="required">*</span></label><select><option>PostgreSQL</option><option>MySQL</option><option>MSSQL</option><option>Oracle</option></select></div>
+            <div class="form-group"><label>Host <span class="required">*</span></label><input type="text" placeholder="db.corp.internal" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Port</label><input type="number" value="5432" /></div>
+            <div class="form-group"><label>Database Name <span class="required">*</span></label><input type="text" placeholder="erp_db" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Username <span class="required">*</span></label><input type="text" placeholder="etl_user" /></div>
+            <div class="form-group"><label>Password <span class="required">*</span></label><input type="password" placeholder="••••••••" /></div>
+          </div>
+          <div class="form-group"><label>SQL Query / Table <span class="required">*</span></label><textarea rows="2" style="font-family:monospace">SELECT * FROM products WHERE updated_at > :lastRun</textarea></div>
+          <div class="form-row">
+            <div class="form-group"><label>Fetch Mode</label><select><option>Full load</option><option selected>Incremental</option><option>CDC</option></select></div>
+            <div class="form-group"><label>Watermark Column</label><input type="text" value="updated_at" /></div>
+          </div>
+        </div>
+
+        <!-- HTTP -->
+        <div class="cfg-panel http" id="cfg-http" style="display:none;">
+          <div class="cfg-panel-title">🌐 HTTP / REST API Source Config</div>
+          <div class="form-row">
+            <div class="form-group"><label>Endpoint URL <span class="required">*</span></label><input type="text" placeholder="https://api.corp.com/products" /></div>
+            <div class="form-group"><label>Method</label><select><option selected>GET</option><option>POST</option></select></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Auth Type</label><select><option>None</option><option selected>Bearer Token</option><option>Basic Auth</option><option>OAuth2</option></select></div>
+            <div class="form-group"><label>Token / Secret</label><input type="password" placeholder="••••••••••••••" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Polling Interval (s)</label><input type="number" value="60" /></div>
+            <div class="form-group"><label>Response Root Path</label><input type="text" value="$.data.items[*]" /></div>
+          </div>
+          <div class="form-group"><label>Custom Headers <span class="tag tag-opt">optional</span></label><input type="text" placeholder='{"X-Tenant": "corp-01"}' /></div>
+        </div>
+
+        <!-- RABBITMQ -->
+        <div class="cfg-panel rabbitmq" id="cfg-rabbitmq" style="display:none;">
+          <div class="cfg-panel-title">🐇 RabbitMQ Source Config</div>
+          <div class="form-row">
+            <div class="form-group"><label>Host <span class="required">*</span></label><input type="text" value="rabbitmq.corp.internal" /></div>
+            <div class="form-group"><label>Port</label><input type="number" value="5672" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Queue Name <span class="required">*</span></label><input type="text" placeholder="products.ingest" /></div>
+            <div class="form-group"><label>Exchange</label><input type="text" placeholder="products.exchange" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Username</label><input type="text" value="etl_consumer" /></div>
+            <div class="form-group"><label>Password</label><input type="password" placeholder="••••••••" /></div>
+          </div>
+          <div class="form-group"><label>Prefetch Count</label><input type="number" value="100" /><div class="hint">Number of messages fetched per batch</div></div>
+        </div>
+
+        <!-- S3 -->
+        <div class="cfg-panel s3" id="cfg-s3" style="display:none;">
+          <div class="cfg-panel-title">☁️ S3 / Blob Storage Config</div>
+          <div class="form-row">
+            <div class="form-group"><label>Provider</label><select><option>AWS S3</option><option>Azure Blob</option><option>GCS</option><option>MinIO</option></select></div>
+            <div class="form-group"><label>Bucket / Container <span class="required">*</span></label><input type="text" placeholder="etl-source-bucket" /></div>
+          </div>
+          <div class="form-group"><label>Prefix / Path <span class="required">*</span></label><input type="text" placeholder="data/products/2026/" /></div>
+          <div class="form-row">
+            <div class="form-group"><label>File Format</label><select><option>JSON</option><option>CSV</option><option selected>Parquet</option></select></div>
+            <div class="form-group"><label>Region</label><input type="text" value="eu-west-1" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Access Key ID</label><input type="text" placeholder="AKIA…" /></div>
+            <div class="form-group"><label>Secret Access Key</label><input type="password" placeholder="••••••••••••" /></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- SIDE PANEL -->
+      <div class="side-panel" style="width:240px;border-left:1px solid var(--border);">
+        <div class="side-title">Source Summary</div>
+        <div class="side-item"><span class="side-key">Type</span><span class="side-val" id="srcTypeBadge"><span class="chip chip-green">Kafka</span></span></div>
+        <div class="side-item"><span class="side-key">Topic</span><span class="side-val" id="srcDetail1">source.products.raw</span></div>
+        <div class="side-item"><span class="side-key">Group</span><span class="side-val" id="srcDetail2">etl-wizard-group-01</span></div>
+        <div class="side-item"><span class="side-key">Offset</span><span class="side-val" id="srcDetail3">latest</span></div>
+        <div class="side-item"><span class="side-key">Format</span><span class="side-val" id="srcDetail4">JSON</span></div>
+        <div class="side-item"><span class="side-key">Mode</span><span class="side-val" id="srcDetail5"><span class="chip chip-blue">Streaming</span></span></div>
+        <br/>
+        <div class="side-title">Connection</div>
+        <div class="validation-item ok"><span class="v-icon">✔</span> Broker reachable</div>
+        <div class="validation-item ok"><span class="v-icon">✔</span> Topic exists (3 partitions)</div>
+        <div class="validation-item warn"><span class="v-icon">⚠</span> Schema registry not set</div>
+        <br/>
+        <button class="toolbar-btn" style="width:100%;justify-content:center;">🔌 Test Connection</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       STEP 3 – METADATA
+  ══════════════════════════════════════════ -->
+  <div class="screen" id="screen-2">
+    <div class="screen-inner" style="display:flex;gap:22px;">
+      <div style="flex:1;">
+        <div class="card">
+          <div class="card-title">🏷️ Pipeline Metadata</div>
+          <div class="form-row">
+            <div class="form-group"><label>Product Source <span class="required">*</span></label><input type="text" value="ERP-System-v2" /></div>
+            <div class="form-group"><label>Product Type <span class="required">*</span></label><select><option>Inventory</option><option>Orders</option><option>CRM</option></select></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Team <span class="required">*</span></label><input type="text" value="data-platform" /></div>
+            <div class="form-group"><label>Environment <span class="required">*</span></label><select><option>staging</option><option selected>production</option><option>dev</option></select></div>
+          </div>
+          <div class="form-group">
+            <label>Custom Metadata (Key → Value)</label>
+            <div style="display:flex;gap:8px;margin-bottom:8px;"><input style="flex:1" value="version"/><input style="flex:1" value="3.2.1"/><button class="remove-btn">+</button></div>
+            <div style="display:flex;gap:8px;"><input style="flex:1" value="owner"/><input style="flex:1" value="alice@corp.com"/><button class="remove-btn">×</button></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">⚙️ Format Configuration <span class="tag tag-json">JSON</span></div>
+          <div class="form-row">
+            <div class="form-group"><label>File Encoding</label><select><option selected>UTF-8</option><option>ISO-8859-1</option></select></div>
+            <div class="form-group"><label>Date Default Format</label><input type="text" value="YYYY-MM-DD" /></div>
+          </div>
+          <div class="form-group"><label>Root Path Selector</label><input type="text" value="$.data.products[*]" /></div>
+        </div>
+      </div>
+      <div class="side-panel" style="width:240px;border-left:1px solid var(--border);">
+        <div class="side-title">State</div>
+        <div class="side-item"><span class="side-key">Source</span><span class="side-val">ERP-System-v2</span></div>
+        <div class="side-item"><span class="side-key">Type</span><span class="side-val">Inventory</span></div>
+        <div class="side-item"><span class="side-key">Team</span><span class="side-val">data-platform</span></div>
+        <div class="side-item"><span class="side-key">Env</span><span class="side-val chip chip-red">production</span></div>
+        <br/>
+        <div class="validation-item ok"><span class="v-icon">✔</span> All required fields filled</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       STEP 4 – FIELD MAPPING
+  ══════════════════════════════════════════ -->
+  <div class="screen" id="screen-3">
+    <div class="screen-inner">
+      <div class="toolbar">
+        <button class="toolbar-btn accent">✦ Auto-Map</button>
+        <button class="toolbar-btn">🔗 Add Mapping</button>
+        <button class="toolbar-btn">⊕ Zoom In</button><button class="toolbar-btn">⊖ Zoom Out</button>
+        <button class="toolbar-btn">⤢ Fit View</button>
+        <button class="toolbar-btn" style="margin-left:auto;">🗑 Clear</button>
+        <span class="chip chip-green">6 mapped</span><span class="chip chip-red">2 missing</span>
+      </div>
+      <div class="mapping-layout">
+        <div class="map-panel">
+          <div class="map-panel-header">📄 Source Fields</div>
+          <div class="tree-node"><span class="dot dot-string"></span>id</div>
+          <div class="tree-node" style="background:rgba(79,110,247,.1)"><span class="dot dot-string"></span>productName ●</div>
+          <div class="tree-node"><span class="dot dot-number"></span>price</div>
+          <div class="tree-node" style="background:rgba(79,110,247,.1)"><span class="dot dot-number"></span>stockQty ●</div>
+          <div class="tree-node"><span class="dot dot-string"></span>category</div>
+          <div class="tree-node" style="background:rgba(79,110,247,.1)"><span class="dot dot-bool"></span>isActive ●</div>
+          <div class="tree-node"><span class="dot dot-object"></span>metadata</div>
+          <div class="tree-node child"><span class="dot dot-string"></span>createdAt</div>
+          <div class="tree-node"><span class="dot dot-string"></span>sku</div>
+        </div>
+        <div class="map-canvas">
+          <div class="map-edge" style="top:50px;left:28px;">productName <span style="color:var(--accent)">→</span> name</div>
+          <div class="map-edge" style="top:96px;left:28px;">price <span style="color:var(--accent)">→</span> unitPrice</div>
+          <div class="map-edge" style="top:142px;left:28px;">stockQty <span style="color:var(--accent)">→</span> quantity <span class="chip chip-purple" style="font-size:10px">CAST</span></div>
+          <div class="map-edge" style="top:188px;left:28px;">isActive <span style="color:var(--accent)">→</span> status</div>
+          <div class="map-edge" style="top:234px;left:28px;">category <span style="color:var(--accent)">→</span> categoryCode</div>
+          <div class="map-edge" style="top:280px;left:28px;">metadata.createdAt <span style="color:var(--accent)">→</span> createdDate</div>
+          <div class="canvas-hint">← drag nodes to connect</div>
+        </div>
+        <div class="map-panel right">
+          <div class="map-panel-header">🎯 Target Entity</div>
+          <div class="tree-node" style="background:rgba(79,110,247,.1)"><span class="dot dot-string"></span>name ●</div>
+          <div class="tree-node" style="background:rgba(79,110,247,.1)"><span class="dot dot-number"></span>unitPrice ●</div>
+          <div class="tree-node" style="background:rgba(79,110,247,.1)"><span class="dot dot-number"></span>quantity ●</div>
+          <div class="tree-node"><span class="dot dot-string"></span>status</div>
+          <div class="tree-node"><span class="dot dot-string"></span>categoryCode</div>
+          <div class="tree-node"><span class="dot dot-string"></span>createdDate</div>
+          <div class="tree-node" style="border-left:2px solid var(--danger)"><span class="dot dot-required"></span><span style="color:var(--danger)">productId</span><span class="tag tag-req" style="margin-left:auto">req</span></div>
+          <div class="tree-node" style="border-left:2px solid var(--danger)"><span class="dot dot-required"></span><span style="color:var(--danger)">tenantId</span><span class="tag tag-req" style="margin-left:auto">req</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       STEP 5 – TRANSFORMATIONS
+  ══════════════════════════════════════════ -->
+  <div class="screen" id="screen-4">
+    <div class="screen-inner">
+      <div class="toolbar"><button class="toolbar-btn accent">+ Add Transformation</button><span style="flex:1"></span><span class="chip chip-blue">4 transforms</span></div>
+      <div class="card">
+        <div class="card-title">⚡ Active Transformation Chain</div>
+        <div class="transform-item"><span class="transform-handle">⠿</span><span class="transform-tag">TRIM</span><span class="transform-field">name</span><span class="transform-expr">trim(whitespace)</span><button class="toolbar-btn" style="margin-left:auto;">Edit</button></div>
+        <div class="transform-item"><span class="transform-handle">⠿</span><span class="transform-tag">CAST</span><span class="transform-field">quantity</span><span class="transform-expr">int(stockQty)</span><button class="toolbar-btn" style="margin-left:auto;">Edit</button></div>
+        <div class="transform-item"><span class="transform-handle">⠿</span><span class="transform-tag">FORMAT</span><span class="transform-field">createdDate</span><span class="transform-expr">dateFormat(createdAt, 'YYYY-MM-DD')</span><button class="toolbar-btn" style="margin-left:auto;">Edit</button></div>
+        <div class="transform-item"><span class="transform-handle">⠿</span><span class="transform-tag">EXPR</span><span class="transform-field">unitPrice</span><span class="transform-expr">round(price * exchangeRate, 2)</span><button class="toolbar-btn" style="margin-left:auto;">Edit</button></div>
+      </div>
+      <div class="card">
+        <div class="card-title">✏️ Expression Editor</div>
+        <div class="form-group"><label>Target Field</label><select><option>unitPrice</option><option>name</option><option>quantity</option></select></div>
+        <div class="form-group"><label>Expression</label><textarea rows="3" style="font-family:monospace;font-size:13px">round(price * exchangeRate, 2)</textarea></div>
+        <div class="validation-item ok" style="margin-bottom:8px;"><span class="v-icon">✔</span> Expression valid — output: number</div>
+        <button class="btn btn-primary" style="width:fit-content">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       STEP 6 – FILTERS
+  ══════════════════════════════════════════ -->
+  <div class="screen" id="screen-5">
+    <div class="screen-inner">
+      <div class="toolbar"><button class="toolbar-btn accent">+ Add Rule</button><button class="toolbar-btn">⊕ Add Group</button><span style="flex:1"></span><span class="chip chip-blue">3 rules</span></div>
+      <div class="card">
+        <div class="card-title">🔽 Filter Rule Builder</div>
+        <div class="filter-group">
+          <div class="filter-group-header"><span style="font-size:12px;color:var(--muted)">Group 1 ·</span><div class="logic-toggle"><div class="logic-btn active">AND</div><div class="logic-btn">OR</div></div></div>
+          <div class="filter-row"><select><option>isActive</option><option>price</option></select><select><option>equals</option></select><input type="text" value="true" /><button class="remove-btn">×</button></div>
+          <div class="filter-row"><select><option>price</option><option>isActive</option></select><select><option>greater than</option></select><input type="text" value="0" /><button class="remove-btn">×</button></div>
+        </div>
+        <div class="filter-group" style="border-color:var(--accent2)">
+          <div class="filter-group-header"><span style="font-size:12px;color:var(--muted)">Group 2 ·</span><div class="logic-toggle"><div class="logic-btn">AND</div><div class="logic-btn active">OR</div></div></div>
+          <div class="filter-row"><select><option>category</option></select><select><option>contains</option></select><input type="text" value="Electronics" /><button class="remove-btn">×</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       STEP 7 – OUTPUT CONFIGURATION
+  ══════════════════════════════════════════ -->
+  <div class="screen" id="screen-6">
+    <div class="screen-inner" style="display:flex;gap:22px;">
+      <div style="flex:1;">
+        <div class="card">
+          <div class="card-title">📤 Output / Sink Configuration</div>
+          <div class="form-group"><label>Sink Type <span class="required">*</span></label>
+            <select id="sinkSelect" onchange="changeSink(this.value)">
+              <option value="">— Select sink —</option>
+              <option value="kafka" selected>Kafka</option>
+              <option value="rabbitmq">RabbitMQ</option>
+              <option value="file">File Storage</option>
+              <option value="http">HTTP Endpoint</option>
+              <option value="db">Database</option>
+            </select>
+          </div>
+          <div class="cfg-panel kafka" id="sink-kafka"><div class="cfg-panel-title">☕ Kafka Sink Options</div><div class="form-group"><label>Topic Name <span class="required">*</span></label><input type="text" value="etl.products.v3" /></div><div class="form-row"><div class="form-group"><label>Partition Strategy</label><select><option>round-robin</option><option>key-hash</option></select></div><div class="form-group"><label>Acks</label><select><option>all</option><option>1</option></select></div></div></div>
+          <div class="cfg-panel rabbitmq" id="sink-rabbitmq" style="display:none;"><div class="cfg-panel-title">🐇 RabbitMQ Sink</div><div class="form-group"><label>Queue Name <span class="required">*</span></label><input type="text" placeholder="products_queue" /></div></div>
+          <div class="cfg-panel file" id="sink-file" style="display:none;"><div class="cfg-panel-title">📂 File Storage Sink</div><div class="form-group"><label>Output Path <span class="required">*</span></label><input type="text" placeholder="/data/output/" /></div><div class="form-group"><label>File Format</label><select><option>JSON</option><option>CSV</option><option>Parquet</option></select></div></div>
+          <div class="cfg-panel http" id="sink-http" style="display:none;"><div class="cfg-panel-title">🌐 HTTP Endpoint Sink</div><div class="form-group"><label>URL <span class="required">*</span></label><input type="text" placeholder="https://api.corp.com/ingest" /></div></div>
+          <div class="cfg-panel db" id="sink-db" style="display:none;"><div class="cfg-panel-title">🗄️ Database Sink</div><div class="form-group"><label>Table Name <span class="required">*</span></label><input type="text" placeholder="products_staging" /></div><div class="form-group"><label>Write Mode</label><select><option>append</option><option>upsert</option><option>overwrite</option></select></div></div>
+        </div>
+      </div>
+      <div class="side-panel" style="width:240px;border-left:1px solid var(--border);">
+        <div class="side-title">Sink Summary</div>
+        <div class="side-item"><span class="side-key">Type</span><span class="side-val chip chip-blue">Kafka</span></div>
+        <div class="side-item"><span class="side-key">Topic</span><span class="side-val">etl.products.v3</span></div>
+        <div class="side-item"><span class="side-key">Partition</span><span class="side-val">round-robin</span></div>
+        <div class="side-item"><span class="side-key">Acks</span><span class="side-val">all</span></div>
+        <br/>
+        <div class="validation-item ok"><span class="v-icon">✔</span> Sink config valid</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       STEP 8 – SUMMARY
+  ══════════════════════════════════════════ -->
+  <div class="screen" id="screen-7">
+    <div class="screen-inner">
+
+      <div class="status-row">
+        <div class="status-card ok"><div class="val">☕</div><div class="lbl">Input Source</div></div>
+        <div class="status-card ok"><div class="val">18</div><div class="lbl">Fields</div></div>
+        <div class="status-card ok"><div class="val">6</div><div class="lbl">Mappings</div></div>
+        <div class="status-card warn"><div class="val">4</div><div class="lbl">Transforms</div></div>
+        <div class="status-card ok"><div class="val">3</div><div class="lbl">Filters</div></div>
+        <div class="status-card ok"><div class="val">Kafka</div><div class="lbl">Sink</div></div>
+      </div>
+
+      <!-- FLINK FLOW -->
+      <div class="card">
+        <div class="card-title">🌊 Flink Pipeline Flow</div>
+        <div class="flink-wrap">
+          <div class="flink-flow">
+            <div class="flink-node source">
+              <span class="flink-parallelism">p=3</span>
+              <div class="flink-node-icon">☕</div>
+              <div class="flink-node-header">Input Source</div>
+              <div class="flink-node-name">Kafka Consumer</div>
+              <div class="flink-node-detail">Topic: source.products.raw<br>Group: etl-wizard-group-01<br>Offset: latest · Format: JSON</div>
+              <span class="flink-pill">3 partitions</span>
+            </div>
+            <div class="flink-arrow"><div class="flink-arrow-line"></div><div class="flink-arrow-label">stream</div></div>
+            <div class="flink-node mapping">
+              <span class="flink-parallelism">p=4</span>
+              <div class="flink-node-icon">🔗</div>
+              <div class="flink-node-header">Field Map</div>
+              <div class="flink-node-name">MapFunction</div>
+              <div class="flink-node-detail">productName→name<br>price→unitPrice<br>stockQty→quantity + 3 more</div>
+              <span class="flink-pill">6 rules</span>
+            </div>
+            <div class="flink-arrow"><div class="flink-arrow-line"></div><div class="flink-arrow-label">mapped</div></div>
+            <div class="flink-node transform">
+              <span class="flink-parallelism">p=4</span>
+              <div class="flink-node-icon">⚡</div>
+              <div class="flink-node-header">Transform</div>
+              <div class="flink-node-name">FlatMapFunction</div>
+              <div class="flink-node-detail">TRIM→name<br>CAST→quantity<br>FORMAT→createdDate<br>EXPR→unitPrice</div>
+              <span class="flink-pill">4 ops</span>
+            </div>
+            <div class="flink-arrow"><div class="flink-arrow-line"></div><div class="flink-arrow-label">enriched</div></div>
+            <div class="flink-node filter">
+              <span class="flink-parallelism">p=4</span>
+              <div class="flink-node-icon">🔽</div>
+              <div class="flink-node-header">Filter</div>
+              <div class="flink-node-name">FilterFunction</div>
+              <div class="flink-node-detail">AND: isActive=true<br>AND: price&gt;0<br>OR: category contains "Electronics"</div>
+              <span class="flink-pill">3 rules</span>
+            </div>
+            <div class="flink-arrow"><div class="flink-arrow-line"></div><div class="flink-arrow-label">filtered</div></div>
+            <div class="flink-node sink">
+              <span class="flink-parallelism">p=2</span>
+              <div class="flink-node-icon">☕</div>
+              <div class="flink-node-header">Output Sink</div>
+              <div class="flink-node-name">Kafka Sink</div>
+              <div class="flink-node-detail">Topic: etl.products.v3<br>Partition: round-robin<br>Acks: all</div>
+              <span class="flink-pill">Kafka 3.x</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- YAML -->
+      <div class="card">
+        <div class="card-title" style="justify-content:space-between;">
+          <span>📋 ETL Definition — YAML</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="draft-badge">● DRAFT</span>
+            <button class="toolbar-btn" onclick="copyYaml()">⎘ Copy</button>
+            <button class="toolbar-btn">⬇ Download</button>
+          </div>
+        </div>
+        <div class="yaml-view" id="yamlView">
+<span class="yaml-comment"># ETL Wizard — Generated Definition v3.2.1</span>
+<span class="yaml-comment"># Auto-generated — do not edit manually</span>
+
+<span class="yaml-key">etlDefinition</span>:
+  <span class="yaml-key">id</span>: <span class="yaml-str">etl-a3f9c2</span>
+  <span class="yaml-key">version</span>: <span class="yaml-str">3.2.1</span>
+  <span class="yaml-key">status</span>: <span class="yaml-bool">draft</span>
+
+  <span class="yaml-key">inputConfig</span>:
+    <span class="yaml-key">sourceType</span>: <span class="yaml-str">kafka</span>
+    <span class="yaml-key">bootstrapServers</span>: <span class="yaml-str">kafka-broker-1:9092,kafka-broker-2:9092</span>
+    <span class="yaml-key">topic</span>: <span class="yaml-str">source.products.raw</span>
+    <span class="yaml-key">consumerGroup</span>: <span class="yaml-str">etl-wizard-group-01</span>
+    <span class="yaml-key">autoOffsetReset</span>: <span class="yaml-str">latest</span>
+    <span class="yaml-key">deserialization</span>: <span class="yaml-str">JSON</span>
+    <span class="yaml-key">maxPollRecords</span>: <span class="yaml-val">500</span>
+    <span class="yaml-key">sessionTimeoutMs</span>: <span class="yaml-val">30000</span>
+
+  <span class="yaml-key">metadata</span>:
+    <span class="yaml-key">productSource</span>: <span class="yaml-str">ERP-System-v2</span>
+    <span class="yaml-key">productType</span>: <span class="yaml-str">Inventory</span>
+    <span class="yaml-key">team</span>: <span class="yaml-str">data-platform</span>
+    <span class="yaml-key">environment</span>: <span class="yaml-str">production</span>
+    <span class="yaml-key">custom</span>:
+      <span class="yaml-key">version</span>: <span class="yaml-str">3.2.1</span>
+      <span class="yaml-key">owner</span>: <span class="yaml-str">alice@corp.com</span>
+
+  <span class="yaml-key">formatConfig</span>:
+    <span class="yaml-key">fileType</span>: <span class="yaml-str">JSON</span>
+    <span class="yaml-key">encoding</span>: <span class="yaml-str">UTF-8</span>
+    <span class="yaml-key">dateFormat</span>: <span class="yaml-str">YYYY-MM-DD</span>
+    <span class="yaml-key">rootPath</span>: <span class="yaml-str">$.data.products[*]</span>
+
+  <span class="yaml-key">mappings</span>:
+    - <span class="yaml-key">source</span>: <span class="yaml-str">productName</span>
+      <span class="yaml-key">target</span>: <span class="yaml-str">name</span>
+      <span class="yaml-key">nullHandling</span>: <span class="yaml-str">SKIP</span>
+    - <span class="yaml-key">source</span>: <span class="yaml-str">price</span>
+      <span class="yaml-key">target</span>: <span class="yaml-str">unitPrice</span>
+    - <span class="yaml-key">source</span>: <span class="yaml-str">stockQty</span>
+      <span class="yaml-key">target</span>: <span class="yaml-str">quantity</span>
+      <span class="yaml-key">castType</span>: <span class="yaml-str">integer</span>
+    - <span class="yaml-key">source</span>: <span class="yaml-str">isActive</span>
+      <span class="yaml-key">target</span>: <span class="yaml-str">status</span>
+    - <span class="yaml-key">source</span>: <span class="yaml-str">category</span>
+      <span class="yaml-key">target</span>: <span class="yaml-str">categoryCode</span>
+    - <span class="yaml-key">source</span>: <span class="yaml-str">metadata.createdAt</span>
+      <span class="yaml-key">target</span>: <span class="yaml-str">createdDate</span>
+
+  <span class="yaml-key">transformations</span>:
+    - <span class="yaml-key">field</span>: <span class="yaml-str">name</span>
+      <span class="yaml-key">type</span>: <span class="yaml-str">TRIM</span>
+      <span class="yaml-key">order</span>: <span class="yaml-val">1</span>
+    - <span class="yaml-key">field</span>: <span class="yaml-str">quantity</span>
+      <span class="yaml-key">type</span>: <span class="yaml-str">CAST</span>
+      <span class="yaml-key">expr</span>: <span class="yaml-str">int(stockQty)</span>
+      <span class="yaml-key">order</span>: <span class="yaml-val">2</span>
+    - <span class="yaml-key">field</span>: <span class="yaml-str">createdDate</span>
+      <span class="yaml-key">type</span>: <span class="yaml-str">FORMAT</span>
+      <span class="yaml-key">expr</span>: <span class="yaml-str">dateFormat(createdAt, 'YYYY-MM-DD')</span>
+      <span class="yaml-key">order</span>: <span class="yaml-val">3</span>
+    - <span class="yaml-key">field</span>: <span class="yaml-str">unitPrice</span>
+      <span class="yaml-key">type</span>: <span class="yaml-str">EXPR</span>
+      <span class="yaml-key">expr</span>: <span class="yaml-str">round(price * exchangeRate, 2)</span>
+      <span class="yaml-key">order</span>: <span class="yaml-val">4</span>
+
+  <span class="yaml-key">filters</span>:
+    <span class="yaml-key">logic</span>: <span class="yaml-str">AND</span>
+    <span class="yaml-key">rules</span>:
+      - <span class="yaml-key">field</span>: <span class="yaml-str">isActive</span>
+        <span class="yaml-key">op</span>: <span class="yaml-str">equals</span>
+        <span class="yaml-key">value</span>: <span class="yaml-bool">true</span>
+      - <span class="yaml-key">field</span>: <span class="yaml-str">price</span>
+        <span class="yaml-key">op</span>: <span class="yaml-str">greaterThan</span>
+        <span class="yaml-key">value</span>: <span class="yaml-val">0</span>
+      - <span class="yaml-key">logic</span>: <span class="yaml-str">OR</span>
+        <span class="yaml-key">rules</span>:
+          - <span class="yaml-key">field</span>: <span class="yaml-str">category</span>
+            <span class="yaml-key">op</span>: <span class="yaml-str">contains</span>
+            <span class="yaml-key">value</span>: <span class="yaml-str">Electronics</span>
+
+  <span class="yaml-key">outputConfig</span>:
+    <span class="yaml-key">sinkType</span>: <span class="yaml-str">kafka</span>
+    <span class="yaml-key">topic</span>: <span class="yaml-str">etl.products.v3</span>
+    <span class="yaml-key">partitionStrategy</span>: <span class="yaml-str">round-robin</span>
+    <span class="yaml-key">acks</span>: <span class="yaml-str">all</span>
+        </div>
+      </div>
+
+      <!-- VALIDATION GATE -->
+      <div class="card">
+        <div class="card-title">✅ Validation Gate</div>
+        <div class="validation-item ok"><span class="v-icon">✔</span> Input — Kafka source reachable, topic exists</div>
+        <div class="validation-item ok"><span class="v-icon">✔</span> Metadata — all required fields present</div>
+        <div class="validation-item ok"><span class="v-icon">✔</span> Format config — rootPath valid JSONPath</div>
+        <div class="validation-item err"><span class="v-icon">✖</span> Mapping — required fields "productId", "tenantId" not mapped</div>
+        <div class="validation-item ok"><span class="v-icon">✔</span> Transformations — all chains valid</div>
+        <div class="validation-item ok"><span class="v-icon">✔</span> Filters — rules valid, serialization OK</div>
+        <div class="validation-item ok"><span class="v-icon">✔</span> Output — Kafka sink fully configured</div>
+        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-secondary">⬇ Download YAML</button>
+          <button class="btn btn-secondary">⬇ Download JSON</button>
+          <button class="btn btn-success" disabled title="Fix validation errors first">🚀 Publish Pipeline</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- wizard-body -->
+
+<div class="wizard-footer">
+  <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+  <span class="draft-badge">● DRAFT</span>
+  <div class="btn-spacer"></div>
+  <span id="footerNote" style="font-size:12px;color:var(--muted);"></span>
+  <button class="btn btn-primary" onclick="nextStep()">Continue →</button>
+</div>
+
+<script>
+  const steps = [
+    { label: 'File Upload' },
+    { label: 'Input Config' },
+    { label: 'Metadata' },
+    { label: 'Field Mapping' },
+    { label: 'Transformations' },
+    { label: 'Filters' },
+    { label: 'Output Config' },
+    { label: 'Summary' },
+  ];
+  let current = 0;
+
+  function renderBar() {
+    const bar = document.getElementById('stepBar');
+    bar.innerHTML = '';
+    steps.forEach((s, i) => {
+      const cls = i < current ? 'done' : i === current ? 'active' : '';
+      bar.innerHTML += `
+        <div class="step-item ${cls}" onclick="goTo(${i})">
+          <div class="step-circle">${i < current ? '✓' : i+1}</div>
+          <span class="step-label">${s.label}</span>
+        </div>
+        ${i < steps.length-1 ? `<div class="step-sep ${i < current ? 'done':''}"></div>` : ''}`;
+    });
+    document.getElementById('footerNote').textContent = `Step ${current+1} of ${steps.length} — ${steps[current].label}`;
+  }
+
+  function goTo(n) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + n).classList.add('active');
+    current = n; renderBar();
+  }
+  function nextStep() { if (current < steps.length - 1) goTo(current + 1); }
+  function prevStep() { if (current > 0) goTo(current - 1); }
+
+  function simulateUpload() {
+    const zone = document.getElementById('dropZone');
+    zone.innerHTML = '<div class="upload-icon">⏳</div><div class="upload-title">Parsing via Web Worker…</div><div class="upload-sub">Streaming large file…</div>';
+    setTimeout(() => {
+      zone.classList.add('upload-success');
+      zone.innerHTML = '<div class="upload-icon">✅</div><div class="upload-title">products_export.json uploaded!</div><div class="upload-sub">Schema extracted — 18 fields</div>';
+      document.getElementById('fileStatus').textContent = '✓ Ready';
+      document.getElementById('fileType').textContent = 'JSON';
+      document.getElementById('fileSize').textContent = '14.2 MB';
+      document.getElementById('fieldCount').textContent = '18';
+      document.getElementById('fileEnc').textContent = 'UTF-8';
+      document.getElementById('schemaCard').style.display = '';
+      const ws = document.getElementById('workerStatus');
+      ws.style.display = 'flex'; ws.className = 'validation-item ok';
+      ws.innerHTML = '<span class="v-icon">✔</span> Web Worker completed';
+    }, 1400);
+  }
+
+  function selectSource(type) {
+    ['file','kafka','db','http','rabbitmq','s3'].forEach(t => {
+      document.getElementById('src-'+t).classList.toggle('selected', t===type);
+      document.getElementById('cfg-'+t).style.display = (t===type) ? '' : 'none';
+    });
+    // update side panel
+    const labels = { file:'File', kafka:'Kafka', db:'Database', http:'HTTP API', rabbitmq:'RabbitMQ', s3:'S3 / Blob' };
+    const modes = { file:'Batch', kafka:'Streaming', db:'Batch', http:'Hybrid', rabbitmq:'Streaming', s3:'Batch' };
+    const colorMap = { kafka:'chip-green', db:'chip-orange', file:'chip-blue', http:'chip-purple', rabbitmq:'chip-red', s3:'chip-orange' };
+    document.getElementById('srcTypeBadge').innerHTML = `<span class="chip ${colorMap[type]||'chip-blue'}">${labels[type]}</span>`;
+    document.getElementById('srcDetail5').innerHTML = `<span class="chip chip-blue">${modes[type]}</span>`;
+  }
+
+  function changeSink(val) {
+    ['kafka','rabbitmq','file','http','db'].forEach(k =>
+      document.getElementById('sink-'+k).style.display = (k===val) ? '' : 'none');
+  }
+
+  function copyYaml() {
+    navigator.clipboard.writeText(document.getElementById('yamlView').innerText).catch(()=>{});
+  }
+
+  renderBar();
+</script>
+</body>
+</html>
