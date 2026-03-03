@@ -1,0 +1,280 @@
+You are a Senior Staff Frontend Architect designing an enterprise-grade ETL configuration UI.
+
+I am building a modular ETL UI system that allows users to define a full ingestion and transformation pipeline step-by-step.
+
+I need a deeply technical design specification that includes:
+
+1) High-level frontend architecture
+2) Component hierarchy per screen
+3) State management strategy
+4) Data models (TypeScript interfaces)
+5) Validation strategy
+6) Handling of large JSON files (performance considerations)
+7) Suggested UX patterns for complex mapping
+8) Extensibility considerations
+9) Suggested API contracts between frontend and backend
+10) Error handling and resilience patterns
+
+The system includes the following wizard-based flow:
+
+---------------------------------------------------
+STEP 1 – File Upload
+---------------------------------------------------
+
+- Upload JSON or CSV via drag & drop
+- Detect file type automatically
+- Parse and extract schema (do NOT display raw JSON – display hierarchical fields only)
+- For JSON:
+  - Preserve hierarchy
+  - Preserve nested arrays
+  - Extract full path representation
+- For CSV:
+  - Infer schema
+  - Detect types
+- Must handle large files efficiently (avoid loading entire file in memory)
+- Use streaming parsing where possible
+- Consider Web Workers for parsing
+- Only extract schema metadata, not full dataset
+- Persist detected fileType for later conditional UI logic
+
+---------------------------------------------------
+STEP 2 – Metadata Configuration
+---------------------------------------------------
+
+- Define metadata fields:
+  productSource
+  productType
+  team
+  environment
+  (extensible key-value metadata)
+
+- Define input format configuration section:
+
+  Common fields:
+  - File Encoding (default: UTF-8)
+  - Date Default Format
+  - Optional format description
+
+- Conditional UI behavior based on detected file type:
+
+  If fileType === JSON:
+    - Display Root Path selector (for array-based JSON)
+    - Allow optional JSON path override
+
+  If fileType === CSV:
+    - Dynamically display two additional required inputs:
+        1) Column Delimiter
+           - Default: comma (,)
+           - Presets: comma, semicolon, tab, pipe
+           - Allow custom delimiter entry
+        2) Row Delimiter
+           - Default: newline (\n)
+           - Allow CRLF option (\r\n)
+           - Allow custom value
+    - Validate delimiter correctness
+    - Provide non-blocking preview validation warning if mismatch detected
+
+- Select or define target entity schema
+  - Entity definitions are provided by backend schema registry
+  - Support entity preview (field names + types + required markers)
+
+- Validation requirements:
+  - All required metadata fields must be completed
+  - CSV delimiter fields required only if fileType === CSV
+  - Persist format configuration into ETL definition model
+
+---------------------------------------------------
+STEP 3 – Field Mapping (Visual Canvas + Rules Engine)
+---------------------------------------------------
+
+Goal:
+Design an advanced mapping experience inspired by a visual node/edge canvas editor.
+
+Core UX Layout:
+
+- Left Panel: Source Fields Tree
+  - Hierarchical JSON path viewer
+  - Expand/collapse
+  - Search
+  - Array indicators
+  - Type badges
+  - Virtualized rendering for large trees
+
+- Right Panel: Target Entity Fields Tree
+  - Required markers
+  - Type indicators
+  - Search
+  - Validation state indicators
+
+- Center Panel: Interactive Mapping Canvas
+
+Mapping Canvas Concept:
+
+- Each mapping is represented as a visual edge (connection)
+- Source and Target fields are draggable node chips/cards
+- Nodes contain:
+  - Field name (truncated if needed)
+  - Type label
+  - Icon
+  - Left/right connection ports
+- Edges:
+  - Smooth curved lines
+  - Direction left → right
+  - Redraw only when node position changes
+
+User interactions:
+
+- Drag source field onto canvas
+- Drag target field onto canvas
+- Connect ports (source → target)
+- Reposition nodes freely
+- Delete edge
+- Clear connections per node
+- Multi-select delete
+- Zoom and pan support
+- Snap-to-grid optional
+
+Mapping Rules Panel:
+
+- Side panel listing all mappings:
+  - Source Path → Target Field
+  - Type match indicator
+  - Required coverage indicator
+  - Status (valid / warning / error)
+  - Quick actions: edit, disable, delete
+
+Right-click Context Menu (Cascading Submenus):
+
+Right-click on edge or node opens cascading menu:
+
+Header:
+  sourcePath → targetField
+
+Sections:
+
+1) Array Handling (single choice)
+   - Map first element
+   - Map each element
+   - Flatten
+   - Aggregate (SUM / COUNT / etc.)
+
+2) Null Handling (single choice)
+   - Fail record
+   - Skip record
+   - Default value
+
+3) Validation Constraints (multi-select)
+   - Required
+   - Min/Max
+   - Regex
+   - Allowed values
+
+4) Notes
+   - Free text note
+   - Clear note option
+
+Context actions:
+- Edit rule (open modal)
+- Clear connections
+- Delete mapping
+
+Per-instance rule model:
+
+- Each mapping edge has independent rule properties
+- Support optional Rule Templates:
+  - Define default rule presets
+  - New mappings may inherit defaults
+  - Edges remain independently editable
+
+Validation logic:
+
+- All required target fields must be mapped before proceeding
+- Detect type mismatches
+- Suggest transformations when mismatch occurs
+- Inline warnings on canvas edges
+- Show issues in mapping table
+- Support Auto-map (fuzzy matching) with review confirmation
+
+Performance constraints:
+
+- Virtualize large field trees
+- Debounce drag operations
+- Redraw edges only on node position updates
+- Clean up mapping state when nodes/edges removed
+- Avoid memory leaks
+- Lazy load deep JSON branches
+
+---------------------------------------------------
+STEP 4 – Transformations
+---------------------------------------------------
+
+- Allow defining ordered transformations per target field
+- Support predefined transformations:
+  - String manipulation
+  - Date parsing
+  - Type casting
+  - Arithmetic operations
+  - Conditional logic
+  - Custom expressions
+- Define execution order
+- Support grouping transformations
+- Detect conflicts between mapping and transformation
+- Provide preview test execution with sample input
+
+---------------------------------------------------
+STEP 5 – Filters
+---------------------------------------------------
+
+- Rule-builder style UI
+- AND / OR groups
+- Nested condition groups
+- Field-based conditions
+- Type-aware operators
+- User-friendly but powerful
+- Real-time validation
+- Visual representation of filter tree structure
+
+---------------------------------------------------
+STEP 6 – Summary & Creation
+---------------------------------------------------
+
+- Present full ETL definition object
+- Display:
+  - Metadata
+  - Mapping
+  - Transformations
+  - Filters
+- Allow editing previous steps
+- Final validation before submission
+- Generate final ETL JSON definition
+- Support Draft vs Published state
+- Include versioning metadata
+
+---------------------------------------------------
+Technical Constraints
+---------------------------------------------------
+
+- React + TypeScript
+- Enterprise internal tool
+- Backend provides schema registry and entity definitions
+- Must be scalable and modular
+- Future support for:
+  - Enrichment steps
+  - Routing steps
+  - Versioning
+  - Collaboration
+  - Plugin-based transformation engine
+
+Please include:
+
+- Suggested folder structure
+- Core reusable components
+- Global state design (Redux? Zustand? React Context? Explain tradeoffs)
+- Suggested data flow diagram
+- Validation layer design (Zod/Yup/custom)
+- Performance considerations for deeply nested JSON
+- How to persist wizard state safely
+- Recommended testing strategy
+- Suggested design system approach
+
+Structure your response clearly with headings and technical depth.
