@@ -47,10 +47,14 @@ The system is a wizard-based ETL configuration UI built with:
 - TypeScript
 - Enterprise internal tool
 - Backend provides schema registry + entity definitions
+- Backend also provides configured sink options
 
 The wizard includes:
 
+---------------------------------------------------
 STEP 1 – File Upload
+---------------------------------------------------
+
 - Upload JSON or CSV via drag & drop
 - Detect file type
 - Extract schema only (do NOT render raw JSON)
@@ -58,65 +62,137 @@ STEP 1 – File Upload
 - Infer CSV schema
 - Must handle very large files efficiently
 - Use streaming parsing and Web Workers if needed
+- Persist detected fileType in global state
 
+---------------------------------------------------
 STEP 2 – Metadata Configuration
+---------------------------------------------------
+
 - productSource
 - productType
 - team
 - environment
 - extensible key-value metadata
-- Common format config:
-  - File Encoding
-  - Date Default Format
-- If JSON:
-  - Root Path selector
-- If CSV:
-  - Column Delimiter (required)
-  - Row Delimiter (required)
-  - Presets + custom input
-- Must validate conditionally based on fileType
 
+Common format config:
+- File Encoding
+- Date Default Format
+
+If JSON:
+- Root Path selector
+
+If CSV:
+- Column Delimiter (required)
+- Row Delimiter (required)
+- Presets + custom input
+
+Must validate conditionally based on fileType.
+
+---------------------------------------------------
 STEP 3 – Field Mapping (MOST COMPLEX PART)
+---------------------------------------------------
 
-This is a visual canvas-based mapping system.
+Visual canvas-based mapping system.
 
-UI layout:
+Layout:
 - Left: Source hierarchical tree (virtualized)
 - Right: Target entity tree
-- Center: Interactive canvas with nodes and edges
+- Center: Interactive mapping canvas
 
 Requirements:
 
-- Source and Target fields become draggable nodes
-- Mapping is represented as directional edge (source → target)
+- Draggable source and target nodes
+- Directional edge (source → target)
 - Each edge has independent rule properties
-- Right-click context menu with cascading submenus
-- Support array handling rules
-- Support null handling rules
-- Support validation constraints
-- Support notes per mapping
+- Cascading right-click context menus
+- Array handling rules
+- Null handling rules
+- Validation constraints
+- Notes per mapping
 - Auto-map suggestions
 - Required field validation
 - Type mismatch detection
 - Zoom + pan
 - Edge redraw only on node movement
 - Clean memory handling
+- Support 1,000+ mappings without performance degradation
 
+---------------------------------------------------
 STEP 4 – Transformations
+---------------------------------------------------
+
 - Ordered per field
 - Type aware
 - Support custom expressions
-- Must integrate with mapping output model
+- Integrated with mapping output model
+- Validate transformation chains
 
+---------------------------------------------------
 STEP 5 – Filters
-- Rule builder with nested AND/OR groups
-- Type aware operators
-- Tree-based filter model
+---------------------------------------------------
 
-STEP 6 – Summary
+- Rule builder with nested AND/OR groups
+- Tree-based filter model
+- Type-aware operators
+- Real-time validation
+- Efficient serialization
+
+---------------------------------------------------
+STEP 6 – Output Configuration
+---------------------------------------------------
+
+This step defines the pipeline sink.
+
+UI Requirements:
+
+- Dropdown (select) for sink type
+- Sink options are provided by backend configuration
+- Example sink types:
+  - Kafka
+  - RabbitMQ
+  - File Storage
+  - HTTP Endpoint
+  - Database
+
+Dynamic behavior:
+
+- After selecting sinkType, dynamically render additional input fields specific to that sink.
+
+Minimum required behavior:
+
+If sinkType = Kafka:
+  - Topic Name (required)
+  - Optional partition strategy
+
+If sinkType = RabbitMQ:
+  - Queue Name (required)
+
+If sinkType = File:
+  - Output Path (required)
+  - File Format (JSON/CSV/Parquet)
+
+General Rules:
+
+- Topic / Queue / Path field is required depending on sinkType
+- Dynamic form rendering based on selected sink
+- Validation must adapt dynamically
+- Sink configuration must be stored as part of ETLDefinition
+- Sink type must support future plugin-based extension
+
+---------------------------------------------------
+STEP 7 – Summary
+---------------------------------------------------
+
 - Display full ETL JSON definition
+- Display:
+  - Metadata
+  - Mapping
+  - Transformations
+  - Filters
+  - Output configuration
 - Draft vs Published
 - Final validation gate
+- Generate final ETL JSON definition
 
 ========================================
 STRICT REQUIREMENTS
@@ -129,6 +205,7 @@ STRICT REQUIREMENTS
   - TransformationRule
   - FilterGroup
   - FormatConfiguration
+  - OutputConfiguration
 
 - Provide a clear state management choice:
   - Pick ONE (Redux Toolkit / Zustand / XState / Other)
@@ -151,7 +228,9 @@ STRICT REQUIREMENTS
 - Provide API contract examples (request/response JSON)
 
 - Provide validation architecture using a specific library (Zod/Yup/custom)
-  - Include example schema
+  - Include example schema for:
+      - Mapping
+      - OutputConfiguration
 
 - Provide testing strategy:
   - Unit
