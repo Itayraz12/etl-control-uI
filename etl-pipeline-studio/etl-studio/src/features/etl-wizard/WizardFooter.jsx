@@ -13,9 +13,11 @@ export default function WizardFooter() {
       padding: '14px 30px', display: 'flex', alignItems: 'center',
       gap: 12, flexShrink: 0,
     }}>
-      <Btn v="secondary" onClick={() => actions.goBack(currentStep)} disabled={currentStep === 0}>
-        ← Back
-      </Btn>
+      {currentStep > 0 && (
+        <Btn v="secondary" onClick={() => actions.goBack(currentStep)}>
+          ← Back
+        </Btn>
+      )}
       <DraftBadge />
       <div style={{ flex: 1 }} />
       <span style={{ fontSize: 12, color: 'var(--muted)' }}>

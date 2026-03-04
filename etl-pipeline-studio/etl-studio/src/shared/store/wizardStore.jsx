@@ -37,12 +37,7 @@ const initialState = {
   },
 
   // Step 4 — Field Mapping
-  mappings: [
-    { id: 'e1', src: 'productName', tgt: 'name',      warn: false },
-    { id: 'e2', src: 'price',       tgt: 'unitPrice',  warn: true  },
-    { id: 'e3', src: 'stockQty',    tgt: 'quantity',   warn: false },
-    { id: 'e4', src: 'category',    tgt: 'status',     warn: false },
-  ],
+  mappings: [],
 
   // Step 5 — Filters
   filters: [{
