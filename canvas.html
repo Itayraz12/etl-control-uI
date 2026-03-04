@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Node Canvas</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #7147E8;
+      --primary-light: #C4B5FD;
+      --bg: #F8F9FB;
+      --card: #fff;
+      --border: #E5E7EB;
+      --text: #292929;
+      --muted: #9CA3AF;
+      --danger: #EF4444;
+      --r: 8px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #canvas {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      background-image: radial-gradient(circle, #E5E7EB 0.5px, transparent 0.5px);
+      background-size: 22px 22px;
+      background-color: #F8F9FB;
+    }
+
+    #canvas.drag-over {
+      background-image: radial-gradient(circle, var(--primary) 0.5px, transparent 0.5px);
+    }
+
+    #edges-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .epath {
+      stroke-dasharray: 600;
+      animation: eDraw 0.4s ease forwards;
+    }
+
+    .epath.hov {
+      stroke: var(--primary) !important;
+      stroke-width: 3.5 !important;
+    }
+
+    @keyframes eDraw {
+      from {
+        stroke-dashoffset: 600;
+        opacity: 0;
+      }
+      to {
+        stroke-dashoffset: 0;
+        opacity: 1;
+      }
+    }
+
+    #pending-path {
+      display: none;
+    }
+
+    .node {
+      position: absolute;
+      width: 172px;
+      height: 58px;
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: var(--r);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      cursor: grab;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      user-select: none;
+      z-index: 10;
+      transition: box-shadow 0.15s, border-color 0.15s;
+    }
+
+    .node::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 6px;
+      bottom: 6px;
+      width: 3px;
+      border-radius: 2px;
+      background: var(--primary);
+    }
+
+    .node:hover {
+      border-color: var(--primary-light);
+    }
+
+    .node.dragging {
+      cursor: grabbing;
+      box-shadow: 0 10px 30px rgba(113, 71, 232, 0.22);
+      transform: scale(1.02);
+      z-index: 50;
+    }
+
+    .node.selected {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(113, 71, 232, 0.15);
+    }
+
+    .node.shake {
+      animation: shake 0.25s ease;
+    }
+
+    @keyframes shake {
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+
+    .ni {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .ni-emoji {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: rgba(113, 71, 232, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .ni-txt {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .ni-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ni-type {
+      font-size: 9px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .port {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      border: 2.5px solid var(--card);
+      background: var(--primary);
+      cursor: crosshair;
+      flex-shrink: 0;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .port-in {
+      background: #10B981;
+      cursor: default;
+    }
+
+    .port-out:hover {
+      transform: scale(1.45);
+      box-shadow: 0 0 0 4px rgba(113, 71, 232, 0.2);
+    }
+
+    body.connecting .node.no-in {
+      opacity: 0.3;
+      pointer-events: none;
+    }
+
+    body.connecting .node.has-in {
+      border-color: var(--primary-light);
+    }
+
+    body.connecting .node.has-in .port-in {
+      animation: portPulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes portPulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(113, 71, 232, 0.5);
+      }
+      50% {
+        box-shadow: 0 0 0 7px rgba(113, 71, 232, 0);
+      }
+    }
+
+    .nd-del {
+      display: none;
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--danger);
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 300;
+      z-index: 100;
+      transition: transform 0.1s;
+    }
+
+    .nd-del:hover {
+      transform: scale(1.1);
+    }
+
+    .node:hover .nd-del {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .empty-state {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .empty-state-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: var(--card);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      margin: 0 auto 12px;
+      animation: bounce-left 2s ease-in-out infinite;
+    }
+
+    @keyframes bounce-left {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(-10px); }
+    }
+
+    .empty-state h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .empty-state p {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .toolbar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 50px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 100;
+    }
+
+    .toolbar-left {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .toolbar-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .toolbar-sub {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .clear-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .clear-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .stats-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 36px;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      font-size: 11px;
+      color: var(--muted);
+      z-index: 100;
+    }
+
+    .ctx-menu {
+      position: fixed;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+      z-index: 1000;
+      min-width: 200px;
+      animation: ctxIn 0.18s ease;
+    }
+
+    @keyframes ctxIn {
+      from {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .ctx-header {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ctx-header-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--primary);
+    }
+
+    .ctx-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text);
+      transition: background 0.15s;
+    }
+
+    .ctx-item:hover {
+      background: rgba(113, 71, 232, 0.05);
+    }
+
+    .ctx-item.danger {
+      color: var(--danger);
+    }
+
+    .ctx-item.danger:hover {
+      background: rgba(239, 68, 68, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="toolbar-title">Node Canvas</div>
+        <div class="toolbar-sub" id="toolbar-sub">Drag items here, then connect them</div>
+      </div>
+      <button class="clear-btn" onclick="clearCanvas()">Clear Canvas</button>
+    </div>
+
+    <svg id="edges-svg">
+      <defs>
+        <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#7147E8" />
+        </marker>
+        <linearGradient id="lg-default" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:#7147E8;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#7147E8;stop-opacity:1" />
+        </linearGradient>
+      </defs>
+      <g id="edges-group"></g>
+      <path id="pending-path" stroke="#7147E8" stroke-width="2" fill="none" stroke-dasharray="7 4" opacity="0.8" marker-end="url(#arr)" />
+    </svg>
+
+    <div class="empty-state" id="empty-state">
+      <div class="empty-state-icon">←</div>
+      <h3>Drop items here</h3>
+      <p>Create nodes by dragging, then connect them</p>
+    </div>
+
+    <div class="stats-bar">
+      <span>Nodes: <strong id="node-count">0</strong></span>
+      <span style="margin-left: 20px;">Connections: <strong id="edge-count">0</strong></span>
+    </div>
+  </div>
+
+  <div class="ctx-menu" id="ctx-menu" style="display: none;">
+    <div class="ctx-header">
+      <div class="ctx-header-dot"></div>
+      <span id="ctx-name"></span>
+    </div>
+    <div class="ctx-item" onclick="editNode(currentCtxId)">Edit Properties</div>
+    <div class="ctx-item danger" onclick="removeNode(currentCtxId)">Remove from Canvas</div>
+  </div>
+
+  <script>
+    // Sample data
+    const SAMPLE_ITEMS = [
+      { id: 'dog', name: 'Dog', emoji: '🐶', type: 'animal' },
+      { id: 'cat', name: 'Cat', emoji: '🐱', type: 'animal' },
+      { id: 'lion', name: 'Lion', emoji: '🦁', type: 'animal' },
+      { id: 'bigger', name: 'bigger', emoji: '⚡', type: 'transformer' },
+      { id: 'equal', name: 'equal', emoji: '⚡', type: 'transformer' },
+      { id: 'contains', name: 'contains', emoji: '⚡', type: 'transformer' },
+      { id: 'startsWith', name: 'startsWith', emoji: '🔍', type: 'filter' },
+      { id: 'isEmpty', name: 'isEmpty', emoji: '🔍', type: 'filter' },
+      { id: 'house', name: 'House', emoji: '🏠', type: 'home' },
+      { id: 'office', name: 'Office', emoji: '🏢', type: 'home' },
+    ];
+
+    const RULES = {
+      animal: { hasOut: true, hasIn: false },
+      transformer: { hasOut: true, hasIn: true },
+      filter: { hasOut: true, hasIn: true },
+      home: { hasOut: false, hasIn: true },
+      general: { hasOut: true, hasIn: true },
+    };
+
+    let nodes = [];
+    let edges = [];
+    let drag = null;
+    let currentCtxId = null;
+
+    const canvas = document.getElementById('canvas');
+    const edgesGroup = document.getElementById('edges-group');
+    const pendingPath = document.getElementById('pending-path');
+    const emptyState = document.getElementById('empty-state');
+    const ctxMenu = document.getElementById('ctx-menu');
+
+    // Initialize with sample nodes
+    function init() {
+      SAMPLE_ITEMS.slice(0, 8).forEach((item, i) => {
+        addNode(item.name, item.emoji, item.type, 100 + i * 200, 100 + (i % 2) * 100);
+      });
+      updateStats();
+    }
+
+    function addNode(name, emoji, type, x, y) {
+      const id = `node-${Date.now()}-${Math.random()}`;
+      nodes.push({ id, name, emoji, type, x, y });
+      renderNode(id);
+      updateStats();
+    }
+
+    function renderNode(nodeId) {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) return;
+
+      const rules = RULES[node.type] || RULES.general;
+      const div = document.createElement('div');
+      div.id = `nd-${nodeId}`;
+      div.className = `node ${rules.hasIn ? 'has-in' : 'no-in'}`;
+      div.dataset.nid = nodeId;
+      div.style.left = node.x + 'px';
+      div.style.top = node.y + 'px';
+
+      let html = '';
+      if (rules.hasIn) {
+        html += `<div class="port port-in" data-nid="${nodeId}"></div>`;
+      }
+
+      html += `
+        <div class="ni" data-nid="${nodeId}">
+          <div class="ni-emoji">${node.emoji}</div>
+          <div class="ni-txt">
+            <div class="ni-name">${node.name}</div>
+            <div class="ni-type">${node.type}</div>
+          </div>
+        </div>
+      `;
+
+      if (rules.hasOut) {
+        html += `<div class="port port-out" data-nid="${nodeId}"></div>`;
+      }
+
+      html += `<button class="nd-del" onclick="removeNode('${nodeId}')">×</button>`;
+
+      div.innerHTML = html;
+      canvas.appendChild(div);
+
+      // Event listeners
+      const ni = div.querySelector('.ni');
+      const ports = div.querySelectorAll('.port');
+
+      ni.addEventListener('mousedown', (e) => startMoveNode(e, nodeId));
+      div.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showContextMenu(e, nodeId);
+      });
+
+      ports.forEach((port) => {
+        if (port.classList.contains('port-out')) {
+          port.addEventListener('mousedown', (e) => startConnection(e, nodeId, node.type));
+        }
+      });
+    }
+
+    function startMoveNode(e, nodeId) {
+      if (e.button !== 0 || e.target.closest('button')) return;
+      e.preventDefault();
+
+      const node = nodes.find(n => n.id === nodeId);
+      const el = document.getElementById(`nd-${nodeId}`);
+      el.classList.add('dragging');
+
+      drag = {
+        type: 'move',
+        id: nodeId,
+        mx0: e.clientX,
+        my0: e.clientY,
+        nx0: node.x,
+        ny0: node.y,
+      };
+
+      const onMove = (me) => {
+        const dx = me.clientX - drag.mx0;
+        const dy = me.clientY - drag.my0;
+        const canvasW = canvas.clientWidth;
+        const canvasH = canvas.clientHeight - 86; // Exclude toolbar and stats bar
+        const toolbarHeight = 50;
+
+        node.x = Math.max(0, Math.min(drag.nx0 + dx, canvasW - 172));
+        node.y = Math.max(toolbarHeight, Math.min(drag.ny0 + dy, canvasH + toolbarHeight - 58));
+
+        el.style.left = node.x + 'px';
+        el.style.top = node.y + 'px';
+        redrawEdges();
+      };
+
+      const onUp = () => {
+        el.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        drag = null;
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    }
+
+    function startConnection(e, nodeId, nodeType) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+
+      const node = nodes.find(n => n.id === nodeId);
+      const fx = node.x + 172;
+      const fy = node.y + 29;
+
+      drag = {
+        type: 'connect',
+        fromId: nodeId,
+        fromType: nodeType,
+        fx,
+        fy,
+      };
+
+      document.body.classList.add('connecting');
+      pendingPath.style.display = 'block';
+
+      const onMove = (me) => {
+        const d = bezier(fx, fy, me.clientX - canvas.getBoundingClientRect().left, me.clientY - canvas.getBoundingClientRect().top);
+        pendingPath.setAttribute('d', d);
+      };
+
+      const onUp = (me) => {
+        const el = document.elementFromPoint(me.clientX, me.clientY);
+        const target = el?.closest('[data-nid]');
+
+        if (target) {
+          const targetId = target.dataset.nid;
+          const targetNode = nodes.find(n => n.id === targetId);
+          if (targetNode && addEdge(nodeId, targetId, nodeType, targetNode.type)) {
+            // Success
+          } else if (targetNode) {
+            // Invalid connection - shake animation
+            target.classList.add('shake');
+            setTimeout(() => target.classList.remove('shake'), 250);
+          }
+        }
+
+        pendingPath.style.display = 'none';
+        document.body.classList.remove('connecting');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        drag = null;
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    }
+
+    function bezier(x1, y1, x2, y2) {
+      const dx = Math.max(Math.abs(x2 - x1) * 0.55, 50);
+      return `M ${x1},${y1} C ${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+    }
+
+    function addEdge(fromId, toId, fromType, toType) {
+      if (fromId === toId) return false;
+
+      const fromRules = RULES[fromType] || RULES.general;
+      const toRules = RULES[toType] || RULES.general;
+
+      if (!fromRules.hasOut || !toRules.hasIn) return false;
+
+      if (edges.some(e => e.from === fromId && e.to === toId)) return false;
+
+      edges.push({ from: fromId, to: toId, fromType, toType });
+      redrawEdges();
+      updateStats();
+      return true;
+    }
+
+    function redrawEdges() {
+      edgesGroup.innerHTML = '';
+
+      edges.forEach((edge) => {
+        const fromNode = nodes.find(n => n.id === edge.from);
+        const toNode = nodes.find(n => n.id === edge.to);
+        if (!fromNode || !toNode) return;
+
+        const x1 = fromNode.x + 172;
+        const y1 = fromNode.y + 29;
+        const x2 = toNode.x;
+        const y2 = toNode.y + 29;
+
+        const d = bezier(x1, y1, x2, y2);
+
+        // Glow
+        const glow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        glow.setAttribute('d', d);
+        glow.setAttribute('stroke', '#A78BFA');
+        glow.setAttribute('stroke-width', '7');
+        glow.setAttribute('fill', 'none');
+        glow.setAttribute('opacity', '0.12');
+        edgesGroup.appendChild(glow);
+
+        // Visible path
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        path.setAttribute('stroke', 'url(#lg-default)');
+        path.setAttribute('stroke-width', '2.5');
+        path.setAttribute('fill', 'none');
+        path.setAttribute('marker-end', 'url(#arr)');
+        path.classList.add('epath');
+        edgesGroup.appendChild(path);
+
+        // Hitbox
+        const hitbox = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        hitbox.setAttribute('d', d);
+        hitbox.setAttribute('stroke', 'transparent');
+        hitbox.setAttribute('stroke-width', '18');
+        hitbox.setAttribute('fill', 'none');
+        hitbox.classList.add('ehit');
+        hitbox.style.pointerEvents = 'auto';
+        hitbox.style.cursor = 'pointer';
+
+        hitbox.addEventListener('mouseenter', () => path.classList.add('hov'));
+        hitbox.addEventListener('mouseleave', () => path.classList.remove('hov'));
+        hitbox.addEventListener('click', () => removeEdge(edge));
+
+        edgesGroup.appendChild(hitbox);
+      });
+    }
+
+    function removeEdge(edge) {
+      edges = edges.filter(e => !(e.from === edge.from && e.to === edge.to));
+      redrawEdges();
+      updateStats();
+    }
+
+    function removeNode(nodeId) {
+      nodes = nodes.filter(n => n.id !== nodeId);
+      edges = edges.filter(e => e.from !== nodeId && e.to !== nodeId);
+      document.getElementById(`nd-${nodeId}`)?.remove();
+      redrawEdges();
+      updateStats();
+      ctxMenu.style.display = 'none';
+    }
+
+    function editNode(nodeId) {
+      console.log('Edit:', nodeId);
+      ctxMenu.style.display = 'none';
+    }
+
+    function showContextMenu(e, nodeId) {
+      const node = nodes.find(n => n.id === nodeId);
+      currentCtxId = nodeId;
+      document.getElementById('ctx-name').textContent = node.name;
+      ctxMenu.style.left = e.clientX + 'px';
+      ctxMenu.style.top = e.clientY + 'px';
+      ctxMenu.style.display = 'block';
+    }
+
+    function clearCanvas() {
+      if (confirm('Clear all nodes and connections?')) {
+        nodes = [];
+        edges = [];
+        document.querySelectorAll('.node').forEach(n => n.remove());
+        redrawEdges();
+        updateStats();
+      }
+    }
+
+    function updateStats() {
+      document.getElementById('node-count').textContent = nodes.length;
+      document.getElementById('edge-count').textContent = edges.length;
+
+      if (nodes.length === 0) {
+        emptyState.style.display = 'block';
+        document.getElementById('toolbar-sub').textContent = 'Drag items here, then connect them';
+      } else if (edges.length === 0) {
+        emptyState.style.display = 'none';
+        document.getElementById('toolbar-sub').textContent = `${nodes.length} nodes — drag ● port to connect`;
+      } else {
+        emptyState.style.display = 'none';
+        document.getElementById('toolbar-sub').textContent = `${nodes.length} nodes · ${edges.length} connections`;
+      }
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.ctx-menu') && !e.target.closest('.node')) {
+        ctxMenu.style.display = 'none';
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        ctxMenu.style.display = 'none';
+      }
+    });
+
+    // Initialize
+    init();
+  </script>
+</body>
+</html>
