@@ -1,6 +1,8 @@
 import { Btn, Chip } from '../../shared/components/index.jsx'
+import { useWizard } from '../../shared/store/wizardStore.jsx'
 
 export default function TopNav() {
+  const { state, actions } = useWizard()
   return (
     <div style={{
       background: 'var(--surf)', borderBottom: '1px solid var(--border)',
@@ -14,6 +16,12 @@ export default function TopNav() {
       <div style={{ flex: 1 }} />
       <Btn v="ghost" sm>⟳ Load Draft</Btn>
       <Btn v="ghost" sm>⚙ Settings</Btn>
+      <Btn
+        v="ghost" sm
+        onClick={() => actions.toggleTheme()}
+      >
+        {state.theme === 'dark' ? '🌞 Light' : '🌙 Dark'}
+      </Btn>
       <Btn v="ghost" sm>?</Btn>
     </div>
   )

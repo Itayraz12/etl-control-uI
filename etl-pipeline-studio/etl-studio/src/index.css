@@ -21,6 +21,23 @@
   --mono:     'JetBrains Mono', ui-monospace, monospace;
 }
 
+/* light theme overrides */
+:root[data-theme="light"] {
+  --bg:       #ffffff;
+  --surf:     #f5f5f5;
+  --surf2:    #e5e7eb;
+  --surf3:    #d1d5db;
+  --border:   #cbd5e1;
+  --accent:   #4f6ef7;
+  --accent2:  #7c3aed;
+  --success:  #22c55e;
+  --warning:  #f59e0b;
+  --danger:   #ef4444;
+  --text:     #1f2937;
+  --text2:    #374151;
+  --muted:    #6b7280;
+}
+
 html, body, #root {
   height: 100%;
   background: var(--bg);

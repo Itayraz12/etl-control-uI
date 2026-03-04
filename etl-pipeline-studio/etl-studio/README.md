@@ -68,6 +68,8 @@ src/
 ## 🎨 Design System
 
 - **Dark theme** — enterprise `#0f1117` base
+- **Light theme** — alternate `#ffffff` base (toggle available in top nav)
+
 - **Accent** — `#4f6ef7` blue, `#7c3aed` purple
 - **Fonts** — DM Sans + JetBrains Mono
 - **Components** — `Chip`, `Btn` (5 variants), `Card`, `FormGroup`, `SidePanel`, `CfgPanel`, `ValidationItem`

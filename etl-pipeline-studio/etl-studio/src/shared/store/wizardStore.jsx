@@ -1,9 +1,11 @@
-import { createContext, useContext, useReducer } from 'react'
+import { createContext, useContext, useReducer, useEffect } from 'react'
 
 // ── Initial State ─────────────────────────────────────────────────────────
 const initialState = {
   currentStep: 0,
   completedSteps: new Set(),
+  // Theme preference
+  theme: 'dark',
 
   // Step 1 — Metadata
   metadata: {
@@ -85,6 +87,10 @@ function wizardReducer(state, action) {
       return { ...state, filters: action.payload }
     case 'UPDATE_SINK':
       return { ...state, sink: { ...state.sink, ...action.payload } }
+    case 'SET_THEME':
+      return { ...state, theme: action.payload }
+    case 'TOGGLE_THEME':
+      return { ...state, theme: state.theme === 'dark' ? 'light' : 'dark' }
     default:
       return state
   }
@@ -96,6 +102,22 @@ const WizardContext = createContext(null)
 export function WizardProvider({ children }) {
   const [state, dispatch] = useReducer(wizardReducer, initialState)
 
+  // apply theme when it changes & persist
+  useEffect(() => {
+    document.documentElement.dataset.theme = state.theme
+    try { localStorage.setItem('theme', state.theme) } catch {}
+  }, [state.theme])
+
+  // on mount, load saved theme
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('theme')
+      if (saved === 'light' || saved === 'dark') {
+        dispatch({ type: 'SET_THEME', payload: saved })
+      }
+    } catch {}
+  }, [])
+
   const actions = {
     setStep:        (step)    => dispatch({ type: 'SET_STEP', payload: step }),
     completeStep:   (step)    => dispatch({ type: 'COMPLETE_STEP', payload: step }),
@@ -105,6 +127,9 @@ export function WizardProvider({ children }) {
     setMappings:    (maps)    => dispatch({ type: 'SET_MAPPINGS',     payload: maps }),
     setFilters:     (filters) => dispatch({ type: 'SET_FILTERS',      payload: filters }),
     updateSink:     (patch)   => dispatch({ type: 'UPDATE_SINK',      payload: patch }),
+
+    setTheme:       (theme)   => dispatch({ type: 'SET_THEME',       payload: theme }),
+    toggleTheme:    ()        => dispatch({ type: 'TOGGLE_THEME' }),
 
     goNext: (current) => {
       dispatch({ type: 'COMPLETE_STEP', payload: current })
