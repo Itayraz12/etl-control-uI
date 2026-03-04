@@ -11,8 +11,8 @@ const STEP_COMPONENTS = [
   MetadataStep,
   SourceConfigStep,
   SourceUploadStep,
-  FieldMappingStep,
   FiltersStep,
+  FieldMappingStep,
   SinkConfigStep,
   SummaryStep,
 ]

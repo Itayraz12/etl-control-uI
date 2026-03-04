@@ -101,7 +101,7 @@ function GroupBlock({ group, depth, onUpdate, onRemove }) {
   )
 }
 
-export default function FiltersStep() {
+export default function   FiltersStep() {
   const { state, actions } = useWizard()
   const filters = state.filters
   const setFilters = actions.setFilters
