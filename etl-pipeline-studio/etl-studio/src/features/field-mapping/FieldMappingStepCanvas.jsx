@@ -29,6 +29,65 @@ export default function FieldMappingStep() {
   const [currentEdge, setCurrentEdge] = useState(null)
   const [sourceSearch, setSourceSearch] = useState('')
   const [targetSearch, setTargetSearch] = useState('')
+  const [successModal, setSuccessModal] = useState(null)
+
+  // Load saved mappings from state on mount
+  useEffect(() => {
+    if (state.mappings && state.mappings.length > 0) {
+      // Convert state.mappings back to nodes and edges
+      const loadedNodes = []
+      const loadedEdges = []
+      const nodeIdMap = {}
+
+      state.mappings.forEach((mapping) => {
+        // Create source node if not exists
+        const srcKey = mapping.srcNodeId || `src-${mapping.src}`
+        if (!nodeIdMap[srcKey]) {
+          const srcNode = {
+            id: srcKey,
+            name: mapping.src,
+            emoji: '📄',
+            type: 'source',
+            fieldId: mapping.src,
+            isRequired: false,
+            x: mapping.srcPos?.x ?? 100,
+            y: mapping.srcPos?.y ?? 100,
+          }
+          loadedNodes.push(srcNode)
+          nodeIdMap[srcKey] = srcNode.id
+        }
+
+        // Create target node if not exists
+        const tgtKey = mapping.tgtNodeId || `tgt-${mapping.tgt}`
+        if (!nodeIdMap[tgtKey]) {
+          const tgtNode = {
+            id: tgtKey,
+            name: mapping.tgt,
+            emoji: '🎯',
+            type: 'target',
+            fieldId: mapping.tgt,
+            isRequired: false,
+            x: mapping.tgtPos?.x ?? 400,
+            y: mapping.tgtPos?.y ?? 100,
+          }
+          loadedNodes.push(tgtNode)
+          nodeIdMap[tgtKey] = tgtNode.id
+        }
+
+        // Create edge
+        loadedEdges.push({
+          from: nodeIdMap[srcKey],
+          to: nodeIdMap[tgtKey],
+          fromType: 'source',
+          toType: 'target',
+          transformer: 'none',
+        })
+      })
+
+      setNodes(loadedNodes)
+      setEdges(loadedEdges)
+    }
+  }, [])
 
   // Filter source and target fields based on search
   const filteredSource = MOCK_SCHEMA.filter(f => 
@@ -211,6 +270,33 @@ export default function FieldMappingStep() {
     })
   }
 
+  const saveMappings = () => {
+    // Convert nodes and edges to mappings format (with positions)
+    const nodeMap = {}
+    const mappingsList = edges.map(edge => {
+      const srcNode = nodes.find(n => n.id === edge.from)
+      const tgtNode = nodes.find(n => n.id === edge.to)
+      
+      // Store node layout info
+      nodeMap[srcNode?.id] = { x: srcNode?.x || 0, y: srcNode?.y || 0 }
+      nodeMap[tgtNode?.id] = { x: tgtNode?.x || 0, y: tgtNode?.y || 0 }
+      
+      return {
+        src: srcNode?.fieldId || srcNode?.name || '',
+        tgt: tgtNode?.fieldId || tgtNode?.name || '',
+        srcNodeId: srcNode?.id,
+        tgtNodeId: tgtNode?.id,
+        srcPos: { x: srcNode?.x || 0, y: srcNode?.y || 0 },
+        tgtPos: { x: tgtNode?.x || 0, y: tgtNode?.y || 0 },
+      }
+    })
+
+    // Save to wizard state
+    actions.setMappings(mappingsList)
+    setSuccessModal(mappingsList.length)
+    setTimeout(() => setSuccessModal(null), 2500)
+  }
+
   const clearCanvas = () => {
     if (confirm('Clear all nodes and mappings?')) {
       setNodes([])
@@ -237,7 +323,7 @@ export default function FieldMappingStep() {
           overflow: 'hidden',
         }}>
           <div style={{ padding: '12px', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Source Assets</div>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>Source Fields <span style={{background: 'var(--accent)', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px'}}>{filteredSource.length}</span></div>
             <input
               type="text"
               placeholder="Search..."
@@ -284,8 +370,11 @@ export default function FieldMappingStep() {
                 }}
               >
                 <span>📄</span>
-                <span>{field.name}</span>
-                {field.required && <span style={{ color: 'var(--danger)', fontSize: '10px', marginLeft: 'auto' }}>*</span>}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <span>{field.name}</span>
+                  <span style={{ fontSize: '10px', color: 'var(--muted)', contentVisibility: 'auto' }}>{field.type}</span>
+                </div>
+                {field.required && <span style={{ color: 'var(--danger)', fontSize: '10px' }}>*</span>}
               </div>
             ))}
             {filteredSource.length === 0 && (
@@ -315,30 +404,56 @@ export default function FieldMappingStep() {
                 Drag fields from panels, then connect them
               </div>
             </div>
-            <button
-              onClick={clearCanvas}
-              style={{
-                padding: '6px 12px',
-                border: '1px solid var(--border)',
-                background: 'transparent',
-                color: 'var(--text)',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: 500,
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => { 
-                e.target.style.borderColor = 'var(--danger)'
-                e.target.style.color = 'var(--danger)' 
-              }}
-              onMouseLeave={(e) => { 
-                e.target.style.borderColor = 'var(--border)'
-                e.target.style.color = 'var(--text)' 
-              }}
-            >
-              Clear Canvas
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={saveMappings}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid var(--border)',
+                  background: 'transparent',
+                  color: 'var(--text)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => { 
+                  e.target.style.borderColor = 'var(--success)'
+                  e.target.style.color = 'var(--success)' 
+                }}
+                onMouseLeave={(e) => { 
+                  e.target.style.borderColor = 'var(--border)'
+                  e.target.style.color = 'var(--text)' 
+                }}
+              >
+                💾 Save Mappings
+              </button>
+              <button
+                onClick={clearCanvas}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid var(--border)',
+                  background: 'transparent',
+                  color: 'var(--text)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => { 
+                  e.target.style.borderColor = 'var(--danger)'
+                  e.target.style.color = 'var(--danger)' 
+                }}
+                onMouseLeave={(e) => { 
+                  e.target.style.borderColor = 'var(--border)'
+                  e.target.style.color = 'var(--text)' 
+                }}
+              >
+                Clear Canvas
+              </button>
+            </div>
           </div>
 
           {/* Canvas Area */}
@@ -701,7 +816,7 @@ export default function FieldMappingStep() {
           overflow: 'hidden',
         }}>
           <div style={{ padding: '12px', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Target Assets</div>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>Target Fields <span style={{background: 'var(--success)', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px'}}>{filteredTarget.length}</span></div>
             <input
               type="text"
               placeholder="Search..."
@@ -748,8 +863,11 @@ export default function FieldMappingStep() {
                 }}
               >
                 <span>🎯</span>
-                <span>{field.name}</span>
-                {field.required && <span style={{ color: 'var(--danger)', fontSize: '10px', marginLeft: 'auto' }}>*</span>}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <span>{field.name}</span>
+                  <span style={{ fontSize: '10px', color: 'var(--muted)', contentVisibility: 'auto' }}>{field.type}</span>
+                </div>
+                {field.required && <span style={{ color: 'var(--danger)', fontSize: '10px' }}>*</span>}
               </div>
             ))}
             {filteredTarget.length === 0 && (
@@ -933,6 +1051,97 @@ export default function FieldMappingStep() {
           animation: shake 0.25s ease;
         }
       `}</style>
+
+      {/* Success Modal */}
+      {successModal && (
+        <>
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              zIndex: 999,
+            }}
+          />
+          <div 
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'var(--surf)',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              zIndex: 1000,
+              minWidth: '380px',
+              maxWidth: '500px',
+              animation: 'scaleIn 0.3s ease',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              background: 'var(--success)',
+              padding: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}>
+              <div style={{ fontSize: '32px' }}>✅</div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff' }}>Mappings Saved</h3>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{
+              padding: '20px',
+              color: 'var(--text)',
+              fontSize: '14px',
+              lineHeight: '1.6',
+              textAlign: 'center',
+            }}>
+              Successfully saved {successModal} mapping{successModal !== 1 ? 's' : ''} to your pipeline.
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '16px 20px',
+              borderTop: '1px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'center',
+              background: 'var(--bg)',
+            }}>
+              <button
+                onClick={() => setSuccessModal(null)}
+                style={{
+                  padding: '8px 16px',
+                  background: 'var(--success)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}
+              >
+                Got it!
+              </button>
+            </div>
+          </div>
+
+          <style>{`
+            @keyframes scaleIn {
+              from { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+              to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            }
+          `}</style>
+        </>
+      )}
     </div>
   )
 }

@@ -31,7 +31,6 @@ function FlinkFlow({ sourceType, mappings, filters, sink }) {
           }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: n.color }}>{n.label}</div>
             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, fontFamily: 'var(--mono)' }}>{n.sub}</div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 4 }}>P={n.pl}</div>
           </div>
           {i < nodes.length - 1 && (
             <div style={{ display: 'flex', alignItems: 'center', margin: '0 4px' }}>
@@ -97,6 +96,7 @@ export default function SummaryStep() {
   const { state, actions } = useWizard()
   const [submitted, setSubmitted] = useState(false)
   const [copying, setCopying] = useState(false)
+  const [copiedDash, setCopiedDash] = useState(false)
   const [errorModal, setErrorModal] = useState(null)
   const srcMeta = SOURCE_TYPES.find(t => t.id === state.source.sourceType)
   const reqMapped = state.mappings.filter(m => ['name', 'unitPrice'].includes(m.tgt)).length
@@ -159,31 +159,102 @@ export default function SummaryStep() {
 
   if (submitted) {
     const pipelineId = `ETL-${Date.now().toString(36).toUpperCase()}`
+    const grafanaLink = `https://grafana.etl-studio.io/d/pipeline-${pipelineId.toLowerCase()}?source=${state.metadata.productSource}&type=${state.metadata.productType}&refresh=30s`
+    
+    const copyGrafanaLink = () => {
+      navigator.clipboard.writeText(grafanaLink)
+      setCopiedDash(true)
+      setTimeout(() => setCopiedDash(false), 2000)
+    }
+
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, textAlign: 'center', animation: 'fadeIn .4s ease' }}>
-        <div style={{ fontSize: 64, marginBottom: 20 }}>🎉</div>
-        <h2 style={{ fontSize: 26, fontWeight: 800, marginBottom: 10, background: 'linear-gradient(135deg,#4f6ef7,#7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          Pipeline Created!
-        </h2>
-        <p style={{ color: 'var(--muted)', marginBottom: 28, maxWidth: 440 }}>
-          Your ETL pipeline has been registered and is ready for deployment.
-        </p>
-        <Card style={{ width: '100%', maxWidth: 460, textAlign: 'left' }} p="18px 22px">
-          {[
-            ['Pipeline ID', pipelineId],
-            ['Entity',      `${state.metadata.entityName} ${state.metadata.schemaVersion}`],
-            ['Mappings',    state.mappings.length],
-            ['Environment', state.metadata.environment],
-          ].map(([k, v]) => (
-            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-              <span style={{ color: 'var(--muted)' }}>{k}</span>
-              <span style={{ fontWeight: 600, fontFamily: 'var(--mono)', color: 'var(--accent)' }}>{v}</span>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
+        {/* Header - Logo and Title */}
+        <div style={{ padding: '30px 20px 10px', textAlign: 'center', flexShrink: 0 }}>
+          <div style={{ fontSize: 64, marginBottom: 10 }}>🎉</div>
+          <h2 style={{ fontSize: 26, fontWeight: 800, marginBottom: 8, background: 'linear-gradient(135deg,#4f6ef7,#7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            Pipeline Created!
+          </h2>
+        </div>
+
+        {/* Scrollable Content */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 40px' }}>
+          {/* Subtitle - centered in middle */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 120, marginBottom: 20 }}>
+            <p style={{ color: 'var(--muted)', maxWidth: 440, textAlign: 'center' }}>
+              Your ETL pipeline has been registered and is ready for deployment.
+            </p>
+          </div>
+
+          {/* Main Info Card */}
+          <Card style={{ width: '100%', maxWidth: 460, textAlign: 'left', marginBottom: 20 }} p="18px 22px">
+            {[
+              ['Pipeline ID', pipelineId],
+              ['Entity',      `${state.metadata.entityName} ${state.metadata.schemaVersion}`],
+              ['Mappings',    state.mappings.length],
+              ['Environment', state.metadata.environment],
+            ].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>{k}</span>
+                <span style={{ fontWeight: 600, fontFamily: 'var(--mono)', color: 'var(--accent)' }}>{v}</span>
+              </div>
+            ))}
+          </Card>
+
+          {/* Dashboard Card */}
+          <Card style={{ width: '100%', maxWidth: 460, textAlign: 'left', marginBottom: 20 }} p="18px 22px">
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--accent)' }}>📊 Grafana Dashboard</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Dashboard Link</div>
+                <div style={{ fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--text)', wordBreak: 'break-all', background: 'var(--surf2)', padding: '8px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                  {grafanaLink}
+                </div>
+              </div>
+              <button
+                onClick={copyGrafanaLink}
+                style={{
+                  padding: '8px 12px',
+                  background: copiedDash ? 'var(--success)' : 'var(--accent)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => !copiedDash && (e.target.style.opacity = '0.9')}
+                onMouseLeave={(e) => !copiedDash && (e.target.style.opacity = '1')}
+              >
+                {copiedDash ? '✓ Copied' : '📋 Copy'}
+              </button>
             </div>
-          ))}
-        </Card>
-        <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
-          <Btn v="secondary">View in Registry</Btn>
-          <Btn v="primary" onClick={() => setSubmitted(false)}>Create Another</Btn>
+            <a href={grafanaLink} target="_blank" rel="noopener noreferrer" style={{
+              display: 'inline-block',
+              padding: '8px 16px',
+              background: 'transparent',
+              border: '1px solid var(--accent)',
+              color: 'var(--accent)',
+              borderRadius: '6px',
+              textDecoration: 'none',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+              onMouseEnter={(e) => { e.target.style.background = 'var(--accent)'; e.target.style.color = 'white' }}
+              onMouseLeave={(e) => { e.target.style.background = 'transparent'; e.target.style.color = 'var(--accent)' }}
+            >
+              🔗 Open in Grafana
+            </a>
+          </Card>
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Btn v="secondary">View in Registry</Btn>
+            <Btn v="primary" onClick={() => setSubmitted(false)}>Create Another</Btn>
+          </div>
         </div>
       </div>
     )
