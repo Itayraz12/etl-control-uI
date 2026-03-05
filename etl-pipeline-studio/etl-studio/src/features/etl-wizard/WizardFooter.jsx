@@ -23,10 +23,9 @@ export default function WizardFooter() {
       <span style={{ fontSize: 12, color: 'var(--muted)' }}>
         Step {currentStep + 1} of {STEPS.length} — {STEPS[currentStep].label}
       </span>
-      {isLast
-        ? <Btn v="success" onClick={() => actions.goNext(currentStep)}>✓ Create ETL Pipeline</Btn>
-        : <Btn v="primary"  onClick={() => actions.goNext(currentStep)}>Continue →</Btn>
-      }
+      {!isLast && (
+        <Btn v="primary" onClick={() => actions.goNext(currentStep)}>Continue →</Btn>
+      )}
     </div>
   )
 }

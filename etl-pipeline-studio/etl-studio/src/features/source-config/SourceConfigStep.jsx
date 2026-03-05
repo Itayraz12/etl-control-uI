@@ -12,8 +12,13 @@ function SourceConfigPanel({ type, state, u }) {
   if (type === 'kafka') return (
     <CfgPanel title="☕ Kafka Source">
       <FormRow>
-        <FormGroup label="Bootstrap Servers" required>
-          <input value={state.kafkaBootstrap || ''} onChange={e => u('kafkaBootstrap', e.target.value)} />
+        <FormGroup label="Environment" required>
+          <select value={state.kafkaEnv || ''} onChange={e => u('kafkaEnv', e.target.value)}>
+            <option value="">Select Environment</option>
+            <option value="prod">Production</option>
+            <option value="cap">Captive</option>
+            <option value="stage">Staging</option>
+          </select>
         </FormGroup>
         <FormGroup label="Topic" required>
           <input value={state.kafkaTopic || ''} onChange={e => u('kafkaTopic', e.target.value)} />

@@ -40,21 +40,7 @@ const initialState = {
   mappings: [],
 
   // Step 5 — Filters
-  filters: [{
-    id: 'g1', logic: 'AND',
-    rules: [
-      { id: 'r1', field: 'isActive', op: 'equals',      value: 'true' },
-      { id: 'r2', field: 'price',    op: 'greater than', value: '0'    },
-    ],
-    subgroups: [{
-      id: 'g2', logic: 'OR',
-      rules: [
-        { id: 'r3', field: 'category', op: 'contains', value: 'Electronics' },
-        { id: 'r4', field: 'category', op: 'contains', value: 'Grocery'     },
-      ],
-      subgroups: [],
-    }],
-  }],
+  filters: [],
 
   // Step 6 — Sink Config
   sink: {

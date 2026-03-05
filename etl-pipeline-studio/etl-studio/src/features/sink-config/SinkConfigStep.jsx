@@ -5,7 +5,7 @@ const SINK_TYPES = [
   { id: 'kafka', icon: '☕', name: 'Kafka',     sub: 'Streaming sink' },
   { id: 'file',  icon: '📂', name: 'File',      sub: 'JSON / CSV / Parquet' },
   { id: 'db',    icon: '🗄️', name: 'Database', sub: 'PostgreSQL · MySQL'    },
-  { id: 'http',  icon: '🌐', name: 'HTTP',      sub: 'Webhook / POST'        },
+  { id: 'rabbitmq',  icon: '🐇', name: 'RabbitMQ',      sub: 'Message queue'        },
 ]
 
 function SinkConfigPanel({ type, sink, u }) {
@@ -47,23 +47,23 @@ function SinkConfigPanel({ type, sink, u }) {
     </CfgPanel>
   )
 
-  if (type === 'http') return (
-    <CfgPanel title="🌐 HTTP Sink">
+  if (type === 'rabbitmq') return (
+    <CfgPanel title="🐇 RabbitMQ Sink">
       <FormRow>
-        <FormGroup label="Endpoint URL">
-          <input value={sink.sinkHttpUrl || ''} onChange={e => u('sinkHttpUrl', e.target.value)} placeholder="https://api.corp.com/ingest" />
+        <FormGroup label="Host">
+          <input value={sink.sinkRmqHost || ''} onChange={e => u('sinkRmqHost', e.target.value)} placeholder="rabbitmq.example.com" />
         </FormGroup>
-        <FormGroup label="Method">
-          <select value={sink.sinkHttpMethod || 'POST'} onChange={e => u('sinkHttpMethod', e.target.value)}>
-            <option>POST</option><option>PUT</option>
-          </select>
+        <FormGroup label="Port">
+          <input value={sink.sinkRmqPort || ''} onChange={e => u('sinkRmqPort', e.target.value)} placeholder="5672" />
         </FormGroup>
       </FormRow>
-      <FormGroup label="Auth Type">
-        <select value={sink.sinkHttpAuth || 'None'} onChange={e => u('sinkHttpAuth', e.target.value)}>
-          <option>None</option><option>Bearer Token</option><option>Basic</option>
-        </select>
+      <FormGroup label="Queue Name" required>
+        <input value={sink.sinkRmqQueue || ''} onChange={e => u('sinkRmqQueue', e.target.value)} placeholder="products.sink" />
       </FormGroup>
+      <FormGroup label="Exchange">
+        <input value={sink.sinkRmqExchange || ''} onChange={e => u('sinkRmqExchange', e.target.value)} placeholder="etl.exchange" />
+      </FormGroup>
+      <Btn sm v="ghost" onClick={() => alert('Connection tested!')} style={{ marginTop: 8 }}>🔌 Test Connection</Btn>
     </CfgPanel>
   )
   return null
@@ -106,7 +106,7 @@ export default function SinkConfigStep() {
 
       <SidePanel title="Sink Summary" items={[
         ['Type',  sinkMeta?.name || '—'],
-        ['Entry', sink.sinkKafkaTopic || sink.sinkFilePath || sink.sinkDbTable || sink.sinkHttpUrl || '—'],
+        ['Entry', sink.sinkKafkaTopic || sink.sinkFilePath || sink.sinkDbTable || sink.sinkRmqQueue || '—'],
       ]} />
     </div>
   )

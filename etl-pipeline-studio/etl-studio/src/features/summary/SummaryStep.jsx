@@ -4,12 +4,23 @@ import { Card, CardTitle, ValidationItem, Btn } from '../../shared/components/in
 import { SOURCE_TYPES } from '../../shared/types/index.js'
 
 function FlinkFlow({ sourceType, mappings, filters, sink }) {
-  const nodes = [
-    { id: 'src',    label: 'Source',   sub: sourceType?.toUpperCase() || 'KAFKA',      color: '#4f6ef7', pl: 2 },
-    { id: 'map',    label: 'Mapping',  sub: `${mappings.length} fields`,               color: '#22c55e', pl: 4 },
-    { id: 'filter', label: 'Filter',   sub: `${filters.reduce((a, g) => a + g.rules.length, 0)} rules`, color: '#f59e0b', pl: 2 },
-    { id: 'sink',   label: 'Sink',     sub: sink?.sinkType?.toUpperCase() || 'KAFKA',  color: '#ec4899', pl: 2 },
-  ]
+  const nodes = []
+  
+  // Source node
+  nodes.push({ id: 'src',    label: 'Source',   sub: sourceType?.toUpperCase() || 'KAFKA',      color: '#4f6ef7', pl: 2 })
+  
+  // Filter node - only if filters exist
+  const totalFilterRules = filters.reduce((a, g) => a + g.rules.length, 0)
+  if (totalFilterRules > 0) {
+    nodes.push({ id: 'filter', label: 'Filter',   sub: `${totalFilterRules} rules`, color: '#f59e0b', pl: 2 })
+  }
+  
+  // Mapping node
+  nodes.push({ id: 'map',    label: 'Mapping',  sub: `${mappings.length} fields`,               color: '#22c55e', pl: 4 })
+  
+  // Sink node
+  nodes.push({ id: 'sink',   label: 'Sink',     sub: sink?.sinkType?.toUpperCase() || 'KAFKA',  color: '#ec4899', pl: 2 })
+  
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap', justifyContent: 'center', padding: '10px 0' }}>
       {nodes.map((n, i) => (
@@ -83,11 +94,14 @@ sink:
 }
 
 export default function SummaryStep() {
-  const { state } = useWizard()
+  const { state, actions } = useWizard()
   const [submitted, setSubmitted] = useState(false)
   const [copying, setCopying] = useState(false)
+  const [errorModal, setErrorModal] = useState(null)
   const srcMeta = SOURCE_TYPES.find(t => t.id === state.source.sourceType)
   const reqMapped = state.mappings.filter(m => ['name', 'unitPrice'].includes(m.tgt)).length
+  const REQUIRED_FIELDS = ['name', 'unitPrice']
+  const unmappedRequired = REQUIRED_FIELDS.filter(f => !state.mappings.some(m => m.tgt === f))
 
   const validations = [
     { type: reqMapped >= 2 ? 'ok' : 'err',  text: `Required fields mapped (${reqMapped}/2)` },
@@ -97,6 +111,51 @@ export default function SummaryStep() {
     { type: state.filters.length > 0 ? 'ok' : 'warn', text: `${state.filters.reduce((a, g) => a + g.rules.length, 0)} filter rule(s) active` },
     { type: state.sink.sinkType ? 'ok' : 'err', text: `Sink configured: ${state.sink.sinkType || 'none'}` },
   ]
+
+  const handleCreatePipeline = () => {
+    // Validate required fields
+    if (unmappedRequired.length > 0) {
+      setErrorModal({
+        icon: '❌',
+        title: 'Missing Required Fields',
+        message: `Not all required fields have been mapped.\n\nMissing: ${unmappedRequired.join(', ')}\n\nPlease go back to Field Mapping and map all required fields marked with *.`,
+        showNavigate: true,
+      })
+      return
+    }
+    
+    // Validate critical config
+    if (!state.source.sourceType || !state.source.kafkaTopic) {
+      setErrorModal({
+        icon: '⚠️',
+        title: 'Source Configuration Incomplete',
+        message: 'Please configure your source settings (type and topic) and try again.',
+      })
+      return
+    }
+    
+    if (!state.sink.sinkType) {
+      setErrorModal({
+        icon: '⚠️',
+        title: 'Sink Configuration Incomplete',
+        message: 'Please configure your sink settings and try again.',
+      })
+      return
+    }
+    
+    if (state.mappings.length === 0) {
+      setErrorModal({
+        icon: '⚠️',
+        title: 'No Field Mappings',
+        message: 'Please define at least one field mapping and try again.',
+        showNavigate: true,
+      })
+      return
+    }
+    
+    // All validations passed
+    setSubmitted(true)
+  }
 
   if (submitted) {
     const pipelineId = `ETL-${Date.now().toString(36).toUpperCase()}`
@@ -131,74 +190,186 @@ export default function SummaryStep() {
   }
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '24px 30px' }}>
-      {/* Stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 20 }}>
-        {[
-          { icon: '🏷️', label: 'Entity',   value: `${state.metadata.entityName} ${state.metadata.schemaVersion}` },
-          { icon: '🔌', label: 'Source',   value: srcMeta?.name || '—' },
-          { icon: '↔',  label: 'Mappings', value: state.mappings.length },
-          { icon: '⚙',  label: 'Filters',  value: state.filters.reduce((a, g) => a + g.rules.length, 0) },
-          { icon: '🔀', label: 'Sink',     value: (state.sink.sinkType || '—').toUpperCase() },
-        ].map(s => (
-          <div key={s.label} style={{
-            background: 'var(--surf)', border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)', padding: '14px 18px', textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{s.label}</div>
-            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--mono)', color: 'var(--accent)' }}>{s.value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Flink flow */}
-      <Card>
-        <CardTitle>⚡ Flink Pipeline Flow</CardTitle>
-        <FlinkFlow sourceType={state.source.sourceType} mappings={state.mappings} filters={state.filters} sink={state.sink} />
-      </Card>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-        {/* Validation */}
-        <Card>
-          <CardTitle>✅ Validation Checklist</CardTitle>
-          {validations.map((v, i) => (
-            <ValidationItem key={i} type={v.type}>{v.text}</ValidationItem>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 30px' }}>
+        {/* Stats row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 20 }}>
+          {[
+            { icon: '🏷️', label: 'Entity',   value: `${state.metadata.entityName} ${state.metadata.schemaVersion}` },
+            { icon: '🔌', label: 'Source',   value: srcMeta?.name || '—' },
+            { icon: '↔',  label: 'Mappings', value: state.mappings.length },
+            { icon: '⚙',  label: 'Filters',  value: state.filters.reduce((a, g) => a + g.rules.length, 0) },
+            { icon: '🔀', label: 'Sink',     value: (state.sink.sinkType || '—').toUpperCase() },
+          ].map(s => (
+            <div key={s.label} style={{
+              background: 'var(--surf)', border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)', padding: '14px 18px', textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--mono)', color: 'var(--accent)' }}>{s.value}</div>
+            </div>
           ))}
+        </div>
+
+        {/* Flink flow */}
+        <Card>
+          <CardTitle>⚡ Flink Pipeline Flow</CardTitle>
+          <FlinkFlow sourceType={state.source.sourceType} mappings={state.mappings} filters={state.filters} sink={state.sink} />
         </Card>
 
-        {/* YAML / JSON Quick edit */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+          {/* Validation */}
+          <Card>
+            <CardTitle>✅ Validation Checklist</CardTitle>
+            {validations.map((v, i) => (
+              <ValidationItem key={i} type={v.type}>{v.text}</ValidationItem>
+            ))}
+          </Card>
+
+          {/* YAML / JSON Quick edit */}
+          <Card>
+            <CardTitle>
+              🔀 Quick Edit
+            </CardTitle>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {['Metadata', 'Source Config', 'Field Mapping', 'Filters', 'Sink Config'].map((label, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: 13 }}>{label}</span>
+                  <Btn sm v="ghost">✏ Edit</Btn>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+
+        {/* YAML Preview */}
         <Card>
           <CardTitle>
-            🔀 Quick Edit
+            📄 YAML Preview
+            <Btn sm v="ghost" onClick={() => { setCopying(true); setTimeout(() => setCopying(false), 1500) }}
+              style={{ marginLeft: 'auto' }}>
+              {copying ? '✓ Copied' : '📋 Copy YAML'}
+            </Btn>
           </CardTitle>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {['Metadata', 'Source Config', 'Field Mapping', 'Filters', 'Sink Config'].map((label, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-                <span style={{ fontSize: 13 }}>{label}</span>
-                <Btn sm v="ghost">✏ Edit</Btn>
-              </div>
-            ))}
-          </div>
+          <YamlPreview state={state} />
         </Card>
       </div>
 
-      {/* YAML Preview */}
-      <Card>
-        <CardTitle>
-          📄 YAML Preview
-          <Btn sm v="ghost" onClick={() => { setCopying(true); setTimeout(() => setCopying(false), 1500) }}
-            style={{ marginLeft: 'auto' }}>
-            {copying ? '✓ Copied' : '📋 Copy YAML'}
-          </Btn>
-        </CardTitle>
-        <YamlPreview state={state} />
-      </Card>
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
+      {/* Sticky footer buttons */}
+      <div style={{
+        borderTop: '1px solid var(--border)',
+        background: 'var(--surf)',
+        padding: '16px 30px',
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: 12,
+        flexShrink: 0,
+      }}>
         <Btn v="secondary">💾 Save Draft</Btn>
-        <Btn v="success" onClick={() => setSubmitted(true)}>✓ Create ETL Pipeline</Btn>
+        <Btn v="success" onClick={handleCreatePipeline}>✓ Create ETL Pipeline</Btn>
       </div>
+
+      {/* Error Modal */}
+      {errorModal && (
+        <>
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              zIndex: 999,
+            }}
+            onClick={() => setErrorModal(null)}
+          />
+          <div 
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'var(--surf)',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              zIndex: 1000,
+              minWidth: '380px',
+              maxWidth: '500px',
+              animation: 'scaleIn 0.3s ease',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              background: 'var(--danger)',
+              padding: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}>
+              <div style={{ fontSize: '32px' }}>{errorModal.icon}</div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff' }}>{errorModal.title}</h3>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{
+              padding: '20px',
+              color: 'var(--text)',
+              fontSize: '14px',
+              lineHeight: '1.6',
+              whiteSpace: 'pre-wrap',
+            }}>
+              {errorModal.message}
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '16px 20px',
+              borderTop: '1px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'var(--bg)',
+              gap: '12px',
+            }}>
+              <div />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {errorModal.showNavigate && (
+                  <Btn 
+                    v="primary" 
+                    onClick={() => {
+                      setErrorModal(null)
+                      actions.goTo(4, state)
+                    }}
+                    style={{ fontWeight: 600 }}
+                  >
+                    ↔ Go to Field Mapping
+                  </Btn>
+                )}
+                <Btn 
+                  v="ghost" 
+                  onClick={() => setErrorModal(null)}
+                  style={{ fontWeight: 600 }}
+                >
+                  Got it, I'll fix it
+                </Btn>
+              </div>
+            </div>
+          </div>
+
+          <style>{`
+            @keyframes scaleIn {
+              from { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+              to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            }
+          `}</style>
+        </>
+      )}
     </div>
   )
 }
