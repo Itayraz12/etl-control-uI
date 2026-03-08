@@ -16,9 +16,7 @@ export default function MetadataStep() {
               <input value={metadata.productSource} onChange={e => u('productSource', e.target.value)} />
             </FormGroup>
             <FormGroup label="Product Type" required>
-              <select value={metadata.productType} onChange={e => u('productType', e.target.value)}>
-                {['Inventory', 'Orders', 'CRM', 'Product', 'User'].map(o => <option key={o}>{o}</option>)}
-              </select>
+              <input value={metadata.productType} onChange={e => u('productType', e.target.value)} />
             </FormGroup>
           </FormRow>
           <FormRow>
@@ -35,11 +33,6 @@ export default function MetadataStep() {
             <FormGroup label="Entity Name" required>
               <select value={metadata.entityName} onChange={e => u('entityName', e.target.value)}>
                 {['Product', 'Order', 'User', 'InventoryItem'].map(o => <option key={o}>{o}</option>)}
-              </select>
-            </FormGroup>
-            <FormGroup label="Schema Version">
-              <select value={metadata.schemaVersion} onChange={e => u('schemaVersion', e.target.value)}>
-                {['v1', 'v2', 'v3'].map(o => <option key={o}>{o}</option>)}
               </select>
             </FormGroup>
           </FormRow>

@@ -32,6 +32,7 @@ export default function FieldMappingStep() {
   const [successModal, setSuccessModal] = useState(null)
   const [transformerModal, setTransformerModal] = useState(false)
   const [editingTransformer, setEditingTransformer] = useState(null)
+  const [fieldPropertiesModal, setFieldPropertiesModal] = useState(null)
 
   // Load saved mappings from state on mount
   useEffect(() => {
@@ -54,6 +55,9 @@ export default function FieldMappingStep() {
             isRequired: false,
             x: mapping.srcPos?.x ?? 100,
             y: mapping.srcPos?.y ?? 100,
+            sendToShaldag: mapping.srcMetadata?.sendToShaldag ?? true,
+            sendToGP: mapping.srcMetadata?.sendToGP ?? true,
+            expression: mapping.srcMetadata?.expression || '',
           }
           loadedNodes.push(srcNode)
           nodeIdMap[srcKey] = srcNode.id
@@ -71,6 +75,9 @@ export default function FieldMappingStep() {
             isRequired: false,
             x: mapping.tgtPos?.x ?? 400,
             y: mapping.tgtPos?.y ?? 100,
+            sendToShaldag: mapping.tgtMetadata?.sendToShaldag ?? true,
+            sendToGP: mapping.tgtMetadata?.sendToGP ?? true,
+            expression: mapping.tgtMetadata?.expression || '',
           }
           loadedNodes.push(tgtNode)
           nodeIdMap[tgtKey] = tgtNode.id
@@ -264,6 +271,9 @@ export default function FieldMappingStep() {
         isRequired: field.required,
         x: Math.max(0, x),
         y: Math.max(0, y),
+        sendToShaldag: true,
+        sendToGP: true,
+        expression: '',
       }
       setNodes(prev => [...prev, newNode])
     }
@@ -277,6 +287,8 @@ export default function FieldMappingStep() {
       x: e.clientX,
       y: e.clientY,
       name: node?.name || '',
+      nodeId: nodeId,
+      node: node,
     })
   }
 
@@ -298,6 +310,16 @@ export default function FieldMappingStep() {
         tgtNodeId: tgtNode?.id,
         srcPos: { x: srcNode?.x || 0, y: srcNode?.y || 0 },
         tgtPos: { x: tgtNode?.x || 0, y: tgtNode?.y || 0 },
+        srcMetadata: {
+          sendToShaldag: srcNode?.sendToShaldag ?? true,
+          sendToGP: srcNode?.sendToGP ?? true,
+          expression: srcNode?.expression || '',
+        },
+        tgtMetadata: {
+          sendToShaldag: tgtNode?.sendToShaldag ?? true,
+          sendToGP: tgtNode?.sendToGP ?? true,
+          expression: tgtNode?.expression || '',
+        },
       }
     })
 
@@ -312,6 +334,160 @@ export default function FieldMappingStep() {
       setNodes([])
       setEdges([])
     }
+  }
+
+  // Calculate string similarity (Levenshtein-inspired)
+  const calculateSimilarity = (str1, str2) => {
+    const s1 = str1.toLowerCase()
+    const s2 = str2.toLowerCase()
+    
+    // Exact match
+    if (s1 === s2) return 100
+    
+    // Substring match
+    if (s1.includes(s2) || s2.includes(s1)) return 85
+    
+    // Check for common prefixes or suffixes
+    const minLen = Math.min(s1.length, s2.length)
+    let commonStart = 0
+    for (let i = 0; i < minLen; i++) {
+      if (s1[i] === s2[i]) commonStart++
+      else break
+    }
+    
+    if (commonStart >= 2) return 60 + commonStart * 5
+    
+    // Check for word boundaries (e.g., "productName" vs "product")
+    if (s1.includes(s2.split(/(?=[A-Z])/)[0]) || s2.includes(s1.split(/(?=[A-Z])/)[0])) {
+      return 50
+    }
+    
+    return 0
+  }
+
+  const mapAllFields = () => {
+    // Group source and target fields by type
+    const sourceByType = {}
+    const targetByType = {}
+    
+    MOCK_SCHEMA.forEach(field => {
+      if (!sourceByType[field.type]) sourceByType[field.type] = []
+      sourceByType[field.type].push(field)
+    })
+    
+    TARGET_FIELDS.forEach(field => {
+      if (!targetByType[field.type]) targetByType[field.type] = []
+      targetByType[field.type].push(field)
+    })
+    
+    const newNodes = []
+    const newEdges = []
+    const sourceNodes = {}
+    const targetNodes = {}
+    const yGap = 75
+    
+    // Create source nodes (left side)
+    MOCK_SCHEMA.forEach((field, idx) => {
+      const nodeId = `src-${field.id}-${Date.now()}-${Math.random()}`
+      const sourceNode = {
+        id: nodeId,
+        name: field.name,
+        emoji: '📄',
+        type: 'source',
+        fieldId: field.id,
+        isRequired: field.required,
+        x: 40,
+        y: idx * yGap + 30,
+        sendToShaldag: true,
+        sendToGP: true,
+        expression: '',
+      }
+      newNodes.push(sourceNode)
+      sourceNodes[field.id] = nodeId
+    })
+    
+    // Create target nodes (right side)
+    TARGET_FIELDS.forEach((field, idx) => {
+      const nodeId = `tgt-${field.id}-${Date.now()}-${Math.random()}`
+      const targetNode = {
+        id: nodeId,
+        name: field.name,
+        emoji: '🎯',
+        type: 'target',
+        fieldId: field.id,
+        isRequired: field.required,
+        x: 650,
+        y: idx * yGap + 80,
+        sendToShaldag: true,
+        sendToGP: true,
+        expression: '',
+      }
+      newNodes.push(targetNode)
+      targetNodes[field.id] = nodeId
+    })
+    
+    // Match source to target fields
+    const matched = new Set()
+    
+    // First pass: Match by type and name similarity
+    Object.keys(sourceByType).forEach(type => {
+      if (targetByType[type]) {
+        sourceByType[type].forEach(srcField => {
+          // Find best match in target fields of same type
+          let bestMatch = null
+          let bestScore = 0
+          
+          targetByType[type].forEach(tgtField => {
+            if (!matched.has(tgtField.id)) {
+              const score = calculateSimilarity(srcField.name, tgtField.name)
+              if (score > bestScore) {
+                bestScore = score
+                bestMatch = tgtField
+              }
+            }
+          })
+          
+          if (bestMatch) {
+            matched.add(bestMatch.id)
+            newEdges.push({
+              from: sourceNodes[srcField.id],
+              to: targetNodes[bestMatch.id],
+              transformer: 'none',
+            })
+          }
+        })
+      }
+    })
+    
+    // Second pass: Connect remaining source fields to any available target
+    Object.keys(sourceByType).forEach(type => {
+      sourceByType[type].forEach(srcField => {
+        // Check if this source is already connected
+        const isConnected = newEdges.some(e => {
+          const fromNode = newNodes.find(n => n.id === e.from)
+          return fromNode?.fieldId === srcField.id
+        })
+        
+        if (!isConnected) {
+          // Find any unmatched target field of same type
+          let availableTarget = null
+          if (targetByType[type]) {
+            availableTarget = targetByType[type].find(f => !matched.has(f.id))
+            if (availableTarget) {
+              matched.add(availableTarget.id)
+              newEdges.push({
+                from: sourceNodes[srcField.id],
+                to: targetNodes[availableTarget.id],
+                transformer: 'none',
+              })
+            }
+          }
+        }
+      })
+    })
+    
+    setNodes(newNodes)
+    setEdges(newEdges)
   }
 
   const bezier = (x1, y1, x2, y2) => {
@@ -462,6 +638,30 @@ export default function FieldMappingStep() {
                 }}
               >
                 ⚙ Show Transformers ({TRANSFORMERS.length})
+              </button>
+              <button
+                onClick={mapAllFields}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid var(--accent)',
+                  background: 'rgba(79, 110, 247, 0.08)',
+                  color: 'var(--accent)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => { 
+                  e.target.style.background = 'var(--accent)'
+                  e.target.style.color = 'white' 
+                }}
+                onMouseLeave={(e) => { 
+                  e.target.style.background = 'rgba(79, 110, 247, 0.08)'
+                  e.target.style.color = 'var(--accent)' 
+                }}
+              >
+                ⚡ Map All Fields
               </button>
               <button
                 onClick={clearCanvas}
@@ -642,7 +842,7 @@ export default function FieldMappingStep() {
                               color: 'var(--muted)',
                               textTransform: 'uppercase',
                             }}>
-                              TXF
+                              Transformer
                             </div>
                           </div>
                         </div>
@@ -1191,14 +1391,14 @@ export default function FieldMappingStep() {
                     cursor: 'pointer',
                   }}
                 >
-                  <option value="any">Any</option>
-                  <option value="string">String</option>
-                  <option value="number">Number</option>
-                  <option value="boolean">Boolean</option>
-                  <option value="date">Date</option>
-                  <option value="array">Array</option>
-                  <option value="object">Object</option>
-                  <option value="null">Null</option>
+                  <option value="any">⊕ Any</option>
+                  <option value="string">" String</option>
+                  <option value="number"># Number</option>
+                  <option value="boolean">✓ Boolean</option>
+                  <option value="date">📅 Date</option>
+                  <option value="array">[] Array</option>
+                  <option value="object">{} Object</option>
+                  <option value="null">∅ Null</option>
                 </select>
               </div>
 
@@ -1230,14 +1430,14 @@ export default function FieldMappingStep() {
                     cursor: 'pointer',
                   }}
                 >
-                  <option value="any">Any</option>
-                  <option value="string">String</option>
-                  <option value="number">Number</option>
-                  <option value="boolean">Boolean</option>
-                  <option value="date">Date</option>
-                  <option value="array">Array</option>
-                  <option value="object">Object</option>
-                  <option value="null">Null</option>
+                  <option value="any">⊕ Any</option>
+                  <option value="string">" String</option>
+                  <option value="number"># Number</option>
+                  <option value="boolean">✓ Boolean</option>
+                  <option value="date">📅 Date</option>
+                  <option value="array">[] Array</option>
+                  <option value="object">{} Object</option>
+                  <option value="null">∅ Null</option>
                 </select>
               </div>
 
@@ -1286,37 +1486,18 @@ export default function FieldMappingStep() {
               padding: '16px 20px',
               borderTop: '1px solid var(--border)',
               display: 'flex',
-              justifyContent: 'flex-end',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               gap: '12px',
               background: 'var(--bg)',
             }}>
               <button
-                onClick={() => setEditingTransformer(null)}
-                style={{
-                  padding: '8px 16px',
-                  background: 'transparent',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text)',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                }}
-              >
-                Cancel
-              </button>
-              <button
                 onClick={() => {
-                  // Update the edge with transformer properties
+                  // Remove transformer from edge
                   if (editingTransformer.edgeId !== undefined) {
                     setEdges(prev => prev.map((e, idx) => 
                       idx === editingTransformer.edgeId
-                        ? {
-                            ...e,
-                            transformerInputType: editingTransformer.transformerInputType,
-                            transformerOutputType: editingTransformer.transformerOutputType,
-                            transformerProps: editingTransformer.transformerProps || {},
-                          }
+                        ? { ...e, transformer: 'none', transformerInputType: undefined, transformerOutputType: undefined, transformerProps: undefined }
                         : e
                     ))
                   }
@@ -1324,17 +1505,64 @@ export default function FieldMappingStep() {
                 }}
                 style={{
                   padding: '8px 16px',
-                  background: 'var(--accent)',
-                  color: 'white',
-                  border: 'none',
+                  background: 'transparent',
+                  border: '1px solid var(--danger)',
+                  color: 'var(--danger)',
                   borderRadius: '6px',
                   cursor: 'pointer',
                   fontSize: '12px',
                   fontWeight: 600,
                 }}
               >
-                Save Changes
+                🗑 Remove
               </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setEditingTransformer(null)}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'transparent',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    // Update the edge with transformer properties
+                    if (editingTransformer.edgeId !== undefined) {
+                      setEdges(prev => prev.map((e, idx) => 
+                        idx === editingTransformer.edgeId
+                          ? {
+                              ...e,
+                              transformerInputType: editingTransformer.transformerInputType,
+                              transformerOutputType: editingTransformer.transformerOutputType,
+                              transformerProps: editingTransformer.transformerProps || {},
+                            }
+                          : e
+                      ))
+                    }
+                    setEditingTransformer(null)
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'var(--accent)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Save Changes
+                </button>
+              </div>
             </div>
           </div>
         </>
@@ -1528,6 +1756,241 @@ export default function FieldMappingStep() {
         </>
       )}
 
+      {/* Field Properties Modal */}
+      {fieldPropertiesModal && (
+        <>
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 1100,
+            animation: 'fadeIn 0.2s ease',
+          }} onClick={() => setFieldPropertiesModal(null)} />
+          <div style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'var(--surf)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            zIndex: 1101,
+            width: '90%',
+            maxWidth: '420px',
+            animation: 'modalIn 0.25s ease',
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '20px',
+              borderBottom: '1px solid var(--border)',
+              background: 'rgba(79, 110, 247, 0.08)',
+              borderRadius: '12px 12px 0 0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}>
+              <div style={{ fontSize: '20px' }}>{fieldPropertiesModal.emoji}</div>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
+                  Field Properties
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                  {fieldPropertiesModal.name}
+                </div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px' }}>
+              {/* Send to Shaldag Toggle */}
+              <div style={{
+                marginBottom: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <label style={{
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: 'var(--text)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}>
+                  <span>📤</span>
+                  <span>Send to Shaldag</span>
+                </label>
+                <button
+                  onClick={() => {
+                    setFieldPropertiesModal({
+                      ...fieldPropertiesModal,
+                      sendToShaldag: !fieldPropertiesModal.sendToShaldag,
+                    })
+                  }}
+                  style={{
+                    padding: '6px 14px',
+                    background: fieldPropertiesModal.sendToShaldag ? 'var(--accent)' : 'var(--border)',
+                    color: fieldPropertiesModal.sendToShaldag ? 'white' : 'var(--muted)',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {fieldPropertiesModal.sendToShaldag ? '✓ Yes' : '✕ No'}
+                </button>
+              </div>
+
+              {/* Send to GP Toggle */}
+              <div style={{
+                marginBottom: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <label style={{
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: 'var(--text)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}>
+                  <span>📊</span>
+                  <span>Send to GP</span>
+                </label>
+                <button
+                  onClick={() => {
+                    setFieldPropertiesModal({
+                      ...fieldPropertiesModal,
+                      sendToGP: !fieldPropertiesModal.sendToGP,
+                    })
+                  }}
+                  style={{
+                    padding: '6px 14px',
+                    background: fieldPropertiesModal.sendToGP ? 'var(--accent)' : 'var(--border)',
+                    color: fieldPropertiesModal.sendToGP ? 'white' : 'var(--muted)',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {fieldPropertiesModal.sendToGP ? '✓ Yes' : '✕ No'}
+                </button>
+              </div>
+
+              {/* Expression Input */}
+              <div style={{ marginBottom: '0' }}>
+                <label style={{
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: 'var(--text)',
+                  marginBottom: '8px',
+                  display: 'block',
+                }}>
+                  Expression
+                </label>
+                <textarea
+                  value={fieldPropertiesModal.expression || ''}
+                  onChange={(e) => {
+                    setFieldPropertiesModal({
+                      ...fieldPropertiesModal,
+                      expression: e.target.value,
+                    })
+                  }}
+                  placeholder="Enter custom expression..."
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    background: 'var(--bg)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    color: 'var(--text)',
+                    fontFamily: 'var(--ff-mono)',
+                    resize: 'vertical',
+                    minHeight: '80px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '16px 20px',
+              borderTop: '1px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              background: 'var(--bg)',
+              borderRadius: '0 0 12px 12px',
+            }}>
+              <button
+                onClick={() => setFieldPropertiesModal(null)}
+                style={{
+                  padding: '8px 16px',
+                  background: 'transparent',
+                  color: 'var(--text)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.05)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  // Update the node with the new metadata
+                  setNodes(prevNodes =>
+                    prevNodes.map(n =>
+                      n.id === fieldPropertiesModal.id
+                        ? {
+                          ...n,
+                          sendToShaldag: fieldPropertiesModal.sendToShaldag,
+                          sendToGP: fieldPropertiesModal.sendToGP,
+                          expression: fieldPropertiesModal.expression,
+                        }
+                        : n
+                    )
+                  )
+                  setFieldPropertiesModal(null)
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: 'var(--accent)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9' }}
+                onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Context menu */}
       {ctxMenu && (
         <div
@@ -1557,6 +2020,23 @@ export default function FieldMappingStep() {
           }}>
             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)' }} />
             {ctxMenu.name}
+          </div>
+          <div
+            style={{
+              padding: '8px 12px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              color: 'var(--text)',
+              transition: 'background 0.15s',
+            }}
+            onClick={() => {
+              setFieldPropertiesModal(ctxMenu.node)
+              setCtxMenu(null)
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+          >
+            ⚙ Edit Metadata
           </div>
           <div
             style={{
@@ -1597,6 +2077,14 @@ export default function FieldMappingStep() {
         @keyframes ctxIn {
           from { opacity: 0; transform: scale(0.95); }
           to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes modalIn {
+          from { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+          to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
         @keyframes shake {
           25% { transform: translateX(-5px); }

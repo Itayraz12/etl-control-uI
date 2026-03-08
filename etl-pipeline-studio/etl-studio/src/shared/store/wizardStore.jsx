@@ -14,7 +14,6 @@ const initialState = {
     team:           'data-platform',
     environment:    'production',
     entityName:     'Product',
-    schemaVersion:  'v2',
     tags:           '',
   },
 
@@ -27,8 +26,6 @@ const initialState = {
     kafkaOffset:     'latest',
     format:          'JSON',
     encoding:        'UTF-8',
-    dateFormat:      'YYYY-MM-DD',
-    rootPath:        '$.data.products[*]',
   },
 
   // Step 3 — Source Upload

@@ -156,14 +156,7 @@ export default function SourceConfigStep() {
               </select>
             </FormGroup>
           </FormRow>
-          <FormRow>
-            <FormGroup label="Date Default Format">
-              <input value={src.dateFormat} onChange={e => u('dateFormat', e.target.value)} />
-            </FormGroup>
-            <FormGroup label="Root Path (JSON)">
-              <input value={src.rootPath} onChange={e => u('rootPath', e.target.value)} />
-            </FormGroup>
-          </FormRow>
+
         </Card>
       </div>
 
