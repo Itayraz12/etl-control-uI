@@ -6,6 +6,7 @@ export default function WizardFooter() {
   const { state, actions } = useWizard()
   const { currentStep } = state
   const isLast = currentStep === STEPS.length - 1
+  const isMetadataStep = currentStep === 0
 
   return (
     <div style={{
@@ -23,7 +24,7 @@ export default function WizardFooter() {
       <span style={{ fontSize: 12, color: 'var(--muted)' }}>
         Step {currentStep + 1} of {STEPS.length} — {STEPS[currentStep].label}
       </span>
-      {!isLast && (
+      {!isLast && !isMetadataStep && (
         <Btn v="primary" onClick={() => actions.goNext(currentStep)}>Continue →</Btn>
       )}
     </div>

@@ -55,7 +55,7 @@ export default function FieldMappingStep() {
             isRequired: false,
             x: mapping.srcPos?.x ?? 100,
             y: mapping.srcPos?.y ?? 100,
-            sendToShaldag: mapping.srcMetadata?.sendToShaldag ?? true,
+            sendToSaknay: mapping.srcMetadata?.sendToSaknay ?? true,
             sendToGP: mapping.srcMetadata?.sendToGP ?? true,
             expression: mapping.srcMetadata?.expression || '',
           }
@@ -75,7 +75,7 @@ export default function FieldMappingStep() {
             isRequired: false,
             x: mapping.tgtPos?.x ?? 400,
             y: mapping.tgtPos?.y ?? 100,
-            sendToShaldag: mapping.tgtMetadata?.sendToShaldag ?? true,
+            sendToSaknay: mapping.tgtMetadata?.sendToSaknay ?? true,
             sendToGP: mapping.tgtMetadata?.sendToGP ?? true,
             expression: mapping.tgtMetadata?.expression || '',
           }
@@ -271,7 +271,7 @@ export default function FieldMappingStep() {
         isRequired: field.required,
         x: Math.max(0, x),
         y: Math.max(0, y),
-        sendToShaldag: true,
+        sendToSaknay: true,
         sendToGP: true,
         expression: '',
       }
@@ -311,12 +311,12 @@ export default function FieldMappingStep() {
         srcPos: { x: srcNode?.x || 0, y: srcNode?.y || 0 },
         tgtPos: { x: tgtNode?.x || 0, y: tgtNode?.y || 0 },
         srcMetadata: {
-          sendToShaldag: srcNode?.sendToShaldag ?? true,
+          sendToSaknay: srcNode?.sendToSaknay ?? true,
           sendToGP: srcNode?.sendToGP ?? true,
           expression: srcNode?.expression || '',
         },
         tgtMetadata: {
-          sendToShaldag: tgtNode?.sendToShaldag ?? true,
+          sendToSaknay: tgtNode?.sendToSaknay ?? true,
           sendToGP: tgtNode?.sendToGP ?? true,
           expression: tgtNode?.expression || '',
         },
@@ -398,7 +398,7 @@ export default function FieldMappingStep() {
         isRequired: field.required,
         x: 40,
         y: idx * yGap + 30,
-        sendToShaldag: true,
+        sendToSaknay: true,
         sendToGP: true,
         expression: '',
       }
@@ -418,7 +418,7 @@ export default function FieldMappingStep() {
         isRequired: field.required,
         x: 650,
         y: idx * yGap + 80,
-        sendToShaldag: true,
+        sendToSaknay: true,
         sendToGP: true,
         expression: '',
       }
@@ -501,7 +501,7 @@ export default function FieldMappingStep() {
         
         {/* LEFT PANEL - Source Fields */}
         <div style={{
-          width: '240px',
+          width: '190px',
           background: 'var(--surf)',
           borderRight: '1px solid var(--border)',
           display: 'flex',
@@ -1112,7 +1112,7 @@ export default function FieldMappingStep() {
 
         {/* RIGHT PANEL - Target Fields */}
         <div style={{
-          width: '240px',
+          width: '190px',
           background: 'var(--surf)',
           borderLeft: '1px solid var(--border)',
           display: 'flex',
@@ -1806,7 +1806,7 @@ export default function FieldMappingStep() {
 
             {/* Body */}
             <div style={{ padding: '20px' }}>
-              {/* Send to Shaldag Toggle */}
+              {/* Send to Saknay Toggle */}
               <div style={{
                 marginBottom: '18px',
                 display: 'flex',
@@ -1822,19 +1822,19 @@ export default function FieldMappingStep() {
                   gap: '8px',
                 }}>
                   <span>📤</span>
-                  <span>Send to Shaldag</span>
+                  <span>Send to Saknay</span>
                 </label>
                 <button
                   onClick={() => {
                     setFieldPropertiesModal({
                       ...fieldPropertiesModal,
-                      sendToShaldag: !fieldPropertiesModal.sendToShaldag,
+                      sendToSaknay: !fieldPropertiesModal.sendToSaknay,
                     })
                   }}
                   style={{
                     padding: '6px 14px',
-                    background: fieldPropertiesModal.sendToShaldag ? 'var(--accent)' : 'var(--border)',
-                    color: fieldPropertiesModal.sendToShaldag ? 'white' : 'var(--muted)',
+                    background: fieldPropertiesModal.sendToSaknay ? 'var(--accent)' : 'var(--border)',
+                    color: fieldPropertiesModal.sendToSaknay ? 'white' : 'var(--muted)',
                     border: 'none',
                     borderRadius: '6px',
                     cursor: 'pointer',
@@ -1843,7 +1843,7 @@ export default function FieldMappingStep() {
                     transition: 'all 0.2s',
                   }}
                 >
-                  {fieldPropertiesModal.sendToShaldag ? '✓ Yes' : '✕ No'}
+                  {fieldPropertiesModal.sendToSaknay ? '✓ Yes' : '✕ No'}
                 </button>
               </div>
 
@@ -1961,7 +1961,7 @@ export default function FieldMappingStep() {
                       n.id === fieldPropertiesModal.id
                         ? {
                           ...n,
-                          sendToShaldag: fieldPropertiesModal.sendToShaldag,
+                          sendToSaknay: fieldPropertiesModal.sendToSaknay,
                           sendToGP: fieldPropertiesModal.sendToGP,
                           expression: fieldPropertiesModal.expression,
                         }

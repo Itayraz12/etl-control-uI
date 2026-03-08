@@ -2,6 +2,8 @@ import { createContext, useContext, useReducer, useEffect } from 'react'
 
 // ── Initial State ─────────────────────────────────────────────────────────
 const initialState = {
+  // Global navigation mode
+  navigationMode: 'menu', // 'menu' | 'etl-config' | 'etl-management'
   currentStep: 0,
   completedSteps: new Set(),
   // Theme preference
@@ -15,6 +17,9 @@ const initialState = {
     environment:    'production',
     entityName:     'Product',
     tags:           '',
+    shadow:         false,
+    saknay:         false,
+    asg:         false,
   },
 
   // Step 2 — Source Config
@@ -38,6 +43,10 @@ const initialState = {
 
   // Step 5 — Filters
   filters: [],
+  kafkaFilters: {
+    keys: '',
+    mode: 'include', // 'include' | 'exclude'
+  },
 
   // Step 6 — Sink Config
   sink: {
@@ -49,6 +58,8 @@ const initialState = {
 // ── Reducer ───────────────────────────────────────────────────────────────
 function wizardReducer(state, action) {
   switch (action.type) {
+    case 'SET_NAVIGATION_MODE':
+      return { ...state, navigationMode: action.payload }
     case 'SET_STEP':
       return { ...state, currentStep: action.payload }
     case 'COMPLETE_STEP':
@@ -63,6 +74,8 @@ function wizardReducer(state, action) {
       return { ...state, mappings: action.payload }
     case 'SET_FILTERS':
       return { ...state, filters: action.payload }
+    case 'SET_KAFKA_FILTERS':
+      return { ...state, kafkaFilters: action.payload }
     case 'UPDATE_SINK':
       return { ...state, sink: { ...state.sink, ...action.payload } }
     case 'SET_THEME':
@@ -97,6 +110,7 @@ export function WizardProvider({ children }) {
   }, [])
 
   const actions = {
+    setNavigationMode: (mode) => dispatch({ type: 'SET_NAVIGATION_MODE', payload: mode }),
     setStep:        (step)    => dispatch({ type: 'SET_STEP', payload: step }),
     completeStep:   (step)    => dispatch({ type: 'COMPLETE_STEP', payload: step }),
     updateMetadata: (patch)   => dispatch({ type: 'UPDATE_METADATA', payload: patch }),
@@ -104,6 +118,7 @@ export function WizardProvider({ children }) {
     setUploadDone:  (val)     => dispatch({ type: 'SET_UPLOAD_DONE', payload: val }),
     setMappings:    (maps)    => dispatch({ type: 'SET_MAPPINGS',     payload: maps }),
     setFilters:     (filters) => dispatch({ type: 'SET_FILTERS',      payload: filters }),
+    setKafkaFilters: (kafkaFilters) => dispatch({ type: 'SET_KAFKA_FILTERS', payload: kafkaFilters }),
     updateSink:     (patch)   => dispatch({ type: 'UPDATE_SINK',      payload: patch }),
 
     setTheme:       (theme)   => dispatch({ type: 'SET_THEME',       payload: theme }),

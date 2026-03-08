@@ -8,14 +8,20 @@ const SINK_TYPES = [
   { id: 'rabbitmq',  icon: '🐇', name: 'RabbitMQ',      sub: 'Message queue'        },
 ]
 
-function SinkConfigPanel({ type, sink, u }) {
+function SinkConfigPanel({ type, sink, metadata, u }) {
+  const hasCatalogOption = metadata?.shadow || metadata?.saknay || metadata?.asg
+  
   if (type === 'kafka') return (
     <CfgPanel title="☕ Kafka Sink">
-      <FormGroup label="Output Topic" required>
-        <input value={sink.sinkKafkaTopic || ''} onChange={e => u('sinkKafkaTopic', e.target.value)} />
+      <FormGroup label="Output Topic" required={!hasCatalogOption} hint={hasCatalogOption ? 'Optional - system will auto-generate if empty' : undefined}>
+        <input value={sink.sinkKafkaTopic || ''} onChange={e => u('sinkKafkaTopic', e.target.value)} placeholder={hasCatalogOption ? 'Leave empty for auto-generation' : 'products.output'} />
       </FormGroup>
-      <FormGroup label="Bootstrap Servers">
-        <input value={sink.sinkKafkaBootstrap || ''} onChange={e => u('sinkKafkaBootstrap', e.target.value)} placeholder="kafka-1:9092" />
+      <FormGroup label="Bootstrap Environment" required>
+        <select value={sink.sinkKafkaEnv || 'prod'} onChange={e => u('sinkKafkaEnv', e.target.value)}>
+          <option value="prod">Production</option>
+          <option value="cap">Captive</option>
+          <option value="stage">Staging</option>
+        </select>
       </FormGroup>
       <Btn sm v="ghost" onClick={() => alert('Connection tested!')} style={{ marginTop: 8 }}>🔌 Test Connection</Btn>
     </CfgPanel>
@@ -50,10 +56,10 @@ function SinkConfigPanel({ type, sink, u }) {
   if (type === 'rabbitmq') return (
     <CfgPanel title="🐇 RabbitMQ Sink">
       <FormRow>
-        <FormGroup label="Host">
-          <input value={sink.sinkRmqHost || ''} onChange={e => u('sinkRmqHost', e.target.value)} placeholder="rabbitmq.example.com" />
+        <FormGroup label="VHOST" required>
+          <input value={sink.sinkRmqVhost || ''} onChange={e => u('sinkRmqVhost', e.target.value)} placeholder="/" />
         </FormGroup>
-        <FormGroup label="Port">
+        <FormGroup label="PORT" required>
           <input value={sink.sinkRmqPort || ''} onChange={e => u('sinkRmqPort', e.target.value)} placeholder="5672" />
         </FormGroup>
       </FormRow>
@@ -72,6 +78,7 @@ function SinkConfigPanel({ type, sink, u }) {
 export default function SinkConfigStep() {
   const { state, actions } = useWizard()
   const sink = state.sink
+  const metadata = state.metadata
   const u = (k, v) => actions.updateSink({ [k]: v })
   const sinkMeta = SINK_TYPES.find(t => t.id === sink.sinkType)
 
@@ -100,7 +107,7 @@ export default function SinkConfigStep() {
               </div>
             ))}
           </div>
-          {sink.sinkType && <SinkConfigPanel type={sink.sinkType} sink={sink} u={u} />}
+          {sink.sinkType && <SinkConfigPanel type={sink.sinkType} sink={sink} metadata={metadata} u={u} />}
         </Card>
       </div>
 

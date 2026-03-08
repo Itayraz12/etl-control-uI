@@ -147,8 +147,8 @@ export function ValidationItem({ type = 'ok', children }) {
 export function SidePanel({ title, items, children }) {
   return (
     <div style={{
-      width: 240, background: 'var(--surf)', borderLeft: '1px solid var(--border)',
-      padding: 18, overflowY: 'auto', flexShrink: 0,
+      width: 190, background: 'var(--surf)', borderLeft: '1px solid var(--border)',
+      padding: 14, overflowY: 'auto', flexShrink: 0,
     }}>
       <div style={{
         fontSize: 11, fontWeight: 700, letterSpacing: .5, color: 'var(--muted)',
@@ -164,7 +164,7 @@ export function SidePanel({ title, items, children }) {
           <span style={{ color: 'var(--muted)' }}>{k}</span>
           <span style={{
             color: 'var(--text)', fontWeight: 500,
-            maxWidth: 130, textAlign: 'right',
+            maxWidth: 100, textAlign: 'right',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {v}

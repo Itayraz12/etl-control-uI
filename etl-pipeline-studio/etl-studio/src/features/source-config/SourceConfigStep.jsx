@@ -40,6 +40,14 @@ function SourceConfigPanel({ type, state, u }) {
 
   if (type === 'rabbitmq') return (
     <CfgPanel title="🐇 RabbitMQ Source">
+      <FormRow>
+        <FormGroup label="VHOST" required>
+          <input value={state.rmqVhost || ''} onChange={e => u('rmqVhost', e.target.value)} placeholder="/" />
+        </FormGroup>
+        <FormGroup label="PORT" required>
+          <input value={state.rmqPort || ''} onChange={e => u('rmqPort', e.target.value)} placeholder="5672" />
+        </FormGroup>
+      </FormRow>
       <FormGroup label="Queue">
         <input value={state.rmqQueue || ''} onChange={e => u('rmqQueue', e.target.value)} placeholder="products.ingest" />
       </FormGroup>

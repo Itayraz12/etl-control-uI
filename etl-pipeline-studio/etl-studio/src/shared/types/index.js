@@ -139,3 +139,68 @@ export const TYPE_COLORS = {
   array:   '#f97316',
   null:    '#64748b',
 }
+
+// ── Mock Data for Frontend (Will be replaced by Java Backend API) ────────────────
+
+export const MOCK_ENTITIES = [
+  { id: 'product', name: 'Product', icon: '📦', description: 'Product catalog data' },
+  { id: 'customer', name: 'Customer', icon: '👤', description: 'Customer master data' },
+  { id: 'order', name: 'Order', icon: '🛒', description: 'Customer orders' },
+  { id: 'inventory', name: 'Inventory', icon: '📦', description: 'Stock levels' },
+  { id: 'transaction', name: 'Transaction', icon: '💳', description: 'Financial transactions' },
+  { id: 'supplier', name: 'Supplier', icon: '🏭', description: 'Supplier information' },
+]
+
+export const MOCK_TEAMS = [
+  { id: 'data-platform', name: 'Data Platform', icon: '🚀' },
+  { id: 'analytics', name: 'Analytics', icon: '📊' },
+  { id: 'data-engineering', name: 'Data Engineering', icon: '⚙️' },
+  { id: 'bi-team', name: 'Business Intelligence', icon: '📈' },
+  { id: 'ml-ops', name: 'ML Ops', icon: '🤖' },
+  { id: 'data-governance', name: 'Data Governance', icon: '🔐' },
+]
+
+export const MOCK_ENVIRONMENTS = [
+  { id: 'dev', name: 'Development', icon: '🔧', color: '#f59e0b' },
+  { id: 'staging', name: 'Staging', icon: '🧪', color: '#8b5cf6' },
+  { id: 'production', name: 'Production', icon: '✅', color: '#22c55e' },
+]
+
+export const MOCK_PRODUCT_SOURCES = [
+  { id: 'erp-sap', name: 'SAP ERP', icon: '🏢' },
+  { id: 'erp-oracle', name: 'Oracle ERP', icon: '🏢' },
+  { id: 'crm-salesforce', name: 'Salesforce CRM', icon: '☁️' },
+  { id: 'crm-hubspot', name: 'HubSpot CRM', icon: '☁️' },
+  { id: 'warehouse', name: 'Data Warehouse', icon: '🗄️' },
+  { id: 'rest-api', name: 'REST API', icon: '🌐' },
+  { id: 'database', name: 'Database', icon: '🗄️' },
+]
+
+export const MOCK_SINKS = [
+  { id: 'kafka', name: 'Kafka', icon: '☕', description: 'Event streaming' },
+  { id: 'rabbitmq', name: 'RabbitMQ', icon: '🐇', description: 'Message queue' },
+  { id: 'snowflake', name: 'Snowflake', icon: '❄️', description: 'Cloud data warehouse' },
+  { id: 'bigquery', name: 'Google BigQuery', icon: '🔵', description: 'Cloud analytics' },
+  { id: 'redshift', name: 'Amazon Redshift', icon: '🟠', description: 'Data warehouse' },
+  { id: 'postgresql', name: 'PostgreSQL', icon: '🐘', description: 'Relational database' },
+  { id: 'mongodb', name: 'MongoDB', icon: '🍃', description: 'NoSQL database' },
+]
+
+export const MOCK_FILTER_OPERATORS = [
+  { id: 'eq', name: 'Equals', symbol: '=' },
+  { id: 'neq', name: 'Not Equals', symbol: '≠' },
+  { id: 'gt', name: 'Greater Than', symbol: '>' },
+  { id: 'gte', name: 'Greater or Equal', symbol: '≥' },
+  { id: 'lt', name: 'Less Than', symbol: '<' },
+  { id: 'lte', name: 'Less or Equal', symbol: '≤' },
+  { id: 'in', name: 'In List', symbol: '∈' },
+  { id: 'nin', name: 'Not In List', symbol: '∉' },
+  { id: 'contains', name: 'Contains', symbol: '⊇' },
+  { id: 'startswith', name: 'Starts With', symbol: '⊢' },
+  { id: 'endswith', name: 'Ends With', symbol: '⊣' },
+  { id: 'regex', name: 'Regex Match', symbol: '~' },
+  { id: 'between', name: 'Between', symbol: '↔' },
+  { id: 'isnull', name: 'Is Null', symbol: '∅' },
+  { id: 'isnotnull', name: 'Is Not Null', symbol: '∃' },
+]
+
