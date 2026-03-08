@@ -30,6 +30,8 @@ export default function FieldMappingStep() {
   const [sourceSearch, setSourceSearch] = useState('')
   const [targetSearch, setTargetSearch] = useState('')
   const [successModal, setSuccessModal] = useState(null)
+  const [transformerModal, setTransformerModal] = useState(false)
+  const [editingTransformer, setEditingTransformer] = useState(null)
 
   // Load saved mappings from state on mount
   useEffect(() => {
@@ -116,9 +118,17 @@ export default function FieldMappingStep() {
   const setEdgeTransformer = (edge, transformerId) => {
     setEdges(prev => prev.map(e => 
       e.from === edge.from && e.to === edge.to 
-        ? { ...e, transformer: transformerId }
+        ? { 
+            ...e, 
+            transformer: transformerId,
+            // Initialize transformer properties if not set
+            transformerInputType: e.transformerInputType || 'any',
+            transformerOutputType: e.transformerOutputType || 'any',
+            transformerProps: e.transformerProps || {},
+          }
         : e
     ))
+    
     setTransformerMenu(null)
   }
 
@@ -430,6 +440,30 @@ export default function FieldMappingStep() {
                 💾 Save Mappings
               </button>
               <button
+                onClick={() => setTransformerModal(true)}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid var(--border)',
+                  background: 'transparent',
+                  color: 'var(--text)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => { 
+                  e.target.style.borderColor = 'var(--accent)'
+                  e.target.style.color = 'var(--accent)' 
+                }}
+                onMouseLeave={(e) => { 
+                  e.target.style.borderColor = 'var(--border)'
+                  e.target.style.color = 'var(--text)' 
+                }}
+              >
+                ⚙ Show Transformers ({TRANSFORMERS.length})
+              </button>
+              <button
                 onClick={clearCanvas}
                 style={{
                   padding: '6px 12px',
@@ -500,73 +534,141 @@ export default function FieldMappingStep() {
                 const midX = (x1 + x2) / 2
                 const midY = (y1 + y2) / 2
                 const transformer = TRANSFORMERS.find(t => t.id === edge.transformer)
+                const tfWidth = 140
+                const tfHeight = 55
                 
                 return (
                   <g key={idx} style={{ cursor: 'pointer' }}>
                     <path d={d} stroke="#4f6ef7" strokeWidth="7" fill="none" opacity="0.12" />
                     <path d={d} stroke="#4f6ef7" strokeWidth="2.5" fill="none" markerEnd="url(#arr)" style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
                     
-                    {/* Invisible click area - larger for easier clicking */}
-                    <circle 
-                      cx={midX} 
-                      cy={midY} 
-                      r="22" 
-                      fill="transparent" 
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setCurrentEdge(edge)
-                        setTransformerMenu({ x: e.clientX, y: e.clientY })
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setCurrentEdge(edge)
-                        setTransformerMenu({ x: e.clientX, y: e.clientY })
-                      }}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    
-                    {/* Visible circle */}
-                    <circle 
-                      cx={midX} 
-                      cy={midY} 
-                      r="16" 
-                      fill="#1a1f36" 
-                      stroke="#4f6ef7" 
-                      strokeWidth="1.5"
-                      opacity="0.8"
-                      style={{ transition: 'all 0.2s', pointerEvents: 'none' }}
-                    />
-                    
-                    {/* Transformer icon */}
-                    <text 
-                      x={midX} 
-                      y={midY - 5} 
-                      textAnchor="middle" 
-                      dy="0.3em"
-                      fontSize="11" 
-                      fontWeight="700" 
-                      fill="#4f6ef7"
-                      pointerEvents="none"
-                      style={{ userSelect: 'none' }}
-                    >
-                      {transformer?.icon || '–'}
-                    </text>
-                    
-                    {/* Transformer name */}
+                    {/* Transformer Node - using foreignObject for field-style component */}
                     {transformer && transformer.id !== 'none' && (
-                      <text 
-                        x={midX} 
-                        y={midY + 6} 
-                        textAnchor="middle" 
-                        fontSize="7" 
-                        fontWeight="600" 
-                        fill="#4f6ef7"
-                        pointerEvents="none"
-                        style={{ userSelect: 'none' }}
+                      <foreignObject 
+                        x={midX - tfWidth / 2} 
+                        y={midY - tfHeight / 2} 
+                        width={tfWidth} 
+                        height={tfHeight}
+                        style={{ pointerEvents: 'auto' }}
                       >
-                        {transformer?.name.substring(0, 8)}
-                      </text>
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            setCurrentEdge(edge)
+                            setTransformerMenu({ x: e.clientX, y: e.clientY })
+                          }}
+                          onContextMenu={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setEditingTransformer({
+                              edgeId: idx,
+                              edge: edge,
+                              transformer: transformer,
+                            })
+                          }}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            background: 'var(--surf2)',
+                            border: '1.5px solid var(--accent)',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '6px',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                            userSelect: 'none',
+                            transition: 'all 0.15s',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = 'var(--accent)'
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(79,110,247,0.2)'
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = 'var(--accent)'
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'
+                          }}
+                        >
+                          {/* Left stripe */}
+                          <div style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: '4px',
+                            bottom: '4px',
+                            width: '3px',
+                            borderRadius: '2px',
+                            background: 'var(--accent)',
+                          }} />
+
+                          {/* Icon */}
+                          <div style={{
+                            width: '22px',
+                            height: '22px',
+                            borderRadius: '4px',
+                            background: 'rgba(79,110,247,0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '11px',
+                            flexShrink: 0,
+                            marginLeft: '2px',
+                          }}>
+                            {transformer?.icon || '⚙'}
+                          </div>
+
+                          {/* Text */}
+                          <div style={{
+                            flex: 1,
+                            minWidth: 0,
+                            display: 'flex',
+                            flexDirection: 'column',
+                          }}>
+                            <div style={{
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              color: 'var(--text)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              lineHeight: '1.2',
+                            }}>
+                              {transformer?.name}
+                            </div>
+                            <div style={{
+                              fontSize: '8px',
+                              fontWeight: 600,
+                              color: 'var(--muted)',
+                              textTransform: 'uppercase',
+                            }}>
+                              TXF
+                            </div>
+                          </div>
+                        </div>
+                      </foreignObject>
+                    )}
+
+                    {/* Click area for empty transformer (to add one) */}
+                    {(!transformer || transformer.id === 'none') && (
+                      <circle 
+                        cx={midX} 
+                        cy={midY} 
+                        r="18" 
+                        fill="transparent" 
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setCurrentEdge(edge)
+                          setTransformerMenu({ x: e.clientX, y: e.clientY })
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setCurrentEdge(edge)
+                          setTransformerMenu({ x: e.clientX, y: e.clientY })
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      />
                     )}
                   </g>
                 )
@@ -772,6 +874,8 @@ export default function FieldMappingStep() {
               })}
             </div>
 
+
+
             {/* Empty State */}
             {nodes.length === 0 && (
               <div style={{
@@ -933,6 +1037,39 @@ export default function FieldMappingStep() {
               {currentEdge.transformer === t.id && <span style={{ marginLeft: 'auto', color: '#4f6ef7' }}>✓</span>}
             </div>
           ))}
+          {currentEdge.transformer && currentEdge.transformer !== 'none' && (
+            <>
+              <div style={{ borderTop: '1px solid var(--border)' }}>
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    color: 'var(--text)',
+                    transition: 'background 0.15s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                  onClick={() => {
+                    setEditingTransformer({
+                      edgeId: edges.indexOf(currentEdge),
+                      edge: currentEdge,
+                      transformer: TRANSFORMERS.find(t => t.id === currentEdge.transformer),
+                      transformerInputType: currentEdge.transformerInputType || 'any',
+                      transformerOutputType: currentEdge.transformerOutputType || 'any',
+                      transformerProps: currentEdge.transformerProps || {},
+                    })
+                    setTransformerMenu(null)
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.1)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  ✏ Edit Properties
+                </div>
+              </div>
+            </>
+          )}
           <div style={{ borderTop: '1px solid var(--border)' }}>
             <div
               style={{
@@ -952,6 +1089,443 @@ export default function FieldMappingStep() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Transformer Edit Modal */}
+      {editingTransformer && (
+        <>
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              zIndex: 1099,
+            }}
+            onClick={() => setEditingTransformer(null)}
+          />
+          <div 
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'var(--surf)',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              zIndex: 1100,
+              width: '90%',
+              maxWidth: '420px',
+              animation: 'scaleIn 0.3s ease',
+              overflow: 'auto',
+              maxHeight: '80vh',
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              background: 'var(--accent)',
+              padding: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}>
+              <div style={{ fontSize: '24px' }}>⚙</div>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff' }}>Edit Transformer</h3>
+            </div>
+
+            {/* Body */}
+            <div style={{
+              padding: '20px',
+            }}>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: 'var(--text)',
+                  marginBottom: '8px',
+                }}>
+                  Transformer
+                </label>
+                <div style={{
+                  padding: '10px 12px',
+                  background: 'var(--surf2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  color: 'var(--text)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                }}>
+                  {editingTransformer.transformer?.name}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: 'var(--text)',
+                  marginBottom: '8px',
+                }}>
+                  Input Type
+                </label>
+                <select
+                  value={editingTransformer.transformerInputType || 'any'}
+                  onChange={(e) => setEditingTransformer({
+                    ...editingTransformer,
+                    transformerInputType: e.target.value,
+                  })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    background: 'var(--surf2)',
+                    color: 'var(--text)',
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="any">Any</option>
+                  <option value="string">String</option>
+                  <option value="number">Number</option>
+                  <option value="boolean">Boolean</option>
+                  <option value="date">Date</option>
+                  <option value="array">Array</option>
+                  <option value="object">Object</option>
+                  <option value="null">Null</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: 'var(--text)',
+                  marginBottom: '8px',
+                }}>
+                  Output Type
+                </label>
+                <select
+                  value={editingTransformer.transformerOutputType || 'any'}
+                  onChange={(e) => setEditingTransformer({
+                    ...editingTransformer,
+                    transformerOutputType: e.target.value,
+                  })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    background: 'var(--surf2)',
+                    color: 'var(--text)',
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="any">Any</option>
+                  <option value="string">String</option>
+                  <option value="number">Number</option>
+                  <option value="boolean">Boolean</option>
+                  <option value="date">Date</option>
+                  <option value="array">Array</option>
+                  <option value="object">Object</option>
+                  <option value="null">Null</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: 'var(--text)',
+                  marginBottom: '8px',
+                }}>
+                  Additional Properties (JSON)
+                </label>
+                <textarea
+                  value={JSON.stringify(editingTransformer.transformerProps || {}, null, 2)}
+                  onChange={(e) => {
+                    try {
+                      const parsed = JSON.parse(e.target.value)
+                      setEditingTransformer({
+                        ...editingTransformer,
+                        transformerProps: parsed,
+                      })
+                    } catch (err) {
+                      // Invalid JSON, allow editing
+                    }
+                  }}
+                  placeholder="{}"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    background: 'var(--surf2)',
+                    color: 'var(--text)',
+                    fontSize: '12px',
+                    fontFamily: 'var(--mono)',
+                    minHeight: '80px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '16px 20px',
+              borderTop: '1px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              background: 'var(--bg)',
+            }}>
+              <button
+                onClick={() => setEditingTransformer(null)}
+                style={{
+                  padding: '8px 16px',
+                  background: 'transparent',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  // Update the edge with transformer properties
+                  if (editingTransformer.edgeId !== undefined) {
+                    setEdges(prev => prev.map((e, idx) => 
+                      idx === editingTransformer.edgeId
+                        ? {
+                            ...e,
+                            transformerInputType: editingTransformer.transformerInputType,
+                            transformerOutputType: editingTransformer.transformerOutputType,
+                            transformerProps: editingTransformer.transformerProps || {},
+                          }
+                        : e
+                    ))
+                  }
+                  setEditingTransformer(null)
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: 'var(--accent)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Transformers Modal */}
+      {transformerModal && (
+        <>
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              zIndex: 1099,
+            }}
+            onClick={() => setTransformerModal(false)}
+          />
+          <div 
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'var(--surf)',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              zIndex: 1100,
+              width: '90%',
+              maxWidth: '500px',
+              animation: 'scaleIn 0.3s ease',
+              overflow: 'auto',
+              maxHeight: '80vh',
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              background: 'var(--accent)',
+              padding: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}>
+              <div style={{ fontSize: '24px' }}>⚙</div>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff', flex: 1 }}>Available Transformers</h3>
+              <div style={{
+                background: 'rgba(255,255,255,0.2)',
+                color: '#fff',
+                borderRadius: '50%',
+                width: '28px',
+                height: '28px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '13px',
+                fontWeight: 600,
+              }}>
+                {TRANSFORMERS.length}
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{
+              padding: '20px',
+            }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '12px',
+              }}>
+                {TRANSFORMERS.map((transformer) => {
+                  // Count how many edges use this transformer
+                  const usageCount = edges.filter(e => e.transformer === transformer.id && transformer.id !== 'none').length
+                  
+                  return (
+                    <div
+                      key={transformer.id}
+                      style={{
+                        padding: '14px',
+                        background: 'var(--surf2)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--accent)'
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(79,110,247,0.2)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--border)'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }}
+                      onClick={() => {
+                        // If no current edge selected, show notification
+                        if (!currentEdge) {
+                          alert('Please right-click on a field connection first')
+                          return
+                        }
+                        setEdgeTransformer(currentEdge, transformer.id)
+                        setTransformerModal(false)
+                      }}
+                    >
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        marginBottom: '8px',
+                      }}>
+                        <div style={{
+                          fontSize: '18px',
+                          width: '28px',
+                          height: '28px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'rgba(79,110,247,0.1)',
+                          borderRadius: '6px',
+                        }}>
+                          {transformer.icon}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: 'var(--text)',
+                          }}>
+                            {transformer.name}
+                          </div>
+                        </div>
+                        {usageCount > 0 && (
+                          <div style={{
+                            background: 'var(--accent)',
+                            color: 'white',
+                            borderRadius: '50%',
+                            width: '20px',
+                            height: '20px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '10px',
+                            fontWeight: 600,
+                          }}>
+                            {usageCount}
+                          </div>
+                        )}
+                      </div>
+                      {transformer.id !== 'none' && (
+                        <p style={{
+                          fontSize: '11px',
+                          color: 'var(--muted)',
+                          margin: '8px 0 0 0',
+                        }}>
+                          {transformer.id.charAt(0).toUpperCase() + transformer.id.slice(1)}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '16px 20px',
+              borderTop: '1px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              background: 'var(--bg)',
+            }}>
+              <button
+                onClick={() => setTransformerModal(false)}
+                style={{
+                  padding: '8px 16px',
+                  background: 'var(--accent)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Context menu */}
