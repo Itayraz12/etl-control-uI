@@ -19,7 +19,12 @@ export default function LoginPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)' }}>
-      <div style={{ fontSize: 32, fontWeight: 700, marginBottom: 24 }}>Login</div>
+      <div style={{ marginBottom: 48, textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>⚡</div>
+        <div style={{ fontSize: 36, fontWeight: 700, marginBottom: 8, color: 'var(--text)' }}>ETL Studio</div>
+        <div style={{ fontSize: 14, color: 'var(--muted)' }}>Enterprise Data Integration Platform</div>
+      </div>
+      <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 24, color: 'var(--text)' }}>Sign In</div>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 320 }}>
         <input
           type="text"
