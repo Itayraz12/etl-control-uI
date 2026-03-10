@@ -3,17 +3,51 @@ import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { MOCK_SCHEMA, TARGET_FIELDS } from '../../shared/types/index.js'
 
 const TRANSFORMERS = [
-  { id: 'none', name: 'None', icon: '–' },
-  { id: 'uppercase', name: 'Uppercase', icon: 'Aa' },
-  { id: 'lowercase', name: 'Lowercase', icon: 'aa' },
-  { id: 'trim', name: 'Trim', icon: '✂' },
-  { id: 'concat', name: 'Concatenate', icon: '∥' },
-  { id: 'replace', name: 'Replace', icon: 'R' },
-  { id: 'substring', name: 'Substring', icon: 'S' },
-  { id: 'split', name: 'Split', icon: '⊣' },
-  { id: 'round', name: 'Round', icon: '◯' },
-  { id: 'hash', name: 'Hash', icon: '#' },
+  { id: 'none',      name: 'None',          icon: '–',  isMultiInput: false },
+  { id: 'uppercase', name: 'Uppercase',      icon: 'Aa', isMultiInput: false },
+  { id: 'lowercase', name: 'Lowercase',      icon: 'aa', isMultiInput: false },
+  { id: 'trim',      name: 'Trim',           icon: '✂',  isMultiInput: false },
+  { id: 'concat',    name: 'Concatenate',    icon: '∥',  isMultiInput: true  },
+  { id: 'replace',   name: 'Replace',        icon: 'R',  isMultiInput: false },
+  { id: 'substring', name: 'Substring',      icon: 'S',  isMultiInput: false },
+  { id: 'split',     name: 'Split',          icon: '⊣',  isMultiInput: false },
+  { id: 'round',     name: 'Round',          icon: '◯',  isMultiInput: false },
+  { id: 'hash',      name: 'Hash',           icon: '#',  isMultiInput: false },
 ]
+
+// Property definitions for each transformer: { key, label, type ('text'|'number'|'select'), options?, default, description }
+const TRANSFORMER_PROPS_SCHEMA = {
+  uppercase:  [],
+  lowercase:  [],
+  trim:       [
+    { key: 'side', label: 'Side', type: 'select', options: ['both', 'left', 'right'], default: 'both', description: 'Which side(s) to trim whitespace from' },
+  ],
+  concat:     [
+    { key: 'separator', label: 'Separator', type: 'text', default: '', description: 'String inserted between concatenated values' },
+    { key: 'values',    label: 'Extra Values', type: 'text', default: '', description: 'Comma-separated extra values to append' },
+  ],
+  replace:    [
+    { key: 'find',    label: 'Find',    type: 'text', default: '', description: 'Text or regex pattern to search for' },
+    { key: 'replace', label: 'Replace', type: 'text', default: '', description: 'Replacement text (empty string to delete)' },
+    { key: 'regex',   label: 'Use Regex', type: 'select', options: ['false', 'true'], default: 'false', description: 'Treat Find as a regular expression' },
+  ],
+  substring:  [
+    { key: 'start',  label: 'Start Index', type: 'number', default: '0',  description: 'Zero-based start index (inclusive)' },
+    { key: 'end',    label: 'End Index',   type: 'number', default: '',   description: 'Zero-based end index (exclusive), leave empty for end of string' },
+  ],
+  split:      [
+    { key: 'delimiter', label: 'Delimiter', type: 'text',   default: ',', description: 'Character or string to split on' },
+    { key: 'index',     label: 'Part Index', type: 'number', default: '0', description: 'Index of the resulting part to keep (0-based)' },
+  ],
+  round:      [
+    { key: 'decimals', label: 'Decimal Places', type: 'number', default: '2', description: 'Number of decimal places to round to' },
+    { key: 'mode',     label: 'Rounding Mode', type: 'select', options: ['half-up', 'floor', 'ceil'], default: 'half-up', description: 'How to round when exactly halfway' },
+  ],
+  hash:       [
+    { key: 'algorithm', label: 'Algorithm', type: 'select', options: ['md5', 'sha1', 'sha256', 'sha512'], default: 'sha256', description: 'Hashing algorithm to apply' },
+    { key: 'encoding',  label: 'Encoding',  type: 'select', options: ['hex', 'base64'],                   default: 'hex',    description: 'Output encoding format' },
+  ],
+}
 
 export default function FieldMappingStep() {
   const { state, actions } = useWizard()
@@ -22,7 +56,7 @@ export default function FieldMappingStep() {
   
   const [nodes, setNodes] = useState([])
   const [edges, setEdges] = useState([])
-  const [drag, setDrag] = useState(null)
+  const [, setDrag] = useState(null)
   const [ctxMenu, setCtxMenu] = useState(null)
   const [currentCtxId, setCurrentCtxId] = useState(null)
   const [transformerMenu, setTransformerMenu] = useState(null)
@@ -33,6 +67,13 @@ export default function FieldMappingStep() {
   const [transformerModal, setTransformerModal] = useState(false)
   const [editingTransformer, setEditingTransformer] = useState(null)
   const [fieldPropertiesModal, setFieldPropertiesModal] = useState(null)
+  // Right-click context menu on + circle
+  const [plusCtxMenu, setPlusCtxMenu] = useState(null) // { x, y, edge, mode }
+  // Add-transformer modal with search
+  const [addTransformerModal, setAddTransformerModal] = useState(null) // { edge, mode }
+  const [transformerSearch, setTransformerSearch] = useState('')
+  const [selectedTf, setSelectedTf] = useState(null)   // transformer object chosen in the list
+  const [tfPropValues, setTfPropValues] = useState({})  // { key: value } for the selected transformer
 
   // Load saved mappings from state on mount
   useEffect(() => {
@@ -89,7 +130,11 @@ export default function FieldMappingStep() {
           to: nodeIdMap[tgtKey],
           fromType: 'source',
           toType: 'target',
-          transformer: 'none',
+          transformer: mapping.transformer || mapping.transformerChain?.[0] || 'none',
+          additionalTransformers: mapping.transformerChain?.slice(1) || [],
+          transformerInputType: mapping.transformerInputType,
+          transformerOutputType: mapping.transformerOutputType,
+          transformerProps: mapping.transformerProps || {},
         })
       })
 
@@ -105,6 +150,15 @@ export default function FieldMappingStep() {
   const filteredTarget = TARGET_FIELDS.filter(f => 
     f.name.toLowerCase().includes(targetSearch.toLowerCase())
   )
+
+  const existingSourceFieldIds = new Set(
+    nodes.filter(n => n.type === 'source' && n.fieldId).map(n => n.fieldId)
+  )
+  const existingTargetFieldIds = new Set(
+    nodes.filter(n => n.type === 'target' && n.fieldId).map(n => n.fieldId)
+  )
+  const allSourceOnCanvas = existingSourceFieldIds.size === MOCK_SCHEMA.length
+  const allTargetOnCanvas = existingTargetFieldIds.size === TARGET_FIELDS.length
 
   const addEdge = (fromId, toId, fromType, toType) => {
     if (fromId === toId) return false
@@ -177,7 +231,7 @@ export default function FieldMappingStep() {
     document.addEventListener('mouseup', onUp)
   }
 
-  const startConnection = (e, nodeId, nodeType) => {
+  const startConnection = (e, nodeId) => {
     if (e.button !== 0) return
     e.preventDefault()
     e.stopPropagation()
@@ -255,6 +309,11 @@ export default function FieldMappingStep() {
 
   const dragFromPanel = (e, field, type) => {
     e.preventDefault()
+
+    // Enforce single instance per field/type on canvas
+    const exists = nodes.some(n => n.type === type && n.fieldId === field.id)
+    if (exists) return
+
     const canvasRect = canvasRef.current.getBoundingClientRect()
     const scrollLeft = canvasRef.current.scrollLeft
     const scrollTop = canvasRef.current.scrollTop
@@ -279,6 +338,102 @@ export default function FieldMappingStep() {
     }
   }
 
+  const addAllSourceFieldsToCanvas = () => {
+    const xPos = 40
+    const yGap = 60
+
+    setNodes(prev => {
+      const existingSourceFieldIds = new Set(
+        prev.filter(n => n.type === 'source' && n.fieldId).map(n => n.fieldId)
+      )
+
+      const baseY = prev.length
+        ? Math.max(...prev.filter(n => n.type === 'source').map(n => n.y), -yGap) + yGap
+        : 30
+
+      const newSourceNodes = MOCK_SCHEMA
+        .filter(field => !existingSourceFieldIds.has(field.id))
+        .map((field, idx) => ({
+          id: `source-${field.id}-${Date.now()}-${Math.random()}`,
+          name: field.name,
+          emoji: '📄',
+          type: 'source',
+          fieldId: field.id,
+          isRequired: field.required,
+          x: xPos,
+          y: baseY + idx * yGap,
+          sendToSaknay: true,
+          sendToGP: true,
+          expression: '',
+        }))
+
+      return [...prev, ...newSourceNodes]
+    })
+  }
+
+  const removeUnconnectedSourceFieldsFromCanvas = () => {
+    setNodes(prevNodes => {
+      const connectedNodeIds = new Set(edges.flatMap(e => [e.from, e.to]))
+      return prevNodes.filter(n => !(n.type === 'source' && !connectedNodeIds.has(n.id)))
+    })
+  }
+
+  const handleSourceBulkAction = () => {
+    if (allSourceOnCanvas) {
+      removeUnconnectedSourceFieldsFromCanvas()
+    } else {
+      addAllSourceFieldsToCanvas()
+    }
+  }
+
+  const addAllTargetFieldsToCanvas = () => {
+    const xPos = 650
+    const yGap = 60
+
+    setNodes(prev => {
+      const existingTargetFieldIds = new Set(
+        prev.filter(n => n.type === 'target' && n.fieldId).map(n => n.fieldId)
+      )
+
+      const baseY = prev.length
+        ? Math.max(...prev.filter(n => n.type === 'target').map(n => n.y), -yGap) + yGap
+        : 80
+
+      const newTargetNodes = TARGET_FIELDS
+        .filter(field => !existingTargetFieldIds.has(field.id))
+        .map((field, idx) => ({
+          id: `target-${field.id}-${Date.now()}-${Math.random()}`,
+          name: field.name,
+          emoji: '🎯',
+          type: 'target',
+          fieldId: field.id,
+          isRequired: field.required,
+          x: xPos,
+          y: baseY + idx * yGap,
+          sendToSaknay: true,
+          sendToGP: true,
+          expression: '',
+        }))
+
+      return [...prev, ...newTargetNodes]
+    })
+  }
+
+  const removeUnconnectedTargetFieldsFromCanvas = () => {
+    setNodes(prevNodes => {
+      const connectedNodeIds = new Set(edges.flatMap(e => [e.from, e.to]))
+      return prevNodes.filter(n => !(n.type === 'target' && !connectedNodeIds.has(n.id)))
+    })
+  }
+
+  const handleTargetBulkAction = () => {
+    if (allTargetOnCanvas) {
+      removeUnconnectedTargetFieldsFromCanvas()
+    } else {
+      addAllTargetFieldsToCanvas()
+    }
+  }
+
   const showContextMenu = (e, nodeId) => {
     const node = nodes.find(n => n.id === nodeId)
     e.preventDefault()
@@ -292,17 +447,11 @@ export default function FieldMappingStep() {
     })
   }
 
-  const saveMappings = () => {
-    // Convert nodes and edges to mappings format (with positions)
-    const nodeMap = {}
-    const mappingsList = edges.map(edge => {
-      const srcNode = nodes.find(n => n.id === edge.from)
-      const tgtNode = nodes.find(n => n.id === edge.to)
-      
-      // Store node layout info
-      nodeMap[srcNode?.id] = { x: srcNode?.x || 0, y: srcNode?.y || 0 }
-      nodeMap[tgtNode?.id] = { x: tgtNode?.x || 0, y: tgtNode?.y || 0 }
-      
+  const buildMappingsList = (nodesInput, edgesInput) => {
+    return edgesInput.map(edge => {
+      const srcNode = nodesInput.find(n => n.id === edge.from)
+      const tgtNode = nodesInput.find(n => n.id === edge.to)
+
       return {
         src: srcNode?.fieldId || srcNode?.name || '',
         tgt: tgtNode?.fieldId || tgtNode?.name || '',
@@ -320,8 +469,22 @@ export default function FieldMappingStep() {
           sendToGP: tgtNode?.sendToGP ?? true,
           expression: tgtNode?.expression || '',
         },
+        transformer: edge.transformer || 'none',
+        transformerInputType: edge.transformerInputType || 'any',
+        transformerOutputType: edge.transformerOutputType || 'any',
+        transformerProps: edge.transformerProps || {},
+        transformerChain: [edge.transformer, ...(edge.additionalTransformers || [])].filter(t => t && t !== 'none'),
       }
     })
+  }
+
+  // Auto-save when connections/transformers change (no success modal).
+  useEffect(() => {
+    actions.setMappings(buildMappingsList(nodes, edges))
+  }, [edges])
+
+  const saveMappings = () => {
+    const mappingsList = buildMappingsList(nodes, edges)
 
     // Save to wizard state
     actions.setMappings(mappingsList)
@@ -334,6 +497,97 @@ export default function FieldMappingStep() {
       setNodes([])
       setEdges([])
     }
+  }
+
+  const alignNodes = () => {
+    const LEFT_X = 40
+    const RIGHT_X = 650
+    const FALLBACK_GAP = 70
+
+    setNodes(prev => {
+      const sources = prev.filter(n => n.type === 'source').sort((a, b) => a.y - b.y)
+      const targets = prev.filter(n => n.type === 'target').sort((a, b) => a.y - b.y)
+      if (sources.length === 0 && targets.length === 0) return prev
+
+      const sourceById = new Map(sources.map(n => [n.id, n]))
+      const targetById = new Map(targets.map(n => [n.id, n]))
+
+      const srcToTgts = new Map()
+      const tgtToSrcs = new Map()
+      edges.forEach(e => {
+        if (!sourceById.has(e.from) || !targetById.has(e.to)) return
+        if (!srcToTgts.has(e.from)) srcToTgts.set(e.from, new Set())
+        if (!tgtToSrcs.has(e.to)) tgtToSrcs.set(e.to, new Set())
+        srcToTgts.get(e.from).add(e.to)
+        tgtToSrcs.get(e.to).add(e.from)
+      })
+
+      // Only strict 1:1 links can be perfectly aligned without creating overlaps.
+      const uniquePairs = []
+      srcToTgts.forEach((tgtSet, srcId) => {
+        if (tgtSet.size !== 1) return
+        const tgtId = Array.from(tgtSet)[0]
+        if ((tgtToSrcs.get(tgtId)?.size || 0) !== 1) return
+        const src = sourceById.get(srcId)
+        const tgt = targetById.get(tgtId)
+        uniquePairs.push({ srcId, tgtId, avgY: ((src?.y || 0) + (tgt?.y || 0)) / 2 })
+      })
+      uniquePairs.sort((a, b) => a.avgY - b.avgY)
+
+      const totalRows = Math.max(sources.length, targets.length, uniquePairs.length, 1)
+      const allNodes = [...sources, ...targets]
+      const minY = Math.min(...allNodes.map(n => n.y))
+      const maxY = Math.max(...allNodes.map(n => n.y))
+      const gap = totalRows > 1 ? ((maxY - minY) / (totalRows - 1) || FALLBACK_GAP) : 0
+      const rowY = (rowIdx) => Math.round(minY + rowIdx * gap)
+
+      const sourceRowById = new Map()
+      const targetRowById = new Map()
+      const usedSourceRows = new Set()
+      const usedTargetRows = new Set()
+
+      let rowCursor = 0
+      const nextFreeRow = (used) => {
+        while (used.has(rowCursor)) rowCursor += 1
+        const row = rowCursor
+        rowCursor += 1
+        return row
+      }
+
+      uniquePairs.forEach(({ srcId, tgtId }) => {
+        const row = nextFreeRow(new Set([...usedSourceRows, ...usedTargetRows]))
+        sourceRowById.set(srcId, row)
+        targetRowById.set(tgtId, row)
+        usedSourceRows.add(row)
+        usedTargetRows.add(row)
+      })
+
+      sources.forEach(src => {
+        if (sourceRowById.has(src.id)) return
+        const row = nextFreeRow(usedSourceRows)
+        sourceRowById.set(src.id, row)
+        usedSourceRows.add(row)
+      })
+
+      targets.forEach(tgt => {
+        if (targetRowById.has(tgt.id)) return
+        const row = nextFreeRow(usedTargetRows)
+        targetRowById.set(tgt.id, row)
+        usedTargetRows.add(row)
+      })
+
+      return prev.map(n => {
+        if (n.type === 'source') {
+          const row = sourceRowById.get(n.id)
+          return { ...n, x: LEFT_X, y: row !== undefined ? rowY(row) : n.y }
+        }
+        if (n.type === 'target') {
+          const row = targetRowById.get(n.id)
+          return { ...n, x: RIGHT_X, y: row !== undefined ? rowY(row) : n.y }
+        }
+        return n
+      })
+    })
   }
 
   // Calculate string similarity (Levenshtein-inspired)
@@ -525,32 +779,53 @@ export default function FieldMappingStep() {
                 fontSize: '12px',
               }}
             />
+            <button
+              onClick={handleSourceBulkAction}
+              style={{
+                width: '100%',
+                marginTop: '8px',
+                padding: '8px',
+                border: '1px solid var(--accent)',
+                borderRadius: '6px',
+                background: 'rgba(79,110,247,.12)',
+                color: 'var(--accent)',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {allSourceOnCanvas ? '<<<' : '>>>'}
+            </button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
             {filteredSource.map((field) => (
               <div
                 key={field.id}
-                draggable
-                onDragEnd={(e) => dragFromPanel(e, field, 'source')}
+                draggable={!existingSourceFieldIds.has(field.id)}
+                onDragEnd={(e) => !existingSourceFieldIds.has(field.id) && dragFromPanel(e, field, 'source')}
                 style={{
                   padding: '10px 8px',
                   marginBottom: '6px',
-                  background: 'var(--surf2)',
+                  background: existingSourceFieldIds.has(field.id) ? 'rgba(148,163,184,.18)' : 'var(--surf2)',
                   border: '1px solid var(--border)',
                   borderRadius: '6px',
-                  cursor: 'grab',
+                  cursor: existingSourceFieldIds.has(field.id) ? 'not-allowed' : 'grab',
                   fontSize: '12px',
-                  color: 'var(--text)',
+                  color: existingSourceFieldIds.has(field.id) ? 'var(--muted)' : 'var(--text)',
                   display: 'flex',
                   gap: '8px',
                   alignItems: 'center',
                   transition: 'all 0.2s',
+                  opacity: existingSourceFieldIds.has(field.id) ? 0.55 : 1,
                 }}
+                title={existingSourceFieldIds.has(field.id) ? 'Field already added to canvas' : ''}
                 onMouseEnter={(e) => {
+                  if (existingSourceFieldIds.has(field.id)) return
                   e.currentTarget.style.background = 'var(--surf3)'
                   e.currentTarget.style.borderColor = 'var(--accent)'
                 }}
                 onMouseLeave={(e) => {
+                  if (existingSourceFieldIds.has(field.id)) return
                   e.currentTarget.style.background = 'var(--surf2)'
                   e.currentTarget.style.borderColor = 'var(--border)'
                 }}
@@ -592,7 +867,7 @@ export default function FieldMappingStep() {
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                onClick={saveMappings}
+                onClick={alignNodes}
                 style={{
                   padding: '6px 12px',
                   border: '1px solid var(--border)',
@@ -604,16 +879,16 @@ export default function FieldMappingStep() {
                   fontWeight: 500,
                   transition: 'all 0.2s',
                 }}
-                onMouseEnter={(e) => { 
-                  e.target.style.borderColor = 'var(--success)'
-                  e.target.style.color = 'var(--success)' 
+                onMouseEnter={(e) => {
+                  e.target.style.borderColor = 'var(--accent)'
+                  e.target.style.color = 'var(--accent)'
                 }}
-                onMouseLeave={(e) => { 
+                onMouseLeave={(e) => {
                   e.target.style.borderColor = 'var(--border)'
-                  e.target.style.color = 'var(--text)' 
+                  e.target.style.color = 'var(--text)'
                 }}
               >
-                💾 Save Mappings
+                Align
               </button>
               <button
                 onClick={() => setTransformerModal(true)}
@@ -756,16 +1031,14 @@ export default function FieldMappingStep() {
                             e.stopPropagation()
                             e.preventDefault()
                             setCurrentEdge(edge)
-                            setTransformerMenu({ x: e.clientX, y: e.clientY })
+                            setTransformerSearch('')
+                            setAddTransformerModal({ edge, mode: 'replace' })
                           }}
                           onContextMenu={(e) => {
                             e.preventDefault()
                             e.stopPropagation()
-                            setEditingTransformer({
-                              edgeId: idx,
-                              edge: edge,
-                              transformer: transformer,
-                            })
+                            setCurrentEdge(edge)
+                            setPlusCtxMenu({ x: e.clientX, y: e.clientY, edge, mode: 'replace' })
                           }}
                           style={{
                             width: '100%',
@@ -851,24 +1124,36 @@ export default function FieldMappingStep() {
 
                     {/* Click area for empty transformer (to add one) */}
                     {(!transformer || transformer.id === 'none') && (
-                      <circle 
-                        cx={midX} 
-                        cy={midY} 
-                        r="18" 
-                        fill="transparent" 
+                      <g
                         onClick={(e) => {
                           e.stopPropagation()
                           setCurrentEdge(edge)
-                          setTransformerMenu({ x: e.clientX, y: e.clientY })
+                          setTransformerSearch('')
+                          setAddTransformerModal({ edge, mode: 'replace' })
                         }}
                         onContextMenu={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
                           setCurrentEdge(edge)
-                          setTransformerMenu({ x: e.clientX, y: e.clientY })
+                          setPlusCtxMenu({ x: e.clientX, y: e.clientY, edge, mode: 'replace' })
                         }}
                         style={{ cursor: 'pointer' }}
-                      />
+                      >
+                        <circle cx={midX} cy={midY} r="18" fill="transparent" />
+                        <circle cx={midX} cy={midY} r="11" fill="var(--surf)" stroke="#4f6ef7" strokeWidth="2" />
+                        <text
+                          x={midX}
+                          y={midY}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill="#4f6ef7"
+                          fontSize="14"
+                          fontWeight="700"
+                          style={{ userSelect: 'none', pointerEvents: 'none' }}
+                        >
+                          +
+                        </text>
+                      </g>
                     )}
                   </g>
                 )
@@ -931,8 +1216,8 @@ export default function FieldMappingStep() {
                     <div style={{
                       position: 'absolute',
                       left: 0,
-                      top: '6px',
-                      bottom: '6px',
+                      top: 6,
+                      bottom: 6,
                       width: '3px',
                       borderRadius: '2px',
                       background: node.type === 'source' ? 'var(--accent)' : 'var(--success)',
@@ -1003,6 +1288,35 @@ export default function FieldMappingStep() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Send-to-Saknay disabled marker (target nodes only) */}
+                    {node.type === 'target' && node.sendToSaknay === false && (
+                      <div
+                        title="Send to Saknay: No"
+                        style={{
+                          position: 'absolute',
+                          top: '4px',
+                          right: '20px',
+                          background: 'rgba(239,68,68,0.15)',
+                          border: '1px solid rgba(239,68,68,0.55)',
+                          borderRadius: '4px',
+                          padding: '1px 5px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          color: '#ef4444',
+                          letterSpacing: '0.04em',
+                          pointerEvents: 'none',
+                          userSelect: 'none',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <span style={{ fontSize: '10px', lineHeight: 1 }}>⊘</span>
+                        <span>Saknay</span>
+                      </div>
+                    )}
 
                     {/* Output port */}
                     {rules.hasOut && (
@@ -1136,32 +1450,53 @@ export default function FieldMappingStep() {
                 fontSize: '12px',
               }}
             />
+            <button
+              onClick={handleTargetBulkAction}
+              style={{
+                width: '100%',
+                marginTop: '8px',
+                padding: '8px',
+                border: '1px solid var(--success)',
+                borderRadius: '6px',
+                background: 'rgba(34,197,94,.12)',
+                color: 'var(--success)',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {allTargetOnCanvas ? '>>>' : '<<<'}
+            </button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
             {filteredTarget.map((field) => (
               <div
                 key={field.id}
-                draggable
-                onDragEnd={(e) => dragFromPanel(e, field, 'target')}
+                draggable={!existingTargetFieldIds.has(field.id)}
+                onDragEnd={(e) => !existingTargetFieldIds.has(field.id) && dragFromPanel(e, field, 'target')}
                 style={{
                   padding: '10px 8px',
                   marginBottom: '6px',
-                  background: 'var(--surf2)',
+                  background: existingTargetFieldIds.has(field.id) ? 'rgba(148,163,184,.18)' : 'var(--surf2)',
                   border: '1px solid var(--border)',
                   borderRadius: '6px',
-                  cursor: 'grab',
+                  cursor: existingTargetFieldIds.has(field.id) ? 'not-allowed' : 'grab',
                   fontSize: '12px',
-                  color: 'var(--text)',
+                  color: existingTargetFieldIds.has(field.id) ? 'var(--muted)' : 'var(--text)',
                   display: 'flex',
                   gap: '8px',
                   alignItems: 'center',
                   transition: 'all 0.2s',
+                  opacity: existingTargetFieldIds.has(field.id) ? 0.55 : 1,
                 }}
+                title={existingTargetFieldIds.has(field.id) ? 'Field already added to canvas' : ''}
                 onMouseEnter={(e) => {
+                  if (existingTargetFieldIds.has(field.id)) return
                   e.currentTarget.style.background = 'var(--surf3)'
                   e.currentTarget.style.borderColor = 'var(--success)'
                 }}
                 onMouseLeave={(e) => {
+                  if (existingTargetFieldIds.has(field.id)) return
                   e.currentTarget.style.background = 'var(--surf2)'
                   e.currentTarget.style.borderColor = 'var(--border)'
                 }}
@@ -1183,7 +1518,354 @@ export default function FieldMappingStep() {
         </div>
       </div>
 
-      {/* Transformer menu */}
+      {/* Plus circle right-click context menu */}
+      {plusCtxMenu && (
+        <div
+          style={{
+            position: 'fixed',
+            left: plusCtxMenu.x,
+            top: plusCtxMenu.y,
+            background: 'var(--surf)',
+            border: '1px solid var(--border)',
+            borderRadius: '10px',
+            boxShadow: '0 8px 28px rgba(0,0,0,0.18)',
+            zIndex: 1001,
+            minWidth: '190px',
+            animation: 'ctxIn 0.15s ease',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            Connection
+          </div>
+          <div
+            style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
+            onClick={() => {
+              const menu = plusCtxMenu
+              setPlusCtxMenu(null)
+              setTransformerSearch('')
+              if (menu?.edge) {
+                setAddTransformerModal({ edge: menu.edge, mode: menu.mode })
+              }
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(79,110,247,0.10)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+          >
+            <span style={{ fontSize: '16px' }}>⚙</span>
+            <span>Add Transformer</span>
+          </div>
+          <div style={{ borderTop: '1px solid var(--border)' }}>
+            <div
+              style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
+              onClick={() => {
+                removeEdge(plusCtxMenu.edge)
+                setPlusCtxMenu(null)
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            >
+              <span style={{ fontSize: '16px' }}>🗑</span>
+              <span>Delete Connection</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Transformer Modal (with search + properties table) */}
+      {addTransformerModal && (() => {
+        const filtered = TRANSFORMERS.filter(t =>
+          t.id !== 'none' &&
+          (t.name.toLowerCase().includes(transformerSearch.toLowerCase()) ||
+           t.id.toLowerCase().includes(transformerSearch.toLowerCase()))
+        )
+        const schema = selectedTf ? (TRANSFORMER_PROPS_SCHEMA[selectedTf.id] || []) : []
+        const hasProps = schema.length > 0
+
+        const handleSelectTf = (t) => {
+          setSelectedTf(t)
+          // Initialize prop values to defaults
+          const defaults = {}
+          ;(TRANSFORMER_PROPS_SCHEMA[t.id] || []).forEach(p => { defaults[p.key] = p.default })
+          setTfPropValues(defaults)
+        }
+
+        const handleApply = () => {
+          setEdgeTransformer(addTransformerModal.edge, selectedTf.id)
+          // Persist custom props onto the edge
+          setEdges(prev => prev.map(e =>
+            (e.from === addTransformerModal.edge.from && e.to === addTransformerModal.edge.to)
+              ? { ...e, transformerProps: { ...tfPropValues } }
+              : e
+          ))
+          setAddTransformerModal(null)
+          setTransformerSearch('')
+          setSelectedTf(null)
+          setTfPropValues({})
+        }
+
+        return (
+          <>
+            <div
+              style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1099 }}
+              onClick={() => { setAddTransformerModal(null); setSelectedTf(null); setTfPropValues({}) }}
+            />
+            <div
+              style={{
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: 'var(--surf)',
+                border: '1px solid var(--border)',
+                borderRadius: '12px',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                zIndex: 1100,
+                width: selectedTf && hasProps ? '680px' : '380px',
+                maxHeight: '600px',
+                display: 'flex',
+                flexDirection: 'column',
+                animation: 'scaleIn 0.22s ease',
+                transition: 'width 0.22s ease',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div style={{ background: 'var(--accent)', padding: '16px 18px', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                <span style={{ fontSize: '20px' }}>⚙</span>
+                <span style={{ fontSize: '15px', fontWeight: 700, color: '#fff', flex: 1 }}>
+                  {selectedTf ? `${selectedTf.name} — Properties` : 'Add Transformer'}
+                </span>
+                {selectedTf && (
+                  <button
+                    onClick={() => { setSelectedTf(null); setTfPropValues({}) }}
+                    style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', marginRight: '4px' }}
+                  >← Back</button>
+                )}
+                <button
+                  onClick={() => { setAddTransformerModal(null); setSelectedTf(null); setTfPropValues({}) }}
+                  style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', width: '26px', height: '26px', cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >×</button>
+              </div>
+
+              {/* Body: two-panel layout when transformer selected with props, else just list */}
+              <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+
+                {/* LEFT: list panel */}
+                <div style={{
+                  width: selectedTf && hasProps ? '260px' : '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderRight: selectedTf && hasProps ? '1px solid var(--border)' : 'none',
+                  flexShrink: 0,
+                }}>
+                  {/* Search input */}
+                  <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="Search transformers..."
+                      value={transformerSearch}
+                      onChange={(e) => setTransformerSearch(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        border: '1.5px solid var(--accent)',
+                        borderRadius: '7px',
+                        background: 'var(--surf2)',
+                        color: 'var(--text)',
+                        fontSize: '13px',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  {/* Transformer list */}
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+                    {filtered.length === 0 && (
+                      <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>
+                        No transformers found
+                      </div>
+                    )}
+                    {filtered.map((t) => {
+                      const isSelected = selectedTf?.id === t.id
+                      const propCount = (TRANSFORMER_PROPS_SCHEMA[t.id] || []).length
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => handleSelectTf(t)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '9px 10px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            transition: 'background 0.15s',
+                            marginBottom: '2px',
+                            background: isSelected ? 'rgba(79,110,247,0.18)' : 'transparent',
+                            border: isSelected ? '1.5px solid rgba(79,110,247,0.5)' : '1.5px solid transparent',
+                          }}
+                          onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(79,110,247,0.09)' }}
+                          onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                        >
+                          <div style={{ width: '30px', height: '30px', borderRadius: '7px', background: isSelected ? 'rgba(79,110,247,0.25)' : 'rgba(79,110,247,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', flexShrink: 0 }}>
+                            {t.icon}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {t.name}
+                              {t.isMultiInput && (
+                                <span style={{
+                                  fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px',
+                                  background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)', color: 'var(--success)',
+                                  letterSpacing: '0.04em', textTransform: 'uppercase',
+                                }}>multi</span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              {propCount > 0 ? `${propCount} propert${propCount === 1 ? 'y' : 'ies'}` : 'no properties'}
+                            </div>
+                          </div>
+                          {isSelected && <span style={{ color: '#4f6ef7', fontSize: '14px' }}>›</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* RIGHT: properties panel */}
+                {selectedTf && (
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+                    {/* Selected transformer info */}
+                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(79,110,247,0.06)' }}>
+                      <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: 'rgba(79,110,247,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
+                        {selectedTf.icon}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>{selectedTf.name}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Configure properties below</div>
+                      </div>
+                    </div>
+
+                    {/* Properties table */}
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
+                      {/* Always show the properties table (isMultiInput is always present) */}
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                            <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.07em', width: '36%' }}>Property</th>
+                            <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.07em', width: '40%' }}>Value</th>
+                            <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {/* isMultiInput — read-only system property, always first */}
+                          <tr style={{ borderBottom: '1px solid rgba(71,85,105,0.4)', background: 'rgba(255,255,255,0.02)' }}>
+                            <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontWeight: 600, color: 'var(--text)' }}>Multi-Input</span>
+                                <span style={{
+                                  fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
+                                  padding: '1px 5px', borderRadius: '3px',
+                                  background: 'rgba(148,163,184,0.15)', color: 'var(--muted)', border: '1px solid var(--border)',
+                                }}>read-only</span>
+                              </div>
+                            </td>
+                            <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}>
+                              {selectedTf.isMultiInput ? (
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                  padding: '3px 10px', borderRadius: '5px',
+                                  background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)', color: 'var(--success)',
+                                  fontSize: '12px', fontWeight: 700,
+                                }}>
+                                  ✓ Yes
+                                </span>
+                              ) : (
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                  padding: '3px 10px', borderRadius: '5px',
+                                  background: 'rgba(148,163,184,0.10)', border: '1px solid var(--border)', color: 'var(--muted)',
+                                  fontSize: '12px', fontWeight: 700,
+                                }}>
+                                  ✕ No
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '8px 8px', color: 'var(--muted)', fontSize: '11px', verticalAlign: 'middle', lineHeight: '1.4' }}>
+                              Whether this transformer accepts multiple source field connections as input
+                            </td>
+                          </tr>
+
+                          {/* Configurable properties */}
+                          {schema.map((prop, pi) => (
+                            <tr key={prop.key} style={{ borderBottom: '1px solid rgba(71,85,105,0.4)', background: pi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                              <td style={{ padding: '8px 8px', fontWeight: 600, color: 'var(--text)', verticalAlign: 'middle' }}>
+                                {prop.label}
+                              </td>
+                              <td style={{ padding: '6px 8px', verticalAlign: 'middle' }}>
+                                {prop.type === 'select' ? (
+                                  <select
+                                    value={tfPropValues[prop.key] ?? prop.default}
+                                    onChange={(e) => setTfPropValues(v => ({ ...v, [prop.key]: e.target.value }))}
+                                    style={{ width: '100%', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '5px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', cursor: 'pointer' }}
+                                  >
+                                    {prop.options.map(o => <option key={o} value={o}>{o}</option>)}
+                                  </select>
+                                ) : (
+                                  <input
+                                    type={prop.type === 'number' ? 'number' : 'text'}
+                                    value={tfPropValues[prop.key] ?? prop.default}
+                                    onChange={(e) => setTfPropValues(v => ({ ...v, [prop.key]: e.target.value }))}
+                                    placeholder={String(prop.default)}
+                                    style={{ width: '100%', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '5px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', boxSizing: 'border-box' }}
+                                  />
+                                )}
+                              </td>
+                              <td style={{ padding: '8px 8px', color: 'var(--muted)', fontSize: '11px', verticalAlign: 'middle', lineHeight: '1.4' }}>
+                                {prop.description}
+                              </td>
+                            </tr>
+                          ))}
+
+                          {/* If no configurable props, show a note */}
+                          {!hasProps && (
+                            <tr>
+                              <td colSpan={3} style={{ padding: '14px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px', fontStyle: 'italic' }}>
+                                No additional configurable properties
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg)', borderRadius: '0 0 12px 12px', display: 'flex', justifyContent: 'flex-end', gap: '8px', flexShrink: 0 }}>
+                <button
+                  onClick={() => { setAddTransformerModal(null); setSelectedTf(null); setTfPropValues({}) }}
+                  style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
+                >
+                  Cancel
+                </button>
+                {selectedTf && (
+                  <button
+                    onClick={handleApply}
+                    style={{ padding: '7px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
+                  >
+                    ✓ Apply {selectedTf.name}
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        )})()}
+
+      {/* Transformer menu (existing transformer square click) */}
       {transformerMenu && currentEdge && (
         <div
           style={{
@@ -1468,11 +2150,11 @@ export default function FieldMappingStep() {
                   style={{
                     width: '100%',
                     padding: '10px 12px',
+                    background: 'var(--bg)',
                     border: '1px solid var(--border)',
                     borderRadius: '6px',
-                    background: 'var(--surf2)',
-                    color: 'var(--text)',
                     fontSize: '12px',
+                    color: 'var(--text)',
                     fontFamily: 'var(--mono)',
                     minHeight: '80px',
                     boxSizing: 'border-box',
@@ -1527,7 +2209,6 @@ export default function FieldMappingStep() {
                     borderRadius: '6px',
                     cursor: 'pointer',
                     fontSize: '12px',
-                    fontWeight: 600,
                   }}
                 >
                   Cancel
@@ -1688,11 +2369,7 @@ export default function FieldMappingStep() {
                           {transformer.icon}
                         </div>
                         <div style={{ flex: 1 }}>
-                          <div style={{
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            color: 'var(--text)',
-                          }}>
+                          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>
                             {transformer.name}
                           </div>
                         </div>
@@ -1785,10 +2462,8 @@ export default function FieldMappingStep() {
           }}>
             {/* Header */}
             <div style={{
+              background: 'var(--accent)',
               padding: '20px',
-              borderBottom: '1px solid var(--border)',
-              background: 'rgba(79, 110, 247, 0.08)',
-              borderRadius: '12px 12px 0 0',
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
@@ -2043,7 +2718,7 @@ export default function FieldMappingStep() {
               padding: '8px 12px',
               cursor: 'pointer',
               fontSize: '12px',
-              color: 'var(--text)',
+              color: 'var(--danger)',
               transition: 'background 0.15s',
             }}
             onClick={() => {
@@ -2059,13 +2734,14 @@ export default function FieldMappingStep() {
       )}
 
       {/* Close menus on canvas click */}
-      {(ctxMenu || transformerMenu) && (
-        <div 
+      {(ctxMenu || transformerMenu || plusCtxMenu) && (
+        <div
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} 
           onClick={() => {
             setCtxMenu(null)
             setTransformerMenu(null)
-          }} 
+            setPlusCtxMenu(null)
+          }}
         />
       )}
 

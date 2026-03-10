@@ -201,12 +201,13 @@ etl-control-uI/
 1. **Metadata Step**: Enter entity name, schema version, team name, and product information
 2. **Source Configuration**: Select source type (Kafka, RabbitMQ, File, Database) and configure connection parameters
 3. **Field Upload**: Review source schema and confirm available fields
-4. **Field Mapping**: 
+4. **Field Mapping**:
    - Drag source fields from left panel to create nodes on canvas
    - Drag target fields from right panel to create receiving nodes
    - Connect source to target nodes by clicking ports
-   - Select transformation from right-click context menu
-   - Save mappings to persist node positions
+   - Use right-click on connection `+` to open **Add Transformer** menu and configure transformer properties
+   - Use **Align** to snap sources left, targets right, and align connected 1:1 source/target pairs on the same row when possible
+   - Mappings are persisted automatically while editing
 5. **Filters** (Optional): Add data filtering rules if needed
 6. **Sink Configuration**: Configure destination system (Kafka, RabbitMQ, File, Database)
 7. **Summary & Validation**: Review entire pipeline configuration
@@ -214,8 +215,8 @@ etl-control-uI/
 
 ### Saving Your Work
 
-- **Auto-save**: All changes automatically saved to wizard state
-- **Manual save**: Click "Save Mappings" on field mapping canvas to preserve node positions
+- **Auto-save**: Field mappings (including transformer selections/properties) are automatically saved to wizard state during canvas edits
+- **No manual save required**: The Field Mapping toolbar no longer has a "Save Mappings" button
 - **Between steps**: Navigate freely between steps - all data persists
 - **Validation**: Required fields marked with `*` must be filled before creation
 
