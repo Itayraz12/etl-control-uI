@@ -8,8 +8,8 @@ const SINK_TYPES = [
   { id: 'rabbitmq',  icon: '🐇', name: 'RabbitMQ',      sub: 'Message queue'        },
 ]
 
-function SinkConfigPanel({ type, sink, metadata, u }) {
-  const hasCatalogOption = metadata?.shadow || metadata?.saknay || metadata?.asg
+function SinkConfigPanel({ type, sink, u }) {
+  const hasCatalogOption = sink?.shadow || sink?.saknay
   
   if (type === 'kafka') return (
     <CfgPanel title="☕ Kafka Sink">
@@ -78,7 +78,6 @@ function SinkConfigPanel({ type, sink, metadata, u }) {
 export default function SinkConfigStep() {
   const { state, actions } = useWizard()
   const sink = state.sink
-  const metadata = state.metadata
   const u = (k, v) => actions.updateSink({ [k]: v })
   const sinkMeta = SINK_TYPES.find(t => t.id === sink.sinkType)
 
@@ -107,8 +106,85 @@ export default function SinkConfigStep() {
               </div>
             ))}
           </div>
-          {sink.sinkType && <SinkConfigPanel type={sink.sinkType} sink={sink} metadata={metadata} u={u} />}
+          {sink.sinkType && <SinkConfigPanel type={sink.sinkType} sink={sink} u={u} />}
         </Card>
+
+        {sink.sinkType === 'kafka' && (
+          <Card>
+            <CardTitle>🏷️ Data Catalog Options</CardTitle>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '12px' }}>
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px', marginBottom: '8px' }}>
+                  <input
+                    type="checkbox"
+                    checked={sink.shadow || false}
+                    onChange={e => u('shadow', e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <span>🌬️ SHADOW</span>
+                </label>
+                {sink.shadow && (
+                  <input
+                    type="text"
+                    value={sink.shadowTopic || ''}
+                    onChange={e => u('shadowTopic', e.target.value)}
+                    placeholder="Topic name (optional)"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      marginLeft: '26px',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      color: 'var(--text)',
+                      fontSize: '12px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                )}
+              </div>
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px', marginBottom: '8px' }}>
+                  <input
+                    type="checkbox"
+                    checked={sink.saknay || false}
+                    onChange={e => u('saknay', e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <span>🦆 SAKNAY</span>
+                </label>
+                {sink.saknay && (
+                  <input
+                    type="text"
+                    value={sink.saknayTopic || ''}
+                    onChange={e => u('saknayTopic', e.target.value)}
+                    placeholder="Topic name (optional)"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      marginLeft: '26px',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      color: 'var(--text)',
+                      fontSize: '12px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                )}
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px' }}>
+                <input
+                  type="checkbox"
+                  checked={sink.asg || false}
+                  onChange={e => u('asg', e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                <span>📊 ASG</span>
+              </label>
+            </div>
+          </Card>
+        )}
       </div>
 
       <SidePanel title="Sink Summary" items={[
