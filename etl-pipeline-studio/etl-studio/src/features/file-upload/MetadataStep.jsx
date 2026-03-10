@@ -39,39 +39,8 @@ export default function MetadataStep() {
         </Card>
 
         <Card>
-          <CardTitle>🏷️ Data Catalog Options</CardTitle>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px' }}>
-              <input
-                type="checkbox"
-                checked={metadata.shadow || false}
-                onChange={e => u('shadow', e.target.checked)}
-                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-              />
-              <span>📌 SHADOW</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px' }}>
-              <input
-                type="checkbox"
-                checked={metadata.saknay || false}
-                onChange={e => u('saknay', e.target.checked)}
-                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-              />
-              <span>📤 SAKNAY</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px' }}>
-              <input
-                type="checkbox"
-                checked={metadata.asg || false}
-                onChange={e => u('asg', e.target.checked)}
-                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-              />
-              <span>🏰 asg</span>
-            </label>
-          </div>
-
           {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '0px' }}>
             <button
               onClick={() => actions.goNext(state.currentStep)}
               style={{

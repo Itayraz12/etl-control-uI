@@ -17,9 +17,6 @@ const initialState = {
     environment:    'production',
     entityName:     'Product',
     tags:           '',
-    shadow:         false,
-    saknay:         false,
-    asg:         false,
   },
 
   // Step 2 — Source Config
@@ -52,6 +49,11 @@ const initialState = {
   sink: {
     sinkType:       'kafka',
     sinkKafkaTopic: 'etl.products.v3',
+    shadow:         false,
+    shadowTopic:    '',
+    saknay:         false,
+    saknayTopic:    '',
+    asg:            false,
   },
 }
 
