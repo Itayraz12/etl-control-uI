@@ -31,14 +31,15 @@ export default function ETLManagementScreen() {
   const [sortKey, setSortKey] = useState('productType');
   const [sortOrder, setSortOrder] = useState('asc');
   const [filterText, setFilterText] = useState("");
-  const { actions } = useWizard();
+  const { actions, state } = useWizard();
 
   useEffect(() => {
-    fetchDeployments().then(data => {
+    const teamName = state?.metadata?.team || 'default';
+    fetchDeployments(teamName).then(data => {
       setDeployments(data);
       setLoading(false);
     });
-  }, []);
+  }, [state?.metadata?.team]);
 
   const handleSort = (columnKey) => {
     if (sortKey === columnKey) {
@@ -112,7 +113,6 @@ export default function ETLManagementScreen() {
     }
   };
 
-  const { state } = useWizard();
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, padding: '40px', background: 'var(--bg)',
@@ -247,3 +247,4 @@ export default function ETLManagementScreen() {
     </div>
   );
 }
+
