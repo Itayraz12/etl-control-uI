@@ -89,9 +89,28 @@ function DropZone({ phase, sampleMode, onUpload }) {
             {sampleMode === 'local' ? 'or click to browse · JSON / CSV' : 'Uses source config settings'}
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 14 }}>
-            {['JSON', 'CSV', 'AVRO', 'Parquet'].map(f => (
-              <span key={f} style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 600, color: 'var(--accent)' }}>{f}</span>
-            ))}
+            {['JSON', 'CSV', 'AVRO', 'Parquet'].map(f => {
+              const isEnabled = ['JSON', 'CSV'].includes(f);
+              return (
+                <span 
+                  key={f} 
+                  title={isEnabled ? '' : 'Future feature'}
+                  style={{ 
+                    background: 'var(--surf)', 
+                    border: `1px solid ${isEnabled ? 'var(--border)' : 'var(--border)'}`, 
+                    borderRadius: 5, 
+                    padding: '3px 10px', 
+                    fontSize: 11, 
+                    fontWeight: 600, 
+                    color: isEnabled ? 'var(--accent)' : 'var(--muted)',
+                    opacity: isEnabled ? 1 : 0.5,
+                    cursor: isEnabled ? 'default' : 'not-allowed',
+                  }}
+                >
+                  {f}
+                </span>
+              );
+            })}
           </div>
         </>
       )}

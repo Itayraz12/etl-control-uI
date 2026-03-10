@@ -37,69 +37,6 @@ export default function MetadataStep() {
             </FormGroup>
           </FormRow>
         </Card>
-
-        <Card>
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: '10px', marginTop: '0px' }}>
-            <button
-              onClick={() => actions.goNext(state.currentStep)}
-              style={{
-                flex: 1,
-                padding: '10px 16px',
-                background: 'var(--accent)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: 600,
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9' }}
-              onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
-            >
-              ✓ Create
-            </button>
-            <button
-              onClick={() => alert('Load functionality coming soon')}
-              style={{
-                flex: 1,
-                padding: '10px 16px',
-                background: 'transparent',
-                color: 'var(--text)',
-                border: '1px solid var(--border)',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: 600,
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text)' }}
-            >
-              📂 Load
-            </button>
-            <button
-              onClick={() => alert('Delete functionality coming soon')}
-              style={{
-                flex: 1,
-                padding: '10px 16px',
-                background: 'transparent',
-                color: 'var(--danger)',
-                border: '1px solid var(--danger)',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: 600,
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-            >
-              🗑 Delete
-            </button>
-          </div>
-        </Card>
       </div>
 
       <SidePanel title="Snapshot" items={[

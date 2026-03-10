@@ -14,8 +14,6 @@ export default function TopNav() {
       </div>
       <Chip c="purple">ENTERPRISE</Chip>
       <div style={{ flex: 1 }} />
-      <Btn v="ghost" sm>⟳ Load Draft</Btn>
-      <Btn v="ghost" sm>⚙ Settings</Btn>
       <Btn
         v="ghost" sm
         onClick={() => actions.toggleTheme()}

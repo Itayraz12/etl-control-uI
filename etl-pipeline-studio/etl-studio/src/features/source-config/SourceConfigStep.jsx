@@ -24,35 +24,75 @@ function SourceConfigPanel({ type, state, u }) {
           <input value={state.kafkaTopic || ''} onChange={e => u('kafkaTopic', e.target.value)} />
         </FormGroup>
       </FormRow>
-      <FormRow>
-        <FormGroup label="Consumer Group">
-          <input value={state.kafkaGroup || ''} onChange={e => u('kafkaGroup', e.target.value)} />
-        </FormGroup>
-        <FormGroup label="Auto Offset Reset">
-          <select value={state.kafkaOffset || 'latest'} onChange={e => u('kafkaOffset', e.target.value)}>
-            <option>earliest</option><option>latest</option>
-          </select>
-        </FormGroup>
-      </FormRow>
       <TestBtn />
+      
+      {/* Kafka Key Filter */}
+      <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>🔑 Key Filter</div>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12 }}>
+            <input
+              type="radio"
+              checked={state.kafkaKeyMode === 'include' || state.kafkaKeyMode === undefined}
+              onChange={() => u('kafkaKeyMode', 'include')}
+            />
+            <span>✓ Include Keys</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12 }}>
+            <input
+              type="radio"
+              checked={state.kafkaKeyMode === 'exclude'}
+              onChange={() => u('kafkaKeyMode', 'exclude')}
+            />
+            <span>✗ Exclude Keys</span>
+          </label>
+        </div>
+        <textarea
+          value={state.kafkaKeys || ''}
+          onChange={e => u('kafkaKeys', e.target.value)}
+          placeholder="Comma-separated keys (optional)&#10;Example: user-001, order-456"
+          style={{
+            width: '100%',
+            minHeight: 60,
+            padding: 8,
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 6,
+            color: 'var(--text)',
+            fontSize: 12,
+            resize: 'vertical',
+          }}
+        />
+        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>
+          {(state.kafkaKeys || '').split(',').filter(k => k.trim()).length} key{(state.kafkaKeys || '').split(',').filter(k => k.trim()).length !== 1 ? 's' : ''} specified
+        </div>
+      </div>
     </CfgPanel>
   )
 
   if (type === 'rabbitmq') return (
     <CfgPanel title="🐇 RabbitMQ Source">
       <FormRow>
-        <FormGroup label="VHOST" required>
-          <input value={state.rmqVhost || ''} onChange={e => u('rmqVhost', e.target.value)} placeholder="/" />
+        <FormGroup label="IP" required>
+          <input value={state.rmqIp || ''} onChange={e => u('rmqIp', e.target.value)} placeholder="192.168.1.10" />
         </FormGroup>
         <FormGroup label="PORT" required>
           <input value={state.rmqPort || ''} onChange={e => u('rmqPort', e.target.value)} placeholder="5672" />
         </FormGroup>
       </FormRow>
-      <FormGroup label="Queue">
+      <FormRow>
+        <FormGroup label="Username" required>
+          <input value={state.rmqUsername || ''} onChange={e => u('rmqUsername', e.target.value)} placeholder="guest" />
+        </FormGroup>
+        <FormGroup label="Password" required>
+          <input type="password" value={state.rmqPassword || ''} onChange={e => u('rmqPassword', e.target.value)} placeholder="••••••••" />
+        </FormGroup>
+      </FormRow>
+      <FormGroup label="Queue" required>
         <input value={state.rmqQueue || ''} onChange={e => u('rmqQueue', e.target.value)} placeholder="products.ingest" />
       </FormGroup>
-      <FormGroup label="Exchange">
-        <input value={state.rmqExchange || ''} onChange={e => u('rmqExchange', e.target.value)} placeholder="etl.exchange" />
+      <FormGroup label="VHOST">
+        <input value={state.rmqVhost || ''} onChange={e => u('rmqVhost', e.target.value)} placeholder="/" />
       </FormGroup>
       <TestBtn />
     </CfgPanel>
@@ -128,24 +168,40 @@ export default function SourceConfigStep() {
         <Card>
           <CardTitle>🔌 Source Config</CardTitle>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
-            {SOURCE_TYPES.map(t => (
+            {SOURCE_TYPES.map(t => {
+              const isEnabled = ['kafka', 'rabbitmq'].includes(t.id);
+              return (
               <div
                 key={t.id}
-                onClick={() => u('sourceType', t.id)}
+                onClick={() => isEnabled && u('sourceType', t.id)}
+                title={isEnabled ? '' : 'Future feature'}
                 style={{
                   background: src.sourceType === t.id ? 'rgba(79,110,247,.12)' : 'var(--surf2)',
                   border: `2px solid ${src.sourceType === t.id ? 'var(--accent)' : 'var(--border)'}`,
                   borderRadius: 10, padding: '16px 12px', textAlign: 'center',
-                  cursor: 'pointer', transition: 'all .18s',
+                  cursor: isEnabled ? 'pointer' : 'not-allowed', 
+                  transition: 'all .18s',
+                  opacity: isEnabled ? 1 : 0.5,
                 }}
-                onMouseEnter={e => { if (src.sourceType !== t.id) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'rgba(79,110,247,.07)' } }}
-                onMouseLeave={e => { if (src.sourceType !== t.id) { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--surf2)' } }}
+                onMouseEnter={e => { 
+                  if (isEnabled && src.sourceType !== t.id) { 
+                    e.currentTarget.style.borderColor = 'var(--accent)'; 
+                    e.currentTarget.style.background = 'rgba(79,110,247,.07)' 
+                  }
+                }}
+                onMouseLeave={e => { 
+                  if (isEnabled && src.sourceType !== t.id) { 
+                    e.currentTarget.style.borderColor = 'var(--border)'; 
+                    e.currentTarget.style.background = 'var(--surf2)' 
+                  }
+                }}
               >
                 <div style={{ fontSize: 28, marginBottom: 6 }}>{t.icon}</div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{t.name}</div>
                 <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{t.sub}</div>
               </div>
-            ))}
+            );
+            })}
           </div>
           {src.sourceType && <SourceConfigPanel type={src.sourceType} state={src} u={u} />}
         </Card>
@@ -164,7 +220,11 @@ export default function SourceConfigStep() {
               </select>
             </FormGroup>
           </FormRow>
-
+          {src.format === 'CSV' && (
+            <FormGroup label="Column Delimiter">
+              <input value={src.csvDelimiter || ','} onChange={e => u('csvDelimiter', e.target.value)} placeholder="," maxLength="1" />
+            </FormGroup>
+          )}
         </Card>
       </div>
 

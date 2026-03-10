@@ -105,8 +105,6 @@ export default function   FiltersStep() {
   const { state, actions } = useWizard()
   const filters = state.filters
   const setFilters = actions.setFilters
-  const kafkaFilters = state.kafkaFilters || { keys: '', mode: 'include' }
-  const setKafkaFilters = (updated) => actions.setKafkaFilters(updated)
 
   const totalRules = filters.reduce((sum, g) => sum + g.rules.length + g.subgroups.reduce((s2, sg) => s2 + sg.rules.length, 0), 0)
 
@@ -115,52 +113,6 @@ export default function   FiltersStep() {
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '24px 30px' }}>
-      {/* Kafka Key Filter */}
-      <Card style={{ marginBottom: 24, background: 'rgba(34, 197, 94, 0.05)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
-        <CardTitle style={{ color: '#22c55e', marginBottom: 12 }}>🔑 Kafka Key Filter</CardTitle>
-        <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
-            <input
-              type="radio"
-              checked={kafkaFilters.mode === 'include'}
-              onChange={() => setKafkaFilters({ ...kafkaFilters, mode: 'include' })}
-            />
-            <span>✓ Include Only These Keys</span>
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
-            <input
-              type="radio"
-              checked={kafkaFilters.mode === 'exclude'}
-              onChange={() => setKafkaFilters({ ...kafkaFilters, mode: 'exclude' })}
-            />
-            <span>✗ Exclude These Keys</span>
-          </label>
-        </div>
-        <div>
-          <textarea
-            value={kafkaFilters.keys}
-            onChange={e => setKafkaFilters({ ...kafkaFilters, keys: e.target.value })}
-            placeholder="Enter Kafka keys (comma-separated)&#10;Example: user-001, order-456, transaction-789"
-            style={{
-              width: '100%',
-              minHeight: 80,
-              padding: 12,
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: 6,
-              color: 'var(--text)',
-              fontFamily: 'var(--mono)',
-              fontSize: 12,
-              lineHeight: 1.6,
-              resize: 'vertical',
-            }}
-          />
-        </div>
-        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)' }}>
-          {kafkaFilters.keys.split(',').filter(k => k.trim()).length} key{kafkaFilters.keys.split(',').filter(k => k.trim()).length !== 1 ? 's' : ''} specified
-        </div>
-      </Card>
-
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
         <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)' }}>Filter Rules</h2>
         <span style={{ fontSize: 12, background: 'rgba(79,110,247,.15)', color: 'var(--accent)', padding: '3px 10px', borderRadius: 20 }}>

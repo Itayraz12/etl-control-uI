@@ -22,12 +22,19 @@ const initialState = {
   // Step 2 — Source Config
   source: {
     sourceType:      'kafka',
-    kafkaBootstrap:  'kafka-1:9092,kafka-2:9092',
+    kafkaEnv:        'prod',
     kafkaTopic:      'source.products.raw',
-    kafkaGroup:      'etl-wizard-group-01',
-    kafkaOffset:     'latest',
+    kafkaKeys:       '',
+    kafkaKeyMode:    'include',
+    rmqIp:           '',
+    rmqPort:         '5672',
+    rmqUsername:     '',
+    rmqPassword:     '',
+    rmqQueue:        '',
+    rmqVhost:        '/',
     format:          'JSON',
     encoding:        'UTF-8',
+    csvDelimiter:    ',',
   },
 
   // Step 3 — Source Upload
@@ -40,10 +47,6 @@ const initialState = {
 
   // Step 5 — Filters
   filters: [],
-  kafkaFilters: {
-    keys: '',
-    mode: 'include', // 'include' | 'exclude'
-  },
 
   // Step 6 — Sink Config
   sink: {
@@ -76,8 +79,6 @@ function wizardReducer(state, action) {
       return { ...state, mappings: action.payload }
     case 'SET_FILTERS':
       return { ...state, filters: action.payload }
-    case 'SET_KAFKA_FILTERS':
-      return { ...state, kafkaFilters: action.payload }
     case 'UPDATE_SINK':
       return { ...state, sink: { ...state.sink, ...action.payload } }
     case 'SET_THEME':
@@ -120,7 +121,6 @@ export function WizardProvider({ children }) {
     setUploadDone:  (val)     => dispatch({ type: 'SET_UPLOAD_DONE', payload: val }),
     setMappings:    (maps)    => dispatch({ type: 'SET_MAPPINGS',     payload: maps }),
     setFilters:     (filters) => dispatch({ type: 'SET_FILTERS',      payload: filters }),
-    setKafkaFilters: (kafkaFilters) => dispatch({ type: 'SET_KAFKA_FILTERS', payload: kafkaFilters }),
     updateSink:     (patch)   => dispatch({ type: 'UPDATE_SINK',      payload: patch }),
 
     setTheme:       (theme)   => dispatch({ type: 'SET_THEME',       payload: theme }),
