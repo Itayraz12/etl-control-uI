@@ -1,7 +1,9 @@
 import { useWizard } from '../../shared/store/wizardStore.jsx'
+import { useUser } from '../../shared/store/userContext.jsx';
 
 export default function MainMenu() {
   const { state, actions } = useWizard()
+  const { user, setUser } = useUser();
 
   const handleETLConfiguration = () => {
     actions.setNavigationMode('etl-config')
@@ -10,6 +12,10 @@ export default function MainMenu() {
 
   const handleETLManagement = () => {
     actions.setNavigationMode('etl-management')
+  }
+
+  function handleLogout() {
+    setUser(null);
   }
 
   return (
@@ -51,6 +57,11 @@ export default function MainMenu() {
           }}>
             Pipeline Builder
           </div>
+          {user && user.userId && (
+            <div style={{ fontSize: '11px', color: 'var(--accent)', marginTop: 4 }}>
+              logged in:{user.userId}
+            </div>
+          )}
         </div>
       </div>
 
@@ -149,6 +160,23 @@ export default function MainMenu() {
       }}>
         v1.0.0
       </div>
+      <button
+        onClick={handleLogout}
+        style={{
+          width: '100%',
+          padding: '10px 0',
+          background: 'var(--danger)',
+          color: 'white',
+          fontWeight: 600,
+          fontSize: '13px',
+          border: 'none',
+          borderRadius: '0 0 8px 8px',
+          cursor: 'pointer',
+          marginTop: 4,
+        }}
+      >
+        Logout
+      </button>
     </div>
   )
 }

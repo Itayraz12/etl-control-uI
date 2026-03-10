@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Btn, Chip } from '../../shared/components/index.jsx';
-import { fetchDeployments, deployService, stopDeployment, fetchDeploymentConfig } from './mockDeploymentsService.js';
+import * as deploymentsService from '../../shared/services/deploymentsService.js';
 import { useWizard } from '../../shared/store/wizardStore.jsx';
+import { useMockMode } from '../../shared/store/mockModeContext.jsx';
+import { useUser } from '../../shared/store/userContext.jsx';
 
 const STATUS_COLORS = {
   draft: 'amber',
@@ -32,14 +34,29 @@ export default function ETLManagementScreen() {
   const [sortOrder, setSortOrder] = useState('asc');
   const [filterText, setFilterText] = useState("");
   const { actions, state } = useWizard();
+  const { useMock, setUseMock } = useMockMode();
+  const { user } = useUser();
 
-  useEffect(() => {
-    const teamName = state?.metadata?.team || 'default';
-    fetchDeployments(teamName).then(data => {
+  // Use team name from user context
+  const teamName = user?.teamName || 'default';
+
+  // Expose the toggle to the service
+  function handleMockToggle(e) {
+    setUseMock(e.target.checked);
+    setLoading(true);
+    deploymentsService.fetchDeployments(teamName, e.target.checked).then(data => {
       setDeployments(data);
       setLoading(false);
     });
-  }, [state?.metadata?.team]);
+  }
+
+  useEffect(() => {
+    setLoading(true);
+    deploymentsService.fetchDeployments(teamName, useMock).then(data => {
+      setDeployments(data);
+      setLoading(false);
+    });
+  }, [teamName, useMock]);
 
   const handleSort = (columnKey) => {
     if (sortKey === columnKey) {
@@ -82,27 +99,31 @@ export default function ETLManagementScreen() {
 
   const handleDeploy = async (id) => {
     setActionLoading(a => ({ ...a, [id]: 'deploy' }));
-    await deployService(id);
+    console.log('[ETLManagementScreen] handleDeploy, useMock:', useMock);
+    await deploymentsService.deployService(id, useMock);
     setActionLoading(a => ({ ...a, [id]: null }));
     // Optionally refresh deployments
   };
 
   const handleStop = async (id) => {
     setActionLoading(a => ({ ...a, [id]: 'stop' }));
-    await stopDeployment(id);
+    console.log('[ETLManagementScreen] handleStop, useMock:', useMock);
+    await deploymentsService.stopDeployment(id, useMock);
     setActionLoading(a => ({ ...a, [id]: null }));
     // Optionally refresh deployments
   };
 
   const handleUpgrade = async (id) => {
     setActionLoading(a => ({ ...a, [id]: 'upgrade' }));
-    await deployService(id);
+    console.log('[ETLManagementScreen] handleUpgrade, useMock:', useMock);
+    await deploymentsService.deployService(id, useMock);
     setActionLoading(a => ({ ...a, [id]: null }));
   };
 
   const handleEdit = async (id) => {
     setActionLoading(a => ({ ...a, [id]: 'edit' }));
-    const { config } = await fetchDeploymentConfig(id);
+    console.log('[ETLManagementScreen] handleEdit, useMock:', useMock);
+    const { config } = await deploymentsService.fetchDeploymentConfig(id, useMock);
     setActionLoading(a => ({ ...a, [id]: null }));
     // Load config into ETL configuration page
     if (config && config.name) {
@@ -113,12 +134,32 @@ export default function ETLManagementScreen() {
     }
   };
 
+  // Handler for creating new configuration
+  function handleCreateNewConfig() {
+    actions.setNavigationMode('etl-config');
+    actions.setStep(0);
+    actions.updateMetadata({
+      team: teamName,
+      productSource: '',
+      productType: '',
+      environment: '',
+      entityName: '',
+      tags: '',
+    });
+    actions.updateSource({});
+    actions.setUploadDone(false);
+    actions.setMappings([]);
+    actions.setFilters([]);
+    actions.setKafkaFilters({});
+    actions.updateSink({});
+  }
+
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, padding: '40px', background: 'var(--bg)',
     }}>
-      <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text)', marginBottom: 24 }}>
-        Deployments{state?.metadata?.team ? ` — ${state.metadata.team}` : ''}
+      <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
+        Deployments{teamName ? ` — ${teamName}` : ''}
       </div>
       <div style={{ marginBottom: 16, width: '100%', maxWidth: 400 }}>
         <input
@@ -138,6 +179,11 @@ export default function ETLManagementScreen() {
             boxSizing: 'border-box',
           }}
         />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', maxWidth: 1300, marginBottom: 16 }}>
+        <Btn v="accent" sm onClick={handleCreateNewConfig}>
+          + Create New Deployment Configuration
+        </Btn>
       </div>
       {loading ? (
         <div>Loading deployments...</div>
@@ -221,7 +267,9 @@ export default function ETLManagementScreen() {
                           disabled={actionLoading[dep.id] === 'stop' || dep.deploymentStatus === 'stopped' || dep.deploymentStatus === 'draft'}
                           title={dep.deploymentStatus === 'stopped' ? 'Disable: Pipeline is already stopped' : dep.deploymentStatus === 'draft' ? 'Disable: Pipeline is in draft status' : ''}
                         >
-                          Stop
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span role="img" aria-label="delete">🗑️</span> Delete
+                          </span>
                         </Btn>
                         <Btn
                           v="accent2"
@@ -233,7 +281,9 @@ export default function ETLManagementScreen() {
                           ⬆ Upgrade
                         </Btn>
                         <Btn v="secondary" sm onClick={() => handleEdit(dep.id)} disabled={actionLoading[dep.id] === 'edit'}>
-                          Edit
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span role="img" aria-label="edit">✏️</span> Edit
+                          </span>
                         </Btn>
                       </td>
                     </tr>
@@ -247,4 +297,3 @@ export default function ETLManagementScreen() {
     </div>
   );
 }
-

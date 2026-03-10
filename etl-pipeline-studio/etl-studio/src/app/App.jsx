@@ -1,13 +1,21 @@
 import { WizardProvider, useWizard } from '../shared/store/wizardStore.jsx'
+import { useUser } from '../shared/store/userContext.jsx';
 import TopNav      from '../features/etl-wizard/TopNav.jsx'
 import StepBar     from '../features/etl-wizard/StepBar.jsx'
 import MainMenu    from '../features/etl-wizard/MainMenu.jsx'
 import WizardShell from '../features/etl-wizard/WizardShell.jsx'
 import WizardFooter from '../features/etl-wizard/WizardFooter.jsx'
 import ETLManagementScreen from '../features/etl-wizard/ETLManagementScreen.jsx'
+import LoginPage from '../features/etl-wizard/LoginPage.jsx';
 
 function AppContent() {
   const { state } = useWizard()
+  const { user } = useUser();
+
+  // Show login page if user is not set
+  if (!user) {
+    return <LoginPage />;
+  }
 
   // Show main menu if not in any mode
   if (state.navigationMode === 'menu') {
