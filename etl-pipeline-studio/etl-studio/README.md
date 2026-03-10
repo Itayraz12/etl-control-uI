@@ -72,6 +72,9 @@ src/
 │   │   ├── TopNav.jsx           # Top navigation
 │   │   ├── WizardShell.jsx      # Main wizard container
 │   │   └── WizardFooter.jsx     # Navigation buttons
+│   │   ├── MainMenu.jsx         # Side menu with logout and user info
+│   │   ├── LoginPage.jsx        # Login page with mock mode toggle
+│   │   ├── ETLManagementScreen.jsx # Management table, create new deployment config
 │   │
 │   ├── file-upload/              # Step 0 – Metadata Input
 │   │   └── MetadataStep.jsx
@@ -97,9 +100,41 @@ src/
     │   └── index.jsx             # Card, Btn, FormGroup, ValidationItem, etc.
     ├── store/
     │   └── wizardStore.jsx       # State management (Context + useReducer)
+    │   └── mockModeContext.jsx   # Global mock/real mode toggle
+    │   └── userContext.jsx       # User login state
+    ├── services/
+    │   └── deploymentsService.js # Central service for backend & mock deployment logic
     └── types/
         └── index.js              # Mock data & type definitions
 ```
+
+## 🆕 Recent Feature Updates
+
+### Login Page & User Context
+- **Login page** added: user enters ID, password, and team name
+- **Mock mode toggle**: checkbox on login page to switch between mock and real backend
+- **User context**: user ID and team name are stored and shown in the side menu
+
+### Side Menu Improvements
+- **Logout button**: at the bottom of the side menu, clears user and returns to login
+- **Logged-in user display**: below "Pipeline Builder" in side menu
+
+### ETL Management Table Enhancements
+- **Create New Deployment Configuration**: button at top-right, redirects to configuration wizard with team name and all fields empty (environment is set to null)
+- **Table columns**: now include saved version, deployed version, sortable by header click
+- **Action buttons**:
+  - Deploy: disabled if status is running
+  - Delete (was Stop): disabled if status is stopped or draft, trash icon
+  - Upgrade: enabled if deployed and saved version differ and status is running
+  - Edit: edit icon
+- **Horizontal scrollbar**: appears if table width exceeds page
+- **Sticky headers**: table headers remain above rows when scrolling
+- **Filter input**: filter deployments by any column
+
+### Backend Integration
+- **Switch between mock and real REST API**: global flag, controlled from login page
+- **Team name**: always taken from login context and used in backend requests
+- **Debug print**: response object is logged for troubleshooting
 
 ## 📄 Key Files
 
@@ -113,6 +148,9 @@ src/
 | `index.html` | - | HTML entry point |
 | `vite.config.js` | - | Build configuration |
 | `package.json` | - | Dependencies and npm scripts |
+| `mockModeContext.jsx` | - | Global mock/real mode toggle |
+| `userContext.jsx` | - | User login state |
+| `deploymentsService.js` | - | Handles all deployment API and mock logic, controlled by global mock flag |
 
 ## 🎨 Key Features
 
@@ -423,45 +461,4 @@ For complete setup and project overview, see [../README.md](../README.md)
 **To start development:**
 ```bash
 npm install && npm run dev
-```
-    │   └── wizardStore.jsx       # useReducer + Context
-    └── types/
-        └── index.js              # JSDoc types & shared constants
-```
-
-## 🎯 Features per Step
-
-| Step | Name            | Key Features |
-|------|-----------------|---|
-| 1    | Metadata        | Entity selector, environment, team, custom tags |
-| 2    | Source Config   | 6 source type cards (Kafka/RMQ/File/DB/HTTP/S3), live config panels |
-| 3    | Source Upload   | Drag-and-drop zone, simulated Web Worker parsing, schema tree |
-| 4    | Field Mapping   | 3-panel DnD canvas, auto-map, type-mismatch warnings |
-| 5    | Filters         | Recursive AND/OR rule builder, SQL expression preview |
-| 6    | Sink Config     | 4 sink types with context-sensitive forms |
-| 7    | Summary         | Flink flow diagram, validation checklist, YAML preview |
-
-## 🎨 Design System
-
-- **Dark theme** — enterprise `#0f1117` base
-- **Light theme** — alternate `#ffffff` base (toggle available in top nav)
-
-- **Accent** — `#4f6ef7` blue, `#7c3aed` purple
-- **Fonts** — DM Sans + JetBrains Mono
-- **Components** — `Chip`, `Btn` (5 variants), `Card`, `FormGroup`, `SidePanel`, `CfgPanel`, `ValidationItem`
-- **Animations** — `fadeIn`, `slideIn`, `spin`
-
-## 🔧 Tech Stack
-
-- React 18 (hooks only — no class components)
-- Vite 5
-- Zero UI library dependencies
-- Inline styles + CSS custom properties
-- Context + useReducer for global state
-
-## 📦 Build
-
-```bash
-npm run build     # Production build → dist/
-npm run preview   # Preview production build
 ```
