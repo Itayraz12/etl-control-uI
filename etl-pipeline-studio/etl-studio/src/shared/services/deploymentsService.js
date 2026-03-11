@@ -1,6 +1,5 @@
 // Backend service for deployments data
-// Using full backend URL since CORS is enabled
-const API_BASE_URL = 'http://localhost:8080/api/backend/deployments';
+const API_BASE = 'http://localhost:8080/api'
 
 export async function fetchDeployments(teamName = 'default', useMock = false) {
   if (useMock) {
@@ -130,7 +129,7 @@ export async function fetchDeployments(teamName = 'default', useMock = false) {
     ];
   } else {
     try {
-      const url = `${API_BASE_URL}?teamName=${encodeURIComponent(teamName)}`;
+      const url = `${API_BASE}/backend/deployments?teamName=${encodeURIComponent(teamName)}`;
       console.log('🔵 Fetching deployments from:', url);
 
       const response = await fetch(url);
@@ -179,7 +178,7 @@ export async function deployService(id, useMock = false) {
     return { success: true };
   } else {
     try {
-      const url = `${API_BASE_URL}/${id}/deploy`;
+      const url = `${API_BASE}/backend/deployments/${id}/deploy`;
       console.log('🔵 Deploying service:', id);
       console.log('   URL:', url);
 
@@ -212,7 +211,7 @@ export async function stopDeployment(id, useMock = false) {
     return { success: true };
   } else {
     try {
-      const url = `${API_BASE_URL}/${id}/stop`;
+      const url = `${API_BASE}/backend/deployments/${id}/stop`;
       console.log('🔵 Stopping deployment:', id);
       console.log('   URL:', url);
 
@@ -245,7 +244,7 @@ export async function fetchDeploymentConfig(id, useMock = false) {
     return { config: { id, name: 'Sample Config', settings: {} } };
   } else {
     try {
-      const url = `${API_BASE_URL}/${id}/config`;
+      const url = `${API_BASE}/backend/deployments/${id}/config`;
       console.log('🔵 Fetching deployment config:', id);
       console.log('   URL:', url);
 

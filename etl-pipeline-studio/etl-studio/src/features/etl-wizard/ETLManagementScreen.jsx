@@ -150,7 +150,6 @@ export default function ETLManagementScreen() {
     actions.setUploadDone(false);
     actions.setMappings([]);
     actions.setFilters([]);
-    actions.setKafkaFilters({});
     actions.updateSink({});
   }
 

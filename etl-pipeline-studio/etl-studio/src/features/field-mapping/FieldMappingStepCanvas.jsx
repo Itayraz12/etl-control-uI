@@ -1,59 +1,23 @@
 import { useState, useRef, useEffect } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
+import { useConfig } from '../../shared/store/configContext.jsx'
 import { MOCK_SCHEMA, TARGET_FIELDS } from '../../shared/types/index.js'
 
-const TRANSFORMERS = [
-  { id: 'none',      name: 'None',          icon: '–',  isMultiInput: false },
-  { id: 'uppercase', name: 'Uppercase',      icon: 'Aa', isMultiInput: false },
-  { id: 'lowercase', name: 'Lowercase',      icon: 'aa', isMultiInput: false },
-  { id: 'trim',      name: 'Trim',           icon: '✂',  isMultiInput: false },
-  { id: 'concat',    name: 'Concatenate',    icon: '∥',  isMultiInput: true  },
-  { id: 'replace',   name: 'Replace',        icon: 'R',  isMultiInput: false },
-  { id: 'substring', name: 'Substring',      icon: 'S',  isMultiInput: false },
-  { id: 'split',     name: 'Split',          icon: '⊣',  isMultiInput: false },
-  { id: 'round',     name: 'Round',          icon: '◯',  isMultiInput: false },
-  { id: 'hash',      name: 'Hash',           icon: '#',  isMultiInput: false },
-]
-
-// Property definitions for each transformer: { key, label, type ('text'|'number'|'select'), options?, default, description }
-const TRANSFORMER_PROPS_SCHEMA = {
-  uppercase:  [],
-  lowercase:  [],
-  trim:       [
-    { key: 'side', label: 'Side', type: 'select', options: ['both', 'left', 'right'], default: 'both', description: 'Which side(s) to trim whitespace from' },
-  ],
-  concat:     [
-    { key: 'separator', label: 'Separator', type: 'text', default: '', description: 'String inserted between concatenated values' },
-    { key: 'values',    label: 'Extra Values', type: 'text', default: '', description: 'Comma-separated extra values to append' },
-  ],
-  replace:    [
-    { key: 'find',    label: 'Find',    type: 'text', default: '', description: 'Text or regex pattern to search for' },
-    { key: 'replace', label: 'Replace', type: 'text', default: '', description: 'Replacement text (empty string to delete)' },
-    { key: 'regex',   label: 'Use Regex', type: 'select', options: ['false', 'true'], default: 'false', description: 'Treat Find as a regular expression' },
-  ],
-  substring:  [
-    { key: 'start',  label: 'Start Index', type: 'number', default: '0',  description: 'Zero-based start index (inclusive)' },
-    { key: 'end',    label: 'End Index',   type: 'number', default: '',   description: 'Zero-based end index (exclusive), leave empty for end of string' },
-  ],
-  split:      [
-    { key: 'delimiter', label: 'Delimiter', type: 'text',   default: ',', description: 'Character or string to split on' },
-    { key: 'index',     label: 'Part Index', type: 'number', default: '0', description: 'Index of the resulting part to keep (0-based)' },
-  ],
-  round:      [
-    { key: 'decimals', label: 'Decimal Places', type: 'number', default: '2', description: 'Number of decimal places to round to' },
-    { key: 'mode',     label: 'Rounding Mode', type: 'select', options: ['half-up', 'floor', 'ceil'], default: 'half-up', description: 'How to round when exactly halfway' },
-  ],
-  hash:       [
-    { key: 'algorithm', label: 'Algorithm', type: 'select', options: ['md5', 'sha1', 'sha256', 'sha512'], default: 'sha256', description: 'Hashing algorithm to apply' },
-    { key: 'encoding',  label: 'Encoding',  type: 'select', options: ['hex', 'base64'],                   default: 'hex',    description: 'Output encoding format' },
-  ],
+// TRANSFORMER_PROPS_SCHEMA is now derived from each transformer's propsSchema field.
+// Helper: look up the propsSchema array for a transformer by its _id.
+function getPropsSchema(transformers, transformerId) {
+  const t = transformers.find(t => t._id === transformerId)
+  console.log('[getPropsSchema] id:', transformerId, '→ found:', t?.name, 'propsSchema:', JSON.stringify(t?.propsSchema))
+  return t?.propsSchema || []
 }
 
 export default function FieldMappingStep() {
   const { state, actions } = useWizard()
+  const { transformers } = useConfig()
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
-  
+
+
   const [nodes, setNodes] = useState([])
   const [edges, setEdges] = useState([])
   const [, setDrag] = useState(null)
@@ -912,7 +876,7 @@ export default function FieldMappingStep() {
                   e.target.style.color = 'var(--text)' 
                 }}
               >
-                ⚙ Show Transformers ({TRANSFORMERS.length})
+                ⚙ Show Transformers ({transformers.length})
               </button>
               <button
                 onClick={mapAllFields}
@@ -1008,7 +972,7 @@ export default function FieldMappingStep() {
                 const d = bezier(x1, y1, x2, y2)
                 const midX = (x1 + x2) / 2
                 const midY = (y1 + y2) / 2
-                const transformer = TRANSFORMERS.find(t => t.id === edge.transformer)
+                const transformer = transformers.find(t => t._id === edge.transformer)
                 const tfWidth = 140
                 const tfHeight = 55
                 
@@ -1018,8 +982,8 @@ export default function FieldMappingStep() {
                     <path d={d} stroke="#4f6ef7" strokeWidth="2.5" fill="none" markerEnd="url(#arr)" style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
                     
                     {/* Transformer Node - using foreignObject for field-style component */}
-                    {transformer && transformer.id !== 'none' && (
-                      <foreignObject 
+                    {transformer && transformer._id && (
+                      <foreignObject
                         x={midX - tfWidth / 2} 
                         y={midY - tfHeight / 2} 
                         width={tfWidth} 
@@ -1573,24 +1537,23 @@ export default function FieldMappingStep() {
 
       {/* Add Transformer Modal (with search + properties table) */}
       {addTransformerModal && (() => {
-        const filtered = TRANSFORMERS.filter(t =>
-          t.id !== 'none' &&
+        const filtered = transformers.filter(t =>
           (t.name.toLowerCase().includes(transformerSearch.toLowerCase()) ||
-           t.id.toLowerCase().includes(transformerSearch.toLowerCase()))
+           t._id.toLowerCase().includes(transformerSearch.toLowerCase()))
         )
-        const schema = selectedTf ? (TRANSFORMER_PROPS_SCHEMA[selectedTf.id] || []) : []
+        const schema = selectedTf ? getPropsSchema(transformers, selectedTf._id) : []
         const hasProps = schema.length > 0
 
         const handleSelectTf = (t) => {
           setSelectedTf(t)
           // Initialize prop values to defaults
           const defaults = {}
-          ;(TRANSFORMER_PROPS_SCHEMA[t.id] || []).forEach(p => { defaults[p.key] = p.default })
+          getPropsSchema(transformers, t._id).forEach(p => { defaults[p.key] = p.default })
           setTfPropValues(defaults)
         }
 
         const handleApply = () => {
-          setEdgeTransformer(addTransformerModal.edge, selectedTf.id)
+          setEdgeTransformer(addTransformerModal.edge, selectedTf._id)
           // Persist custom props onto the edge
           setEdges(prev => prev.map(e =>
             (e.from === addTransformerModal.edge.from && e.to === addTransformerModal.edge.to)
@@ -1688,11 +1651,11 @@ export default function FieldMappingStep() {
                       </div>
                     )}
                     {filtered.map((t) => {
-                      const isSelected = selectedTf?.id === t.id
-                      const propCount = (TRANSFORMER_PROPS_SCHEMA[t.id] || []).length
+                      const isSelected = selectedTf?._id === t._id
+                      const propCount = getPropsSchema(transformers, t._id).length
                       return (
                         <div
-                          key={t.id}
+                          key={t._id}
                           onClick={() => handleSelectTf(t)}
                           style={{
                             display: 'flex',
@@ -1715,7 +1678,7 @@ export default function FieldMappingStep() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                               {t.name}
-                              {t.isMultiInput && (
+                              {t.isMultipleInput && (
                                 <span style={{
                                   fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px',
                                   background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)', color: 'var(--success)',
@@ -1750,7 +1713,6 @@ export default function FieldMappingStep() {
 
                     {/* Properties table */}
                     <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
-                      {/* Always show the properties table (isMultiInput is always present) */}
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                         <thead>
                           <tr style={{ borderBottom: '2px solid var(--border)' }}>
@@ -1760,49 +1722,21 @@ export default function FieldMappingStep() {
                           </tr>
                         </thead>
                         <tbody>
-                          {/* isMultiInput — read-only system property, always first */}
-                          <tr style={{ borderBottom: '1px solid rgba(71,85,105,0.4)', background: 'rgba(255,255,255,0.02)' }}>
-                            <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontWeight: 600, color: 'var(--text)' }}>Multi-Input</span>
-                                <span style={{
-                                  fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
-                                  padding: '1px 5px', borderRadius: '3px',
-                                  background: 'rgba(148,163,184,0.15)', color: 'var(--muted)', border: '1px solid var(--border)',
-                                }}>read-only</span>
-                              </div>
-                            </td>
-                            <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}>
-                              {selectedTf.isMultiInput ? (
-                                <span style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: '5px',
-                                  padding: '3px 10px', borderRadius: '5px',
-                                  background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)', color: 'var(--success)',
-                                  fontSize: '12px', fontWeight: 700,
-                                }}>
-                                  ✓ Yes
-                                </span>
-                              ) : (
-                                <span style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: '5px',
-                                  padding: '3px 10px', borderRadius: '5px',
-                                  background: 'rgba(148,163,184,0.10)', border: '1px solid var(--border)', color: 'var(--muted)',
-                                  fontSize: '12px', fontWeight: 700,
-                                }}>
-                                  ✕ No
-                                </span>
-                              )}
-                            </td>
-                            <td style={{ padding: '8px 8px', color: 'var(--muted)', fontSize: '11px', verticalAlign: 'middle', lineHeight: '1.4' }}>
-                              Whether this transformer accepts multiple source field connections as input
-                            </td>
-                          </tr>
 
                           {/* Configurable properties */}
                           {schema.map((prop, pi) => (
                             <tr key={prop.key} style={{ borderBottom: '1px solid rgba(71,85,105,0.4)', background: pi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
                               <td style={{ padding: '8px 8px', fontWeight: 600, color: 'var(--text)', verticalAlign: 'middle' }}>
-                                {prop.label}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                  {prop.label}
+                                  {prop.required && (
+                                    <span style={{
+                                      fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px',
+                                      background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)',
+                                      color: 'var(--danger)', letterSpacing: '0.04em', textTransform: 'uppercase',
+                                    }}>req</span>
+                                  )}
+                                </div>
                               </td>
                               <td style={{ padding: '6px 8px', verticalAlign: 'middle' }}>
                                 {prop.type === 'select' ? (
@@ -1896,9 +1830,9 @@ export default function FieldMappingStep() {
           }}>
             ⚙ Select Transformer
           </div>
-          {TRANSFORMERS.map((t) => (
+          {transformers.map((t) => (
             <div
-              key={t.id}
+              key={t._id}
               style={{
                 padding: '10px 12px',
                 cursor: 'pointer',
@@ -1908,15 +1842,15 @@ export default function FieldMappingStep() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                borderLeft: currentEdge.transformer === t.id ? '3px solid #4f6ef7' : '3px solid transparent',
+                borderLeft: currentEdge.transformer === t._id ? '3px solid #4f6ef7' : '3px solid transparent',
               }}
-              onClick={() => setEdgeTransformer(currentEdge, t.id)}
+              onClick={() => setEdgeTransformer(currentEdge, t._id)}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.1)' }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
             >
               <span style={{ fontSize: '14px' }}>{t.icon}</span>
               <span>{t.name}</span>
-              {currentEdge.transformer === t.id && <span style={{ marginLeft: 'auto', color: '#4f6ef7' }}>✓</span>}
+              {currentEdge.transformer === t._id && <span style={{ marginLeft: 'auto', color: '#4f6ef7' }}>✓</span>}
             </div>
           ))}
           {currentEdge.transformer && currentEdge.transformer !== 'none' && (
@@ -1937,7 +1871,7 @@ export default function FieldMappingStep() {
                     setEditingTransformer({
                       edgeId: edges.indexOf(currentEdge),
                       edge: currentEdge,
-                      transformer: TRANSFORMERS.find(t => t.id === currentEdge.transformer),
+                      transformer: transformers.find(t => t._id === currentEdge.transformer),
                       transformerInputType: currentEdge.transformerInputType || 'any',
                       transformerOutputType: currentEdge.transformerOutputType || 'any',
                       transformerProps: currentEdge.transformerProps || {},
@@ -2304,7 +2238,7 @@ export default function FieldMappingStep() {
                 fontSize: '13px',
                 fontWeight: 600,
               }}>
-                {TRANSFORMERS.length}
+                {transformers.length}
               </div>
             </div>
 
@@ -2317,13 +2251,13 @@ export default function FieldMappingStep() {
                 gridTemplateColumns: '1fr 1fr',
                 gap: '12px',
               }}>
-                {TRANSFORMERS.map((transformer) => {
+                {transformers.map((transformer) => {
                   // Count how many edges use this transformer
-                  const usageCount = edges.filter(e => e.transformer === transformer.id && transformer.id !== 'none').length
-                  
+                  const usageCount = edges.filter(e => e.transformer === transformer._id).length
+
                   return (
                     <div
-                      key={transformer.id}
+                      key={transformer._id}
                       style={{
                         padding: '14px',
                         background: 'var(--surf2)',
@@ -2346,7 +2280,7 @@ export default function FieldMappingStep() {
                           alert('Please right-click on a field connection first')
                           return
                         }
-                        setEdgeTransformer(currentEdge, transformer.id)
+                        setEdgeTransformer(currentEdge, transformer._id)
                         setTransformerModal(false)
                       }}
                     >
@@ -2390,15 +2324,13 @@ export default function FieldMappingStep() {
                           </div>
                         )}
                       </div>
-                      {transformer.id !== 'none' && (
-                        <p style={{
-                          fontSize: '11px',
-                          color: 'var(--muted)',
-                          margin: '8px 0 0 0',
-                        }}>
-                          {transformer.id.charAt(0).toUpperCase() + transformer.id.slice(1)}
-                        </p>
-                      )}
+                      <p style={{
+                        fontSize: '11px',
+                        color: 'var(--muted)',
+                        margin: '8px 0 0 0',
+                      }}>
+                        {transformer.description || transformer.name}
+                      </p>
                     </div>
                   )
                 })}

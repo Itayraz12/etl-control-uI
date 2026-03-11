@@ -1,10 +1,13 @@
 import { useWizard } from '../../shared/store/wizardStore.jsx'
+import { useConfig } from '../../shared/store/configContext.jsx'
 import { Card, CardTitle, FormRow, FormGroup, SidePanel } from '../../shared/components/index.jsx'
 
 export default function MetadataStep() {
   const { state, actions } = useWizard()
+  const { entities } = useConfig()
   const { metadata } = state
   const u = (k, v) => actions.updateMetadata({ [k]: v })
+
 
   return (
     <div style={{ display: 'flex', gap: 22, flex: 1, overflow: 'hidden' }}>
@@ -32,7 +35,9 @@ export default function MetadataStep() {
           <FormRow>
             <FormGroup label="Entity Name" required>
               <select value={metadata.entityName} onChange={e => u('entityName', e.target.value)}>
-                {['Product', 'Order', 'User', 'InventoryItem'].map(o => <option key={o}>{o}</option>)}
+                {entities.map(ent => (
+                  <option key={ent.id} value={ent.type}>{ent.name} ({ent.type})</option>
+                ))}
               </select>
             </FormGroup>
           </FormRow>
@@ -40,7 +45,7 @@ export default function MetadataStep() {
       </div>
 
       <SidePanel title="Snapshot" items={[
-        ['Entity',   `${metadata.entityName} ${metadata.schemaVersion}`],
+        ['Entity',   `${metadata.entityName} ${metadata.schemaVersion || ''}`],
         ['Env',      metadata.environment],
         ['Team',     metadata.team],
         ['Type',     metadata.productType],

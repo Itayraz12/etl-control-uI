@@ -1,464 +1,304 @@
-# ETL Pipeline Studio Application
+# ETL Pipeline Studio
 
-A production-grade React UI for configuring ETL (Extract–Transform–Load) data pipelines. Built as a 7-step wizard with visual field mapping canvas, comprehensive validation, and Grafana integration.
+A production-grade React UI for configuring ETL (Extract–Transform–Load) data pipelines.  
+Built as a **7-step wizard** with a visual field-mapping canvas, live/mock backend switching, and transformer property editing.
+
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Node.js** v16 or higher
-- **npm** v7 or higher
+- **Node.js** v16+
+- **npm** v7+
+- **Backend** (optional) — `etl-control-bff` running on `http://localhost:8080`
 
-### Installation & Run
+### Install & run
 
 ```bash
-# 1. Navigate to project directory (from etl-control-uI root)
 cd etl-pipeline-studio/etl-studio
-
-# 2. Install dependencies
 npm install
-
-# 3. Start development server
 npm run dev
 ```
 
-Open **http://localhost:5173** in your browser (or the next available port shown in terminal)
+Open **http://localhost:5173** in your browser.
 
-## 📦 Dependencies
-
-### Production Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| react | ^18.3.1 | React UI library |
-| react-dom | ^18.3.1 | React DOM rendering engine |
-
-### Development Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| vite | ^5.4.0 | Build tool and dev server |
-| @vitejs/plugin-react | ^4.3.1 | React JSX support for Vite |
-| @types/react | ^18.3.1 | TypeScript type definitions |
-| @types/react-dom | ^18.3.1 | TypeScript type definitions |
-
-All dependencies are automatically installed when you run `npm install`.
-
-## 🛠️ Available Scripts
-
-```bash
-# Development server with hot reload (HMR)
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build locally
-npm run preview
-```
+---
 
 ## 🏗️ Project Architecture
 
 ```
 src/
-├── index.css                     # Global styles & CSS variables
-├── main.jsx                      # React entry point
+├── main.jsx                          # Entry point — provider tree
+├── index.css                         # Global styles & CSS variables
 │
 ├── app/
-│   └── App.jsx                   # Main app container & provider
+│   └── App.jsx                       # Navigation router (login / management / wizard)
 │
-├── features/                     # Feature modules (Step-by-step wizard)
-│   ├── etl-wizard/               # Wizard orchestration & navigation
-│   │   ├── StepBar.jsx          # Step indicator bar
-│   │   ├── TopNav.jsx           # Top navigation
-│   │   ├── WizardShell.jsx      # Main wizard container
-│   │   └── WizardFooter.jsx     # Navigation buttons
-│   │   ├── MainMenu.jsx         # Side menu with logout and user info
-│   │   ├── LoginPage.jsx        # Login page with mock mode toggle
-│   │   ├── ETLManagementScreen.jsx # Management table, create new deployment config
+├── features/
+│   ├── etl-wizard/
+│   │   ├── LoginPage.jsx             # Login + mock-mode toggle
+│   │   ├── MainMenu.jsx              # Side navigation + logout
+│   │   ├── TopNav.jsx                # Top bar
+│   │   ├── StepBar.jsx               # Step progress indicator
+│   │   ├── WizardShell.jsx           # Step router + pre-fetch spinner
+│   │   ├── WizardFooter.jsx          # Next / Back buttons
+│   │   └── ETLManagementScreen.jsx   # Deployments table + actions
 │   │
-│   ├── file-upload/              # Step 0 – Metadata Input
-│   │   └── MetadataStep.jsx
-│   │
-│   ├── source-config/            # Steps 1-2 – Source Configuration
-│   │   ├── SourceConfigStep.jsx
-│   │   └── SourceUploadStep.jsx
-│   │
-│   ├── field-mapping/            # Step 3 – Visual Field Mapping
-│   │   └── FieldMappingStepCanvas.jsx (1055 lines)
-│   │
-│   ├── filters/                  # Step 4 – Filter Rules
-│   │   └── FiltersStep.jsx
-│   │
-│   ├── sink-config/              # Step 5 – Sink Configuration
-│   │   └── SinkConfigStep.jsx
-│   │
-│   └── summary/                  # Step 6 – Pipeline Review & Creation
-│       └── SummaryStep.jsx
+│   ├── file-upload/
+│   │   └── MetadataStep.jsx          # Step 0 — entity, team, environment
+│   ├── source-config/
+│   │   ├── SourceConfigStep.jsx      # Step 1 — Kafka / RabbitMQ config
+│   │   └── SourceUploadStep.jsx      # Step 2 — schema upload / preview
+│   ├── field-mapping/
+│   │   ├── FieldMappingStep.jsx      # Step 3 wrapper
+│   │   └── FieldMappingStepCanvas.jsx# Visual node-canvas with transformers
+│   ├── filters/
+│   │   └── FiltersStep.jsx           # Step 4 — filter rule builder
+│   ├── sink-config/
+│   │   └── SinkConfigStep.jsx        # Step 5 — sink configuration
+│   └── summary/
+│       └── SummaryStep.jsx           # Step 6 — review & create pipeline
 │
 └── shared/
-    ├── components/               # Reusable UI components
-    │   └── index.jsx             # Card, Btn, FormGroup, ValidationItem, etc.
-    ├── store/
-    │   └── wizardStore.jsx       # State management (Context + useReducer)
-    │   └── mockModeContext.jsx   # Global mock/real mode toggle
-    │   └── userContext.jsx       # User login state
+    ├── components/
+    │   └── index.jsx                 # Card, Btn, FormGroup, TypeBadge, Spinner…
     ├── services/
-    │   └── deploymentsService.js # Central service for backend & mock deployment logic
+    │   ├── configService.js          # Transformer / filter / entity API + mock data
+    │   └── deploymentsService.js     # Deployments API + mock data
+    ├── store/
+    │   ├── wizardStore.jsx           # Global wizard state (Context + useReducer)
+    │   ├── configContext.jsx         # Pre-fetched config data + loading flags
+    │   ├── mockModeContext.jsx       # Global mock / live toggle
+    │   └── userContext.jsx           # Logged-in user state
     └── types/
-        └── index.js              # Mock data & type definitions
+        └── index.js                  # MOCK_SCHEMA, TARGET_FIELDS, type helpers
 ```
 
-## 🆕 Recent Feature Updates
+---
 
-### Login Page & User Context
-- **Login page** added: user enters ID, password, and team name
-- **Mock mode toggle**: checkbox on login page to switch between mock and real backend
-- **User context**: user ID and team name are stored and shown in the side menu
+## 🔌 Backend API Endpoints
 
-### Side Menu Improvements
-- **Logout button**: at the bottom of the side menu, clears user and returns to login
-- **Logged-in user display**: below "Pipeline Builder" in side menu
+All live calls go to `http://localhost:8080`.  
+When **mock mode is ON** the frontend uses its own built-in data — no backend required.
 
-### ETL Management Table Enhancements
-- **Create New Deployment Configuration**: button at top-right, redirects to configuration wizard with team name and all fields empty (environment is set to null)
-- **Table columns**: now include saved version, deployed version, sortable by header click
-- **Action buttons**:
-  - Deploy: disabled if status is running
-  - Delete (was Stop): disabled if status is stopped or draft, trash icon
-  - Upgrade: enabled if deployed and saved version differ and status is running
-  - Edit: edit icon
-- **Horizontal scrollbar**: appears if table width exceeds page
-- **Sticky headers**: table headers remain above rows when scrolling
-- **Filter input**: filter deployments by any column
+| Data | Method | URL |
+|------|--------|-----|
+| Transformers | GET | `http://localhost:8080/api/config/transformers` |
+| Filters | GET | `http://localhost:8080/api/config/filters` |
+| Entities | GET | `http://localhost:8080/api/backbone/entities` |
+| Deployments | GET | `http://localhost:8080/api/config/deployments` |
 
-### Backend Integration
-- **Switch between mock and real REST API**: global flag, controlled from login page
-- **Team name**: always taken from login context and used in backend requests
-- **Debug print**: response object is logged for troubleshooting
+---
 
-## 📄 Key Files
+## ⚙️ Config Service (`configService.js`)
 
-| File | Lines | Purpose |
-|------|-------|---------|
-| `FieldMappingStepCanvas.jsx` | 1055 | Interactive node-based canvas with SVG connections |
-| `SummaryStep.jsx` | 439 | Pipeline review, validation, and creation |
-| `wizardStore.jsx` | - | Central state management via Context API |
-| `App.jsx` | - | Main app wrapper and provider setup |
-| `index.css` | - | Global styles and CSS variables |
-| `index.html` | - | HTML entry point |
-| `vite.config.js` | - | Build configuration |
-| `package.json` | - | Dependencies and npm scripts |
-| `mockModeContext.jsx` | - | Global mock/real mode toggle |
-| `userContext.jsx` | - | User login state |
-| `deploymentsService.js` | - | Handles all deployment API and mock logic, controlled by global mock flag |
+Central service that switches between **mock** and **live** data for the three config types.
 
-## 🎨 Key Features
+### Mock / live switch
 
-### 1. Visual Field Mapping Canvas
-- **Node-based interface** for mapping source to target fields
-- **Drag-and-drop** support for field nodes
-- **SVG connections** with Bezier curves
-- **Transformer selection** via right-click context menu
-- **Position persistence** - node positions saved across navigation
-- **Grid background** with visual indicators
-- **Scrollable canvas** with unlimited node positioning
-- **10+ transformers**: uppercase, lowercase, trim, concat, replace, substring, split, round, hash, and more
+```js
+fetchTransformers(useMock)  // true → mock, false → GET /api/config/transformers
+fetchFilters(useMock)       // true → mock, false → GET /api/config/filters
+fetchEntities(useMock)      // true → mock, false → GET /api/backbone/entities
+```
 
-### 2. Validation System
-- **Real-time validation** on field changes
-- **Required field checking** (name, unitPrice marked with *)
-- **Styled error modals** (not browser alerts) with:
-  - Error context and helpful messages
-  - Navigation button to problematic step
-  - Visual distinction with danger/warning colors
-- **Validation checklist** in summary step
-- **Multi-field validation** before pipeline creation
+### Transformer shape (backend contract)
 
-### 3. State Persistence
-- **Context API** for global state management
-- **useReducer pattern** for predictable state updates
-- **Auto-restore** mappings when returning to field mapping step
-- **Position coordinates** saved with mapping data (srcPos, tgtPos)
-- **Cross-step navigation** without data loss
-
-### 4. Configuration Wizard (6 Steps)
-
-| Step | Component | Config |
-|------|-----------|--------|
-| 0 | MetadataStep | Entity, schema, team, product info |
-| 1 | SourceConfigStep | Source type (Kafka, RabbitMQ, etc.), connection params |
-| 2 | SourceUploadStep | Schema review and confirmation |
-| 3 | FieldMappingStepCanvas | Visual field mapping with canvas |
-| 4 | FiltersStep | Optional filter rules |
-| 5 | SinkConfigStep | Sink type and configuration |
-| 6 | SummaryStep | Review, validate, create pipeline |
-
-### 5. Grafana Integration
-- **Auto-generated dashboard links** upon pipeline creation
-- **Query parameters**: pipeline ID, source, type
-- **Link format**: `https://grafana.etl-studio.io/d/pipeline-${id}?source=${productSource}&type=${productType}&refresh=30s`
-- **Copy-to-clipboard** button with "✓ Copied" feedback
-- **Direct link** opens in new browser tab
-- **30-second auto-refresh** for real-time monitoring
-
-## 🎯 State Management
-
-### Wizard Store Structure
-```javascript
+```json
 {
-  step: 0,                    // Current wizard step
-  metadata: {                 // Step 0
-    entityName: '',
-    schemaVersion: '',
-    team: '',
-    productSource: '',
-    productType: '',
-    environment: ''
-  },
-  source: {                   // Steps 1-2
-    sourceType: 'kafka',
-    format: 'avro',
-    kafkaBootstrap: '',
-    kafkaTopic: ''
-  },
-  mappings: [                 // Step 3
-    {
-      src: 'fieldName',
-      tgt: 'fieldName',
-      srcNodeId: 'node-1',
-      tgtNodeId: 'node-2',
-      srcPos: { x: 100, y: 50 },
-      tgtPos: { x: 400, y: 50 },
-      transformer: 'uppercase'
-    }
-  ],
-  filters: [],                // Step 4 (optional)
-  sink: {                     // Step 5
-    sinkType: 'rabbitmq',
-    sinkHost: '',
-    sinkPort: 5672
+  "_id": "00000000-0000-0000-0000-000000000001",
+  "name": "ToTimestamp",
+  "description": "convert TZ",
+  "format": "string",
+  "canonize": false,
+  "isMultipleInput": false,
+  "additionalProperties": {
+    "_required": ["format", "zone"],
+    "format": "dd/MM/yyyy",
+    "zone": "Asia/Jerusalem",
+    "output_format": "yyyy-MM-dd'T'HH:mm:ss"
   }
 }
 ```
 
-### Key Actions
-- `setMappings(mappings)` - Save field mappings with positions
-- `goTo(stepNumber)` - Navigate to specific step
-- `goNext(currentStep)` - Move to next step
-- `goBack(currentStep)` - Move to previous step
+### `buildPropsSchema(additionalProperties)`
 
-## 🎨 Styling
+Converts `additionalProperties` into an array of editable UI rows:
 
-### CSS Variables (in `index.css`)
-```css
---accent: #4f6ef7;          /* Primary blue */
---success: #22c55e;         /* Success green */
---danger: #ef4444;          /* Error red */
---bg: #0f172a;              /* Dark background */
---surf: #1e293b;            /* Surface/card background */
---surf2: #334155;           /* Secondary surface */
---border: #475569;          /* Border color */
---text: #f1f5f9;            /* Text color */
---muted: #cbd5e1;           /* Muted text */
---mono: 'Courier New', mono; /* Monospace font */
+- Keys in `_required` → marked `required: true`, **never rendered as a row**
+- `string` value → `text` input
+- `number` value → `number` input
+- `boolean` value → `select` with `[true, false]`
+- Label auto-generated from key: `output_format` → **Output Format**
+
+```json
+[
+  { "key": "format",        "label": "Format",        "type": "text", "default": "dd/MM/yyyy",  "required": true  },
+  { "key": "zone",          "label": "Zone",          "type": "text", "default": "Asia/Jerusalem","required": true  },
+  { "key": "output_format", "label": "Output Format", "type": "text", "default": "...",          "required": false }
+]
 ```
 
-### Theme Support
-- Dark mode (default)
-- Light mode available via toggle
-- All colors use CSS variables for consistency
+> **Note:** Both spellings are supported — `additionalProperties` (correct) and `additionalProperites` (legacy backend typo).
 
-## 📊 Data Structures
+### Entity shape (backend contract)
 
-### Node Object
-```javascript
-{
-  id: 'node-1',              // Unique identifier
-  name: 'email',             // Field name
-  emoji: '📄',               // Visual indicator
-  type: 'source' | 'target', // Node type
-  fieldId: 'email',          // Original field id
-  isRequired: false,         // Required field flag
-  x: 100,                    // X position on canvas
-  y: 50                      // Y position on canvas
-}
+```json
+{ "id": "ent-1", "name": "CustomerEntity", "type": "Customer", "description": "..." }
 ```
 
-### Edge Object
-```javascript
-{
-  from: 'node-1',            // Source node id
-  to: 'node-2',              // Target node id
-  fromType: 'source',        // Source type
-  toType: 'target',          // Target type
-  transformer: 'uppercase'   // Applied transformation
-}
+### Filter shape (backend contract)
+
+```json
+{ "id": "f-1", "name": "Filter 1", "rule": "severity >= warning", "isInclude": true }
 ```
-
-### Mapping Object
-```javascript
-{
-  src: 'fieldName',          // Source field
-  tgt: 'fieldName',          // Target field
-  srcNodeId: 'node-1',       // Source node id
-  tgtNodeId: 'node-2',       // Target node id
-  srcPos: { x, y },          // Source position
-  tgtPos: { x, y }           // Target position
-}
-```
-
-## 🔧 Development Workflow
-
-1. **Start dev server**
-   ```bash
-   npm run dev
-   ```
-
-2. **Make changes** - files auto-saved, browser auto-refreshes (HMR)
-
-3. **Test in browser** - http://localhost:5173
-
-4. **Check console** - F12 → Console for errors
-
-5. **Build when ready**
-   ```bash
-   npm run build
-   ```
-
-## 🐛 Debugging
-
-### Browser DevTools
-- **Open**: F12 (Windows/Linux) or Cmd+Option+I (macOS)
-- **Console**: View errors and add `console.log()` statements
-- **Elements**: Inspect DOM and CSS
-- **Network**: Monitor API calls
-- **React DevTools**: Install extension for component inspection
-
-### Common Debugging Commands
-```javascript
-// In browser console (F12)
-console.log(document) // Access DOM
-console.log(localStorage) // Check stored data
-localStorage.clear() // Clear corrupted data
-```
-
-## ⚡ Performance Considerations
-
-- **Lazy loading** of wizard steps
-- **SVG rendering** optimized for canvas
-- **CSS variables** for instant theme switching (no re-render)
-- **Context API** for efficient state updates
-- **Vite** HMR for instant feedback during development
-
-## 📦 Building for Production
-
-```bash
-# Create optimized build
-npm run build
-
-# Output location: dist/
-# Check with: ls dist/
-
-# Preview production build
-npm run preview
-```
-
-Files ready for:
-- Static hosting (GitHub Pages, Netlify, Vercel)
-- CDN distribution
-- Docker containerization
-
-## ⚠️ System Requirements
-
-| Requirement | Minimum | Recommended |
-|-------------|---------|-------------|
-| Node.js | v16 LTS | v18 LTS+ |
-| npm | v7 | v9+ |
-| RAM | 2GB | 4GB+ |
-| Disk | 500MB | 1GB+ |
-| Browser | Modern | Chrome/Firefox latest |
-
-## 🌐 Browser Support
-
-Tested on:
-- Chrome/Chromium 90+
-- Firefox 88+
-- Safari 14+
-- Microsoft Edge 90+
-
-## 🚨 Troubleshooting
-
-### Dev Server Won't Start
-```bash
-# Check port usage
-lsof -i :5173  # macOS/Linux
-
-# Use different port
-npm run dev -- --port 3000
-```
-
-### Dependencies Won't Install
-```bash
-# Clear cache and reinstall
-npm cache clean --force
-rm -rf node_modules package-lock.json
-npm install
-```
-
-### Styles Not Applying
-```bash
-# 1. Clear browser cache (Ctrl+Shift+Delete)
-# 2. Restart dev server
-npm run dev
-# 3. Hard refresh browser (Ctrl+Shift+R)
-```
-
-### State Not Persisting
-```bash
-# Clear corrupted data
-localStorage.clear()
-
-# Restart server
-npm run dev
-```
-
-### Build Fails
-```bash
-# Verify Node version
-node --version  # Must be v16+
-
-# Try rebuilding
-npm run build
-```
-
-## 📚 Resources
-
-- [React Documentation](https://react.dev)
-- [Vite Documentation](https://vitejs.dev)
-- [Node.js Downloads](https://nodejs.org/)
-
-## 📝 Version Info
-
-- **Version**: 1.0.0
-- **Built with**: React 18.3 + Vite 5.4
-- **Node.js Requirement**: v16+
-- **Last Updated**: March 2026
-
-## 🤝 Contributing
-
-When adding features:
-1. Follow existing component structure
-2. Use CSS variables for colors
-3. Test with both themes
-4. Run `npm run build` to verify
-
-## 📄 Main README
-
-For complete setup and project overview, see [../README.md](../README.md)
 
 ---
 
-**To start development:**
-```bash
-npm install && npm run dev
+## 🔄 Config Context & Pre-fetching (`configContext.jsx`)
+
+`ConfigProvider` holds the three config lists and their loading flags.  
+`WizardShell` calls `prefetchForStep(step, useMock)` every time the user navigates to a new step — **data is always refreshed** before the step renders.
+
+| Step | Data fetched | Loading flag |
+|------|-------------|--------------|
+| 0 — Metadata | `entities` | `loadingEntities` |
+| 3 — Filters | `filters` (operators) | `loadingFilters` |
+| 4 — Field Mapping | `transformers` | `loadingTransformers` |
+
+While loading, `WizardShell` renders a full-height spinner instead of the step component — the step never mounts until its data is ready.
+
+In-flight deduplication is handled via `useRef` flags (not state) to avoid infinite render loops.
+
+```jsx
+// Consuming data in a step component
+const { entities }     = useConfig()   // MetadataStep
+const { filters }      = useConfig()   // FiltersStep   (operator list)
+const { transformers } = useConfig()   // FieldMappingStepCanvas
 ```
+
+---
+
+## 🪄 Wizard Steps
+
+| # | Step | Component | Data source |
+|---|------|-----------|-------------|
+| 0 | Metadata | `MetadataStep` | `entities` from config context |
+| 1 | Source Config | `SourceConfigStep` | Static |
+| 2 | Source Upload | `SourceUploadStep` | Static / schema upload |
+| 3 | Filters | `FiltersStep` | `filters` (operators) from config context |
+| 4 | Field Mapping | `FieldMappingStepCanvas` | `transformers` from config context |
+| 5 | Sink Config | `SinkConfigStep` | Static |
+| 6 | Summary | `SummaryStep` | Wizard state |
+
+---
+
+## 🗺️ Field Mapping Canvas
+
+- **Node-based** drag-and-drop interface — source fields (left) → target fields (right)
+- **SVG Bezier edges** connect source to target nodes
+- **Right-click** on an edge → assign/replace transformer
+- **Transformer modal** — searchable list; selecting a transformer opens a **properties panel** with editable rows derived from `additionalProperties`
+- Required properties show a red **req** badge
+- `isMultipleInput` flag shown as **multi** badge in the transformer list
+- **Map All Fields** — auto-connects fields by name similarity and type
+- **Align** — re-arranges nodes into two clean columns
+
+---
+
+## 🎛️ Mock Mode
+
+Toggle on the **Login page** (checkbox) or in the **ETL Management** header.
+
+| Mode | Transformers | Filters | Entities | Deployments |
+|------|-------------|---------|----------|-------------|
+| Mock ON | Built-in list | Built-in operators | 3 sample entities | Mock deployments |
+| Mock OFF | `GET /api/config/transformers` | `GET /api/config/filters` | `GET /api/backbone/entities` | `GET /api/config/deployments` |
+
+---
+
+## 🧰 State Management
+
+### Provider tree (`main.jsx`)
+
+```jsx
+<UserProvider>
+  <MockModeProvider>
+    <ConfigProvider>       ← transformer / filter / entity lists
+      <WizardProvider>     ← wizard step state (inside App.jsx)
+        <App />
+      </WizardProvider>
+    </ConfigProvider>
+  </MockModeProvider>
+</UserProvider>
+```
+
+### Wizard store shape
+
+```js
+{
+  navigationMode: 'menu' | 'etl-config' | 'etl-management',
+  currentStep: 0,
+  completedSteps: Set,
+  theme: 'dark' | 'light',
+  metadata: { productSource, productType, team, environment, entityName, tags },
+  source:   { sourceType, kafkaTopic, format, ... },
+  upload:   { done: false },
+  mappings: [ { src, tgt, transformer, transformerProps, transformerChain, ... } ],
+  filters:  [ { id, logic, rules: [...], subgroups: [...] } ],
+  sink:     { sinkType, sinkKafkaTopic, shadow, saknay, asg }
+}
+```
+
+---
+
+## 🎨 Styling
+
+All colors use CSS variables defined in `index.css`:
+
+```css
+--accent:  #4f6ef7;   /* primary blue      */
+--success: #22c55e;   /* green             */
+--danger:  #ef4444;   /* red               */
+--warning: #f59e0b;   /* amber             */
+--bg:      #0f172a;   /* page background   */
+--surf:    #1e293b;   /* card background   */
+--surf2:   #334155;   /* secondary surface */
+--border:  #475569;   /* borders           */
+--text:    #f1f5f9;   /* primary text      */
+--muted:   #94a3b8;   /* secondary text    */
+```
+
+Dark mode is the default. Light mode is toggled via the theme button in the top nav and persisted in `localStorage`.
+
+---
+
+## 🛠️ Scripts
+
+```bash
+npm run dev      # dev server with HMR — http://localhost:5173
+npm run build    # production build → dist/
+npm run preview  # preview production build locally
+```
+
+---
+
+## 🚨 Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| Blank properties panel for transformers | Ensure backend sends `additionalProperties` key; both spellings are supported |
+| Infinite loading spinner on step | Check `configContext.jsx` — refs guard against duplicate in-flight requests |
+| `actions.setKafkaFilters is not a function` | Remove stale call; action does not exist in `wizardStore` |
+| Missing key warning in transformer list | Transformer items use `key={t._id}` — ensure backend returns `_id` |
+| No entities in Metadata dropdown | Confirm `GET /api/backbone/entities` returns `[{ id, name, type, description }]` |
+| Styles not applying | Hard refresh (`Ctrl+Shift+R`) or restart dev server |
+
+---
+
+## 📝 Version
+
+- **App version**: 1.0.0
+- **React**: 18.3 · **Vite**: 5.4
+- **Node.js required**: v16+
+- **Last updated**: March 2026
