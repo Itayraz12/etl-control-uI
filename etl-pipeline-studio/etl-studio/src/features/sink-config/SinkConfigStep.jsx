@@ -23,7 +23,7 @@ function SinkConfigPanel({ type, sink, u, metadata }) {
         <input value={sink.sinkKafkaTopic || ''} onChange={e => u('sinkKafkaTopic', e.target.value)} placeholder={hasCatalogOption ? 'Leave empty for auto-generation' : 'products.output'} />
       </FormGroup>
       <FormGroup label="Bootstrap Environment" required>
-        <select value={sink.sinkKafkaEnv || ''} onChange={e => u('sinkKafkaEnv', e.target.value)}>
+        <select value={sink.sinkKafkaEnv || ''} onChange={e => u('sinkKafkaEnv', e.target.value)} disabled>
           <option value="production">Production</option>
           <option value="dev">Dev</option>
           <option value="staging">Staging</option>

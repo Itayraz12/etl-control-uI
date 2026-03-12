@@ -13,7 +13,7 @@ function SourceConfigPanel({ type, state, u }) {
     <CfgPanel title="☕ Kafka Source">
       <FormRow>
         <FormGroup label="Environment" required>
-          <select value={state.kafkaEnv || ''} onChange={e => u('kafkaEnv', e.target.value)}>
+          <select value={state.kafkaEnv || ''} onChange={e => u('kafkaEnv', e.target.value)} disabled>
             <option value="production">Production</option>
             <option value="dev">Dev</option>
             <option value="staging">Staging</option>

@@ -1,12 +1,23 @@
+import { useEffect } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
+import { useUser } from '../../shared/store/userContext.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
 import { Card, CardTitle, FormRow, FormGroup, SidePanel } from '../../shared/components/index.jsx'
 
 export default function MetadataStep() {
   const { state, actions } = useWizard()
+  const { user } = useUser()
   const { entities } = useConfig()
   const { metadata } = state
   const u = (k, v) => actions.updateMetadata({ [k]: v })
+
+  // Sync team from user context when it changes
+  useEffect(() => {
+    if (user?.teamName && metadata.team !== user.teamName) {
+      actions.updateMetadata({ team: user.teamName })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.teamName])
 
 
   return (
@@ -24,7 +35,7 @@ export default function MetadataStep() {
           </FormRow>
           <FormRow>
             <FormGroup label="Team" required>
-              <input value={metadata.team} onChange={e => u('team', e.target.value)} />
+              <input value={user?.teamName || metadata.team || ''} disabled style={{ opacity: 0.6, cursor: 'not-allowed' }} />
             </FormGroup>
             <FormGroup label="Environment" required>
               <select value={metadata.environment} onChange={e => u('environment', e.target.value)}>
@@ -47,6 +58,7 @@ export default function MetadataStep() {
 
       <SidePanel title="Snapshot" items={[
         ['Entity',   `${metadata.entityName} ${metadata.schemaVersion || ''}`],
+        ['Source',   metadata.productSource],
         ['Env',      metadata.environment],
         ['Team',     metadata.team],
         ['Type',     metadata.productType],
