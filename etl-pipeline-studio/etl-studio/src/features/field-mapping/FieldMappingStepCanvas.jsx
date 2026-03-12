@@ -19,6 +19,11 @@ export default function FieldMappingStep() {
   // Stores { edgeIdx, x, y, w, h } for each edge that has a transformer node,
   // in SVG/canvas coordinates. Updated every render — used for multi-input drop detection.
   const tfBoxesRef = useRef([])
+  const skipInitialMappingsSyncRef = useRef(true)
+  const latestMappingsRef = useRef(Array.isArray(state.mappings) ? state.mappings : [])
+  const nodesRef = useRef([])
+  const edgesRef = useRef([])
+  const setMappings = actions.setMappings
 
 
   const [nodes, setNodes] = useState([])
@@ -43,9 +48,9 @@ export default function FieldMappingStep() {
   const [tfInputType, setTfInputType] = useState('any')
   const [tfOutputType, setTfOutputType] = useState('any')
 
-  // Load saved mappings from state on mount
-  useEffect(() => {
-    if (state.mappings && state.mappings.length > 0) {
+    // Load saved mappings from state on mount
+    useEffect(() => {
+    if (Array.isArray(state.mappings) && state.mappings.length > 0) {
       // Convert state.mappings back to nodes and edges
       const loadedNodes = []
       const loadedEdges = []
@@ -132,10 +137,17 @@ export default function FieldMappingStep() {
         })
       })
 
+      nodesRef.current = loadedNodes
+      edgesRef.current = loadedEdges
       setNodes(loadedNodes)
       setEdges(loadedEdges)
+      latestMappingsRef.current = state.mappings
     }
-  }, [])
+    }, [])
+
+    useEffect(() => {
+    skipInitialMappingsSyncRef.current = false
+    }, [])
 
   // Filter source and target fields based on search
   const filteredSource = MOCK_SCHEMA.filter(f => 
@@ -154,41 +166,40 @@ export default function FieldMappingStep() {
   const allSourceOnCanvas = existingSourceFieldIds.size === MOCK_SCHEMA.length
   const allTargetOnCanvas = existingTargetFieldIds.size === TARGET_FIELDS.length
 
-  const addEdge = (fromId, toId, fromType, toType) => {
+    const addEdge = (fromId, toId, fromType, toType) => {
     if (fromId === toId) return false
 
     // Validate: source to target only
     if (fromType !== 'source' || toType !== 'target') return false
     // Block duplicate from→to
-    if (edges.some(e => e.from === fromId && e.to === toId)) return false
+    if (edgesRef.current.some(e => e.from === fromId && e.to === toId)) return false
     // Target can only have ONE incoming connection
-    if (edges.some(e => e.to === toId)) return false
+    if (edgesRef.current.some(e => e.to === toId)) return false
 
-    setEdges(prev => [...prev, { from: fromId, to: toId, fromType, toType, transformer: 'none', extraInputs: [] }])
+    applyEdges(prev => [...prev, { from: fromId, to: toId, fromType, toType, transformer: 'none', extraInputs: [] }])
     return true
-  }
+    }
 
-  const removeEdge = (edge) => {
-    setEdges(prev => prev.filter(e => !(e.from === edge.from && e.to === edge.to)))
+    const removeEdge = (edge) => {
+    applyEdges(prev => prev.filter(e => !(e.from === edge.from && e.to === edge.to)))
     setTransformerMenu(null)
-  }
+    }
 
-  const setEdgeTransformer = (edge, transformerId) => {
-    setEdges(prev => prev.map(e => 
-      e.from === edge.from && e.to === edge.to 
+    const setEdgeTransformer = (edge, transformerId) => {
+    applyEdges(prev => prev.map(e =>
+      e.from === edge.from && e.to === edge.to
         ? { 
             ...e, 
             transformer: transformerId,
-            // Initialize transformer properties if not set
             transformerInputType: e.transformerInputType || 'any',
             transformerOutputType: e.transformerOutputType || 'any',
             transformerProps: e.transformerProps || {},
           }
         : e
     ))
-    
+
     setTransformerMenu(null)
-  }
+    }
 
   const startMoveNode = (e, nodeId) => {
     if (e.button !== 0 || e.target.closest('button')) return
@@ -210,8 +221,8 @@ export default function FieldMappingStep() {
     const onMove = (me) => {
       const dx = me.clientX - e.clientX
       const dy = me.clientY - e.clientY
-      setNodes(prev => prev.map(n => 
-        n.id === nodeId 
+      applyNodes(prev => prev.map(n =>
+        n.id === nodeId
           ? { ...n, x: Math.max(0, node.x + dx), y: Math.max(0, node.y + dy) }
           : n
       ))
@@ -278,13 +289,13 @@ export default function FieldMappingStep() {
             dropY >= box.y && dropY <= box.y + box.h
           )
           if (hit) {
-            setEdges(prev => {
+            applyEdges(prev => {
               const targetEdge = prev[hit.edgeIdx]
               if (!targetEdge) return prev
               const tf = transformers.find(t => t._id === targetEdge.transformer)
-              if (!tf?.isMultipleInput) return prev              // transformer doesn't support multi-input
-              if (targetEdge.from === nodeId) return prev        // same primary source — skip
-              if (targetEdge.extraInputs?.includes(nodeId)) return prev  // already added
+              if (!tf?.isMultipleInput) return prev
+              if (targetEdge.from === nodeId) return prev
+              if (targetEdge.extraInputs?.includes(nodeId)) return prev
               return prev.map((e, i) => i === hit.edgeIdx
                 ? { ...e, extraInputs: [...(e.extraInputs || []), nodeId] }
                 : e
@@ -327,16 +338,17 @@ export default function FieldMappingStep() {
     document.addEventListener('mouseup', onUp)
   }
 
-  const removeNode = (nodeId) => {
-    setNodes(prev => prev.filter(n => n.id !== nodeId))
-    setEdges(prev => prev
+    const removeNode = (nodeId) => {
+    const nextNodes = nodesRef.current.filter(n => n.id !== nodeId)
+    const nextEdges = edgesRef.current
       .filter(e => e.from !== nodeId && e.to !== nodeId)
       .map(e => e.extraInputs?.includes(nodeId)
         ? { ...e, extraInputs: e.extraInputs.filter(id => id !== nodeId) }
         : e
       )
-    )
-  }
+
+    applyCanvas(nextNodes, nextEdges)
+    }
 
   const dragFromPanel = (e, field, type) => {
     e.preventDefault()
@@ -365,15 +377,15 @@ export default function FieldMappingStep() {
         sendToGP: true,
         expression: '',
       }
-      setNodes(prev => [...prev, newNode])
+      applyNodes(prev => [...prev, newNode])
     }
-  }
+    }
 
-  const addAllSourceFieldsToCanvas = () => {
+    const addAllSourceFieldsToCanvas = () => {
     const xPos = 40
     const yGap = 60
 
-    setNodes(prev => {
+    applyNodes(prev => {
       const existingSourceFieldIds = new Set(
         prev.filter(n => n.type === 'source' && n.fieldId).map(n => n.fieldId)
       )
@@ -400,14 +412,14 @@ export default function FieldMappingStep() {
 
       return [...prev, ...newSourceNodes]
     })
-  }
+    }
 
-  const removeUnconnectedSourceFieldsFromCanvas = () => {
-    setNodes(prevNodes => {
-      const connectedNodeIds = new Set(edges.flatMap(e => [e.from, e.to]))
+    const removeUnconnectedSourceFieldsFromCanvas = () => {
+    applyNodes(prevNodes => {
+      const connectedNodeIds = new Set(edgesRef.current.flatMap(e => [e.from, e.to]))
       return prevNodes.filter(n => !(n.type === 'source' && !connectedNodeIds.has(n.id)))
     })
-  }
+    }
 
   const handleSourceBulkAction = () => {
     if (allSourceOnCanvas) {
@@ -417,11 +429,11 @@ export default function FieldMappingStep() {
     }
   }
 
-  const addAllTargetFieldsToCanvas = () => {
+    const addAllTargetFieldsToCanvas = () => {
     const xPos = 650
     const yGap = 60
 
-    setNodes(prev => {
+    applyNodes(prev => {
       const existingTargetFieldIds = new Set(
         prev.filter(n => n.type === 'target' && n.fieldId).map(n => n.fieldId)
       )
@@ -448,14 +460,14 @@ export default function FieldMappingStep() {
 
       return [...prev, ...newTargetNodes]
     })
-  }
+    }
 
-  const removeUnconnectedTargetFieldsFromCanvas = () => {
-    setNodes(prevNodes => {
-      const connectedNodeIds = new Set(edges.flatMap(e => [e.from, e.to]))
+    const removeUnconnectedTargetFieldsFromCanvas = () => {
+    applyNodes(prevNodes => {
+      const connectedNodeIds = new Set(edgesRef.current.flatMap(e => [e.from, e.to]))
       return prevNodes.filter(n => !(n.type === 'target' && !connectedNodeIds.has(n.id)))
     })
-  }
+    }
 
   const handleTargetBulkAction = () => {
     if (allTargetOnCanvas) {
@@ -478,7 +490,7 @@ export default function FieldMappingStep() {
     })
   }
 
-  const buildMappingsList = (nodesInput, edgesInput) => {
+    const buildMappingsList = (nodesInput, edgesInput) => {
     return edgesInput.map(edge => {
       const srcNode = nodesInput.find(n => n.id === edge.from)
       const tgtNode = nodesInput.find(n => n.id === edge.to)
@@ -512,26 +524,59 @@ export default function FieldMappingStep() {
         }),
       }
     })
-  }
-
-  // Auto-save when connections/transformers change (no success modal).
-  useEffect(() => {
-    actions.setMappings(buildMappingsList(nodes, edges))
-  }, [edges])
-
-  const clearCanvas = () => {
-    if (confirm('Clear all nodes and mappings?')) {
-      setNodes([])
-      setEdges([])
     }
-  }
 
-  const alignNodes = () => {
+    const persistMappings = (nextNodes = nodesRef.current, nextEdges = edgesRef.current) => {
+    const nextMappings = buildMappingsList(nextNodes, nextEdges)
+    latestMappingsRef.current = nextMappings
+    if (!skipInitialMappingsSyncRef.current) {
+      setMappings(nextMappings)
+    }
+    return nextMappings
+    }
+
+    const applyNodes = (updater, { persist = true } = {}) => {
+    const nextNodes = typeof updater === 'function' ? updater(nodesRef.current) : updater
+    nodesRef.current = nextNodes
+    setNodes(nextNodes)
+    if (persist) persistMappings(nextNodes, edgesRef.current)
+    return nextNodes
+    }
+
+    const applyEdges = (updater, { persist = true } = {}) => {
+    const nextEdges = typeof updater === 'function' ? updater(edgesRef.current) : updater
+    edgesRef.current = nextEdges
+    setEdges(nextEdges)
+    if (persist) persistMappings(nodesRef.current, nextEdges)
+    return nextEdges
+    }
+
+    const applyCanvas = (nextNodes, nextEdges, { persist = true } = {}) => {
+    nodesRef.current = nextNodes
+    edgesRef.current = nextEdges
+    setNodes(nextNodes)
+    setEdges(nextEdges)
+    if (persist) persistMappings(nextNodes, nextEdges)
+    }
+
+    useEffect(() => {
+    return () => {
+      setMappings(latestMappingsRef.current)
+    }
+    }, [setMappings])
+
+    const clearCanvas = () => {
+    if (confirm('Clear all nodes and mappings?')) {
+      applyCanvas([], [])
+    }
+    }
+
+    const alignNodes = () => {
     const LEFT_X = 40
     const RIGHT_X = 650
     const GAP = 70
 
-    setNodes(prev => {
+    applyNodes(prev => {
       const sources = prev.filter(n => n.type === 'source').sort((a, b) => a.y - b.y)
       const targets = prev.filter(n => n.type === 'target').sort((a, b) => a.y - b.y)
 
@@ -547,7 +592,7 @@ export default function FieldMappingStep() {
         return n
       })
     })
-  }
+    }
 
   // Calculate string similarity (Levenshtein-inspired)
   const calculateSimilarity = (str1, str2) => {
@@ -699,9 +744,8 @@ export default function FieldMappingStep() {
       })
     })
     
-    setNodes(newNodes)
-    setEdges(newEdges)
-  }
+    applyCanvas(newNodes, newEdges)
+    }
 
   const bezier = (x1, y1, x2, y2) => {
     const dx = Math.max(Math.abs(x2 - x1) * 0.55, 50)
@@ -1649,7 +1693,7 @@ export default function FieldMappingStep() {
               <div
                 style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
                 onClick={() => {
-                  setEdges(prev => prev.map(e =>
+                  applyEdges(prev => prev.map(e =>
                     (e.from === liveEdge.from && e.to === liveEdge.to)
                       ? { ...e, transformer: 'none', extraInputs: [], transformerProps: {} }
                       : e
@@ -1677,7 +1721,7 @@ export default function FieldMappingStep() {
                         key={extraId}
                         style={{ padding: '8px 14px', cursor: 'pointer', fontSize: '12px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
                         onClick={() => {
-                          setEdges(prev => prev.map(e =>
+                          applyEdges(prev => prev.map(e =>
                             (e.from === liveEdge.from && e.to === liveEdge.to)
                               ? { ...e, extraInputs: (e.extraInputs || []).filter(id => id !== extraId) }
                               : e
@@ -1836,7 +1880,7 @@ export default function FieldMappingStep() {
         }
 
         const handleApply = () => {
-          setEdges(prev => prev.map(e => {
+          applyEdges(prev => prev.map(e => {
             if (e.from !== currentModalEdge.from || e.to !== currentModalEdge.to) return e
             return {
               ...e,
@@ -2023,7 +2067,7 @@ export default function FieldMappingStep() {
                   {hadAssignedTransformer && (
                     <button
                       onClick={() => {
-                        setEdges(prev => prev.map(e =>
+                        applyEdges(prev => prev.map(e =>
                           (e.from === currentModalEdge.from && e.to === currentModalEdge.to)
                             ? { ...e, transformer: 'none', extraInputs: [], transformerProps: {}, transformerInputType: undefined, transformerOutputType: undefined }
                             : e
@@ -2065,7 +2109,7 @@ export default function FieldMappingStep() {
           >
             <div style={{ background: 'var(--accent)', padding: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ fontSize: '24px' }}>⚙</div>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff', flex: 1 }}>Available Transformers</h3>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff' }}>Available Transformers</h3>
               <div style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600 }}>{transformers.length}</div>
             </div>
             <div style={{ padding: '20px' }}>
@@ -2135,7 +2179,7 @@ export default function FieldMappingStep() {
               <button onClick={() => setFieldPropertiesModal(null)} style={{ padding: '8px 16px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Cancel</button>
               <button
                 onClick={() => {
-                  setNodes(prevNodes => prevNodes.map(n =>
+                  applyNodes(prevNodes => prevNodes.map(n =>
                     n.id === fieldPropertiesModal.id
                       ? { ...n, sendToSaknay: fieldPropertiesModal.sendToSaknay, sendToGP: fieldPropertiesModal.sendToGP, expression: fieldPropertiesModal.expression }
                       : n
