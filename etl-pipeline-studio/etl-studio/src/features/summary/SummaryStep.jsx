@@ -288,28 +288,13 @@ export default function SummaryStep() {
           <FlinkFlow sourceType={state.source.sourceType} mappings={state.mappings} filters={state.filters} sink={state.sink} />
         </Card>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-          {/* Validation */}
+        <div style={{ marginBottom: 20 }}>
+          {/* Validation - Full Width */}
           <Card>
             <CardTitle>✅ Validation Checklist</CardTitle>
             {validations.map((v, i) => (
               <ValidationItem key={i} type={v.type}>{v.text}</ValidationItem>
             ))}
-          </Card>
-
-          {/* YAML / JSON Quick edit */}
-          <Card>
-            <CardTitle>
-              🔀 Quick Edit
-            </CardTitle>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {['Metadata', 'Source Config', 'Field Mapping', 'Filters', 'Sink Config'].map((label, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ fontSize: 13 }}>{label}</span>
-                  <Btn sm v="ghost">✏ Edit</Btn>
-                </div>
-              ))}
-            </div>
           </Card>
         </div>
 
@@ -337,7 +322,7 @@ export default function SummaryStep() {
         flexShrink: 0,
       }}>
         <Btn v="secondary">💾 Save Draft</Btn>
-        <Btn v="success" onClick={handleCreatePipeline}>✓ Create ETL Pipeline</Btn>
+        <Btn v="success" onClick={handleCreatePipeline}>🚀 Deploy</Btn>
       </div>
 
       {/* Error Modal */}

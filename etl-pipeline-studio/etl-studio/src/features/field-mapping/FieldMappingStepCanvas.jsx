@@ -1185,16 +1185,16 @@ export default function FieldMappingStep() {
                       </div>
                     </div>
 
-                    {/* Send-to-Saknay disabled marker (target nodes only) */}
-                    {node.type === 'target' && node.sendToSaknay === false && (
+                    {/* Send-to-Saknay indicator (target nodes only) */}
+                    {node.type === 'target' && (
                       <div
-                        title="Send to Saknay: No"
+                        title={node.sendToSaknay ? 'Send to Saknay: Yes' : 'Send to Saknay: No'}
                         style={{
                           position: 'absolute',
                           top: '4px',
                           right: '20px',
-                          background: 'rgba(239,68,68,0.15)',
-                          border: '1px solid rgba(239,68,68,0.55)',
+                          background: node.sendToSaknay ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                          border: node.sendToSaknay ? '1px solid rgba(34,197,94,0.55)' : '1px solid rgba(239,68,68,0.55)',
                           borderRadius: '4px',
                           padding: '1px 5px',
                           display: 'flex',
@@ -1202,28 +1202,28 @@ export default function FieldMappingStep() {
                           gap: '3px',
                           fontSize: '9px',
                           fontWeight: 700,
-                          color: '#ef4444',
+                          color: node.sendToSaknay ? '#22c55e' : '#ef4444',
                           letterSpacing: '0.04em',
                           pointerEvents: 'none',
                           userSelect: 'none',
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        <span style={{ fontSize: '10px', lineHeight: 1 }}>⊘</span>
+                        <span style={{ fontSize: '10px', lineHeight: 1 }}>{node.sendToSaknay ? '✓' : '⊘'}</span>
                         <span>Saknay</span>
                       </div>
                     )}
 
-                    {/* Send-to-Saknay enabled indicator */}
-                    {node.sendToSaknay === true && (
+                    {/* Send-to-GP indicator (target nodes only) */}
+                    {node.type === 'target' && (
                       <div
-                        title="Send to Saknay: Yes"
+                        title={node.sendToGP ? 'Send to GP: Yes' : 'Send to GP: No'}
                         style={{
                           position: 'absolute',
-                          top: '4px',
+                          top: '24px',
                           right: '20px',
-                          background: 'rgba(34,197,94,0.15)',
-                          border: '1px solid rgba(34,197,94,0.55)',
+                          background: node.sendToGP ? 'rgba(79,110,247,0.15)' : 'rgba(239,68,68,0.15)',
+                          border: node.sendToGP ? '1px solid rgba(79,110,247,0.55)' : '1px solid rgba(239,68,68,0.55)',
                           borderRadius: '4px',
                           padding: '1px 5px',
                           display: 'flex',
@@ -1231,43 +1231,14 @@ export default function FieldMappingStep() {
                           gap: '3px',
                           fontSize: '9px',
                           fontWeight: 700,
-                          color: '#22c55e',
+                          color: node.sendToGP ? '#4f6ef7' : '#ef4444',
                           letterSpacing: '0.04em',
                           pointerEvents: 'none',
                           userSelect: 'none',
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        <span style={{ fontSize: '10px', lineHeight: 1 }}>✓</span>
-                        <span>Saknay</span>
-                      </div>
-                    )}
-
-                    {/* Send-to-GP enabled indicator */}
-                    {node.sendToGP === true && (
-                      <div
-                        title="Send to GP: Yes"
-                        style={{
-                          position: 'absolute',
-                          top: node.sendToSaknay === true ? '24px' : '4px',
-                          right: '20px',
-                          background: 'rgba(79,110,247,0.15)',
-                          border: '1px solid rgba(79,110,247,0.55)',
-                          borderRadius: '4px',
-                          padding: '1px 5px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '3px',
-                          fontSize: '9px',
-                          fontWeight: 700,
-                          color: '#4f6ef7',
-                          letterSpacing: '0.04em',
-                          pointerEvents: 'none',
-                          userSelect: 'none',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        <span style={{ fontSize: '10px', lineHeight: 1 }}>✓</span>
+                        <span style={{ fontSize: '10px', lineHeight: 1 }}>{node.sendToGP ? '✓' : '⊘'}</span>
                         <span>GP</span>
                       </div>
                     )}
@@ -2618,23 +2589,25 @@ export default function FieldMappingStep() {
             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)' }} />
             {ctxMenu.name}
           </div>
-          <div
-            style={{
-              padding: '8px 12px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              color: 'var(--text)',
-              transition: 'background 0.15s',
-            }}
-            onClick={() => {
-              setFieldPropertiesModal(ctxMenu.node)
-              setCtxMenu(null)
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.1)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-          >
-            ⚙ Edit Metadata
-          </div>
+          {ctxMenu.node?.type === 'target' && (
+            <div
+              style={{
+                padding: '8px 12px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                color: 'var(--text)',
+                transition: 'background 0.15s',
+              }}
+              onClick={() => {
+                setFieldPropertiesModal(ctxMenu.node)
+                setCtxMenu(null)
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.1)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+            >
+              ⚙ Edit Metadata
+            </div>
+          )}
           <div
             style={{
               padding: '8px 12px',
