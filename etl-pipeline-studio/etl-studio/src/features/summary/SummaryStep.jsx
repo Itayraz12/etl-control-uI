@@ -3,6 +3,7 @@ import { useWizard } from "../../shared/store/wizardStore";
 import { useConfig } from "../../shared/store/configContext.jsx";
 import { Card, CardTitle, ValidationItem, Btn } from '../../shared/components/index.jsx'
 import { SOURCE_TYPES, MOCK_SCHEMA, TARGET_FIELDS } from '../../shared/types/index.js'
+import { MOCK_FILTER_OPERATORS } from '../../shared/services/configService.js'
 
 function FlinkFlow({ sourceType, mappings, filters, sink }) {
   const nodes = []
@@ -99,6 +100,28 @@ export default function SummaryStep() {
 
   // Generate YAML with improved transformer descriptions
   const generateYaml = () => {
+    // Helper to map operator ID to name
+    const getOperatorName = (opId) => {
+      const op = MOCK_FILTER_OPERATORS.find(o => o.id === opId)
+      return op?.name?.toLowerCase().replace(/\s+/g, '_') || opId
+    }
+
+    // Helper to format a filter group with parentheses
+    const formatFilterGroup = (group, depth = 0) => {
+      const conditions = group.rules
+        .map(r => `(${r.field} ${getOperatorName(r.op)} ${r.value || 'null'})`)
+        .join(` ${group.logic} `)
+      
+      const subgroupConditions = group.subgroups?.length > 0
+        ? group.subgroups.map(sg => `(${formatFilterGroup(sg, depth + 1)})`).join(` ${group.logic} `)
+        : ''
+      
+      if (conditions && subgroupConditions) {
+        return `${conditions} ${group.logic} ${subgroupConditions}`
+      }
+      return conditions || subgroupConditions
+    }
+
     // Find source and target field types
     const getFieldType = (fieldName, isTarget = false) => {
       const schema = isTarget ? TARGET_FIELDS : MOCK_SCHEMA
@@ -149,13 +172,7 @@ transformations:
 ${transformations.join('\n')}` : ''}
 ${state.filters.length > 0 ? `
 filters:
-${state.filters.map((group, idx) => {
-  const renderGroup = (g, depth = 0) => {
-    const indent = '  '.repeat(depth + 2)
-    return `${indent}- logic: ${g.logic}\n${g.rules.map(r => `${indent}  ${r.field} ${r.op} ${r.value || 'null'}`).join('\n')}${g.subgroups.length > 0 ? '\n' + g.subgroups.map(sg => renderGroup(sg, depth + 1)).join('\n') : ''}`
-  }
-  return renderGroup(group)
-}).join('\n')}` : ''}
+${state.filters.map(group => `  - ${formatFilterGroup(group)}`).join('\n')}` : ''}
 
 sink:
   type: ${state.sink.sinkType}
