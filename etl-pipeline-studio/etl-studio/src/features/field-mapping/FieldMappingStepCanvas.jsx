@@ -624,30 +624,52 @@ export default function FieldMappingStep() {
   }
 
   const mapAllFields = () => {
-    // Group source and target fields by type
-    const sourceByType = {}
-    const targetByType = {}
-    
-    MOCK_SCHEMA.forEach(field => {
-      if (!sourceByType[field.type]) sourceByType[field.type] = []
-      sourceByType[field.type].push(field)
+    const existingNodes = nodesRef.current
+    const existingEdges = edgesRef.current
+    const sourceNodesById = new Map(existingNodes.filter(n => n.type === 'source').map(n => [n.id, n]))
+    const targetNodesById = new Map(existingNodes.filter(n => n.type === 'target').map(n => [n.id, n]))
+
+    const connectedSourceFieldIds = new Set()
+    const connectedTargetFieldIds = new Set()
+
+    existingEdges.forEach(edge => {
+      const srcNode = sourceNodesById.get(edge.from)
+      const tgtNode = targetNodesById.get(edge.to)
+      if (srcNode?.fieldId) connectedSourceFieldIds.add(srcNode.fieldId)
+      if (tgtNode?.fieldId) connectedTargetFieldIds.add(tgtNode.fieldId)
+
+      ;(edge.extraInputs || []).forEach(extraId => {
+        const extraNode = sourceNodesById.get(extraId)
+        if (extraNode?.fieldId) connectedSourceFieldIds.add(extraNode.fieldId)
+      })
     })
-    
-    TARGET_FIELDS.forEach(field => {
-      if (!targetByType[field.type]) targetByType[field.type] = []
-      targetByType[field.type].push(field)
-    })
-    
-    const newNodes = []
-    const newEdges = []
-    const sourceNodes = {}
-    const targetNodes = {}
+
+    const candidateSources = MOCK_SCHEMA.filter(field => !connectedSourceFieldIds.has(field.id))
+    const candidateTargets = TARGET_FIELDS.filter(field => !connectedTargetFieldIds.has(field.id))
+
+    if (candidateSources.length === 0 || candidateTargets.length === 0) return
+
+    const nextNodes = [...existingNodes]
+    const nextEdges = [...existingEdges]
+    const sourceNodeIds = {}
+    const targetNodeIds = {}
     const yGap = 75
-    
-    // Create source nodes (left side)
-    MOCK_SCHEMA.forEach((field, idx) => {
+    const sourceBaseY = existingNodes.filter(n => n.type === 'source').length
+      ? Math.max(...existingNodes.filter(n => n.type === 'source').map(n => n.y)) + yGap
+      : 30
+    const targetBaseY = existingNodes.filter(n => n.type === 'target').length
+      ? Math.max(...existingNodes.filter(n => n.type === 'target').map(n => n.y)) + yGap
+      : 80
+
+    candidateSources.forEach((field, idx) => {
+      const existingNode = existingNodes.find(n => n.type === 'source' && n.fieldId === field.id)
+      if (existingNode) {
+        sourceNodeIds[field.id] = existingNode.id
+        return
+      }
+
       const nodeId = `src-${field.id}-${Date.now()}-${Math.random()}`
-      const sourceNode = {
+      nextNodes.push({
         id: nodeId,
         name: field.name,
         emoji: '📄',
@@ -655,19 +677,23 @@ export default function FieldMappingStep() {
         fieldId: field.id,
         isRequired: field.required,
         x: 40,
-        y: idx * yGap + 30,
+        y: sourceBaseY + idx * yGap,
         sendToSaknay: true,
         sendToGP: true,
         expression: '',
-      }
-      newNodes.push(sourceNode)
-      sourceNodes[field.id] = nodeId
+      })
+      sourceNodeIds[field.id] = nodeId
     })
-    
-    // Create target nodes (right side)
-    TARGET_FIELDS.forEach((field, idx) => {
+
+    candidateTargets.forEach((field, idx) => {
+      const existingNode = existingNodes.find(n => n.type === 'target' && n.fieldId === field.id)
+      if (existingNode) {
+        targetNodeIds[field.id] = existingNode.id
+        return
+      }
+
       const nodeId = `tgt-${field.id}-${Date.now()}-${Math.random()}`
-      const targetNode = {
+      nextNodes.push({
         id: nodeId,
         name: field.name,
         emoji: '🎯',
@@ -675,77 +701,80 @@ export default function FieldMappingStep() {
         fieldId: field.id,
         isRequired: field.required,
         x: 650,
-        y: idx * yGap + 80,
+        y: targetBaseY + idx * yGap,
         sendToSaknay: true,
         sendToGP: true,
         expression: '',
-      }
-      newNodes.push(targetNode)
-      targetNodes[field.id] = nodeId
+      })
+      targetNodeIds[field.id] = nodeId
     })
-    
-    // Match source to target fields
-    const matched = new Set()
-    
-    // First pass: Match by type and name similarity
-    Object.keys(sourceByType).forEach(type => {
-      if (targetByType[type]) {
-        sourceByType[type].forEach(srcField => {
-          // Find best match in target fields of same type
-          let bestMatch = null
-          let bestScore = 0
-          
-          targetByType[type].forEach(tgtField => {
-            if (!matched.has(tgtField.id)) {
-              const score = calculateSimilarity(srcField.name, tgtField.name)
-              if (score > bestScore) {
-                bestScore = score
-                bestMatch = tgtField
-              }
-            }
-          })
-          
-          if (bestMatch) {
-            matched.add(bestMatch.id)
-            newEdges.push({
-              from: sourceNodes[srcField.id],
-              to: targetNodes[bestMatch.id],
-              transformer: 'none',
-            })
-          }
-        })
-      }
+
+    const sourceByType = {}
+    const targetByType = {}
+    candidateSources.forEach(field => {
+      if (!sourceByType[field.type]) sourceByType[field.type] = []
+      sourceByType[field.type].push(field)
     })
-    
-    // Second pass: Connect remaining source fields to any available target
+    candidateTargets.forEach(field => {
+      if (!targetByType[field.type]) targetByType[field.type] = []
+      targetByType[field.type].push(field)
+    })
+
+    const matchedTargets = new Set()
+    const mappedSources = new Set()
+
     Object.keys(sourceByType).forEach(type => {
+      if (!targetByType[type]) return
+
       sourceByType[type].forEach(srcField => {
-        // Check if this source is already connected
-        const isConnected = newEdges.some(e => {
-          const fromNode = newNodes.find(n => n.id === e.from)
-          return fromNode?.fieldId === srcField.id
-        })
-        
-        if (!isConnected) {
-          // Find any unmatched target field of same type
-          let availableTarget = null
-          if (targetByType[type]) {
-            availableTarget = targetByType[type].find(f => !matched.has(f.id))
-            if (availableTarget) {
-              matched.add(availableTarget.id)
-              newEdges.push({
-                from: sourceNodes[srcField.id],
-                to: targetNodes[availableTarget.id],
-                transformer: 'none',
-              })
-            }
+        let bestMatch = null
+        let bestScore = 0
+
+        targetByType[type].forEach(tgtField => {
+          if (matchedTargets.has(tgtField.id)) return
+          const score = calculateSimilarity(srcField.name, tgtField.name)
+          if (score > bestScore) {
+            bestScore = score
+            bestMatch = tgtField
           }
+        })
+
+        if (bestMatch) {
+          matchedTargets.add(bestMatch.id)
+          mappedSources.add(srcField.id)
+          nextEdges.push({
+            from: sourceNodeIds[srcField.id],
+            to: targetNodeIds[bestMatch.id],
+            fromType: 'source',
+            toType: 'target',
+            transformer: 'none',
+            extraInputs: [],
+          })
         }
       })
     })
-    
-    applyCanvas(newNodes, newEdges)
-    }
+
+    Object.keys(sourceByType).forEach(type => {
+      sourceByType[type].forEach(srcField => {
+        if (mappedSources.has(srcField.id)) return
+        const availableTarget = targetByType[type]?.find(field => !matchedTargets.has(field.id))
+        if (!availableTarget) return
+
+        matchedTargets.add(availableTarget.id)
+        mappedSources.add(srcField.id)
+        nextEdges.push({
+          from: sourceNodeIds[srcField.id],
+          to: targetNodeIds[availableTarget.id],
+          fromType: 'source',
+          toType: 'target',
+          transformer: 'none',
+          extraInputs: [],
+        })
+      })
+    })
+
+    applyCanvas(nextNodes, nextEdges)
+  }
 
   const bezier = (x1, y1, x2, y2) => {
     const dx = Math.max(Math.abs(x2 - x1) * 0.55, 50)
@@ -2147,119 +2176,6 @@ export default function FieldMappingStep() {
             </div>
           </div>
         </>
-      )}
-
-      {/* Field Properties Modal */}
-      {fieldPropertiesModal && (
-        <>
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1100 }} onClick={() => setFieldPropertiesModal(null)} />
-          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', zIndex: 1101, width: '90%', maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ background: 'var(--accent)', padding: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ fontSize: '20px' }}>{fieldPropertiesModal.emoji}</div>
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>Field Properties</div>
-                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.8)' }}>{fieldPropertiesModal.name}</div>
-              </div>
-            </div>
-            <div style={{ padding: '20px' }}>
-              <div style={{ marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📤</span><span>Send to Saknay</span></label>
-                <button onClick={() => setFieldPropertiesModal({ ...fieldPropertiesModal, sendToSaknay: !fieldPropertiesModal.sendToSaknay })} style={{ padding: '6px 14px', background: fieldPropertiesModal.sendToSaknay ? 'var(--accent)' : 'var(--border)', color: fieldPropertiesModal.sendToSaknay ? 'white' : 'var(--muted)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>{fieldPropertiesModal.sendToSaknay ? '✓ Yes' : '✕ No'}</button>
-              </div>
-              <div style={{ marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📊</span><span>Send to GP</span></label>
-                <button onClick={() => setFieldPropertiesModal({ ...fieldPropertiesModal, sendToGP: !fieldPropertiesModal.sendToGP })} style={{ padding: '6px 14px', background: fieldPropertiesModal.sendToGP ? 'var(--accent)' : 'var(--border)', color: fieldPropertiesModal.sendToGP ? 'white' : 'var(--muted)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>{fieldPropertiesModal.sendToGP ? '✓ Yes' : '✕ No'}</button>
-              </div>
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)', marginBottom: '8px', display: 'block' }}>Expression</label>
-                <textarea value={fieldPropertiesModal.expression || ''} onChange={(e) => setFieldPropertiesModal({ ...fieldPropertiesModal, expression: e.target.value })} placeholder="Enter custom expression..." style={{ width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text)', fontFamily: 'var(--mono)', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }} />
-              </div>
-            </div>
-            <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: 'var(--bg)', borderRadius: '0 0 12px 12px' }}>
-              <button onClick={() => setFieldPropertiesModal(null)} style={{ padding: '8px 16px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Cancel</button>
-              <button
-                onClick={() => {
-                  applyNodes(prevNodes => prevNodes.map(n =>
-                    n.id === fieldPropertiesModal.id
-                      ? { ...n, sendToSaknay: fieldPropertiesModal.sendToSaknay, sendToGP: fieldPropertiesModal.sendToGP, expression: fieldPropertiesModal.expression }
-                      : n
-                  ))
-                  setFieldPropertiesModal(null)
-                }}
-                style={{ padding: '8px 16px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
-              >Save</button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Context menu */}
-      {ctxMenu && (
-        <div
-          style={{
-            position: 'fixed',
-            left: ctxMenu.x,
-            top: ctxMenu.y,
-            background: 'var(--surf)',
-            border: '1px solid var(--border)',
-            borderRadius: '10px',
-            boxShadow: '0 8px 28px rgba(0,0,0,0.14)',
-            zIndex: 1000,
-            minWidth: '200px',
-            animation: 'ctxIn 0.18s ease',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div style={{
-            padding: '10px 12px',
-            borderBottom: '1px solid var(--border)',
-            fontSize: '11px',
-            fontWeight: 600,
-            color: 'var(--text)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)' }} />
-            {ctxMenu.name}
-          </div>
-          {ctxMenu.node?.type === 'target' && (
-            <div
-              style={{
-                padding: '8px 12px',
-                cursor: 'pointer',
-                fontSize: '12px',
-                color: 'var(--text)',
-                transition: 'background 0.15s',
-              }}
-              onClick={() => {
-                setFieldPropertiesModal(ctxMenu.node)
-                setCtxMenu(null)
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.1)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-            >
-              ⚙ Edit Metadata
-            </div>
-          )}
-          <div
-            style={{
-              padding: '8px 12px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              color: 'var(--danger)',
-              transition: 'background 0.15s',
-            }}
-            onClick={() => {
-              removeNode(currentCtxId)
-              setCtxMenu(null)
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.1)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-          >
-            Remove from Canvas
-          </div>
-        </div>
       )}
 
       {/* Close menus on canvas click */}
