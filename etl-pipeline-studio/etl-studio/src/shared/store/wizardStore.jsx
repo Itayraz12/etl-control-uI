@@ -15,7 +15,7 @@ const initialState = {
     productType:    'Inventory',
     team:           'data-platform',
     environment:    'production',
-    entityName:     'Product',
+    entityName:     '',
     tags:           '',
   },
 
@@ -23,7 +23,7 @@ const initialState = {
   source: {
     sourceType:           'kafka',
     kafkaEnv:             'production',
-    kafkaTopic:           'source.products.raw',
+    kafkaTopic:           'source_products_raw',
     kafkaKeys:            '',
     kafkaKeyMode:         'include',
     rmqIp:                '',
@@ -33,8 +33,8 @@ const initialState = {
     rmqQueue:             '',
     rmqVhost:             '/',
     format:               'JSON',
-    encoding:             'UTF-8',
     csvDelimiter:         ',',
+    jsonSplit:            '',
     streamingContinuity:  'continuous',
     recordsPerDay:        'millions',
   },
@@ -53,7 +53,7 @@ const initialState = {
   // Step 6 — Sink Config
   sink: {
     sinkType:        'kafka',
-    sinkKafkaTopic:  'etl.products.v3',
+    sinkKafkaTopic:  'etl_products_v3',
     sinkKafkaEnv:    'production',
     shadow:          false,
     shadowTopic:     '',

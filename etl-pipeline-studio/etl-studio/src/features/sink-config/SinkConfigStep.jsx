@@ -188,7 +188,7 @@ export default function SinkConfigStep() {
           <CardTitle>🔀 Sink Configuration</CardTitle>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 18 }}>
             {SINK_TYPES.map(t => {
-              const isEnabled = ['kafka', 'rabbitmq'].includes(t.id);
+              const isEnabled = ['kafka'].includes(t.id);
               return (
               <div
                 key={t.id}

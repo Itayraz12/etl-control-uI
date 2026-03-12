@@ -89,7 +89,7 @@ function DropZone({ phase, sampleMode, onUpload }) {
             {sampleMode === 'local' ? 'or click to browse · JSON / CSV' : 'Uses source config settings'}
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 14 }}>
-            {['JSON', 'CSV', 'AVRO', 'Parquet'].map(f => {
+            {['JSON', 'CSV'].map(f => {
               const isEnabled = ['JSON', 'CSV'].includes(f);
               return (
                 <span 

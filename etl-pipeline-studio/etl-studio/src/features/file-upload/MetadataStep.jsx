@@ -35,6 +35,7 @@ export default function MetadataStep() {
           <FormRow>
             <FormGroup label="Entity Name" required>
               <select value={metadata.entityName} onChange={e => u('entityName', e.target.value)}>
+                <option value="">Select an entity...</option>
                 {entities.map(ent => (
                   <option key={ent.id} value={ent.type}>{ent.name} ({ent.type})</option>
                 ))}

@@ -27,25 +27,8 @@ function SourceConfigPanel({ type, state, u }) {
       
       {/* Kafka Key Filter */}
       <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>🔑 Key Filter</div>
-        <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12 }}>
-            <input
-              type="radio"
-              checked={state.kafkaKeyMode === 'include' || state.kafkaKeyMode === undefined}
-              onChange={() => u('kafkaKeyMode', 'include')}
-            />
-            <span>✓ Include Keys</span>
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12 }}>
-            <input
-              type="radio"
-              checked={state.kafkaKeyMode === 'exclude'}
-              onChange={() => u('kafkaKeyMode', 'exclude')}
-            />
-            <span>✗ Exclude Keys</span>
-          </label>
-        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, color: 'var(--text)' }}>🔑 Key Filter</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>Include only records with this key</div>
         <textarea
           value={state.kafkaKeys || ''}
           onChange={e => u('kafkaKeys', e.target.value)}
@@ -232,18 +215,16 @@ export default function SourceConfigStep() {
 
         <Card>
           <CardTitle>⚙️ Source Format</CardTitle>
-          <FormRow>
-            <FormGroup label="Message / File Format" required>
-              <select value={src.format} onChange={e => u('format', e.target.value)}>
-                {['JSON', 'CSV', 'Parquet', 'Avro', 'XML'].map(o => <option key={o}>{o}</option>)}
-              </select>
+          <FormGroup label="Message / File Format" required>
+            <select value={src.format} onChange={e => u('format', e.target.value)}>
+              {['JSON', 'CSV'].map(o => <option key={o}>{o}</option>)}
+            </select>
+          </FormGroup>
+          {src.format === 'JSON' && (
+            <FormGroup label="Split Key (optional)">
+              <input value={src.jsonSplit || ''} onChange={e => u('jsonSplit', e.target.value)} placeholder="e.g., records, items, data" />
             </FormGroup>
-            <FormGroup label="Encoding">
-              <select value={src.encoding} onChange={e => u('encoding', e.target.value)}>
-                <option>UTF-8</option><option>ISO-8859-1</option>
-              </select>
-            </FormGroup>
-          </FormRow>
+          )}
           {src.format === 'CSV' && (
             <FormGroup label="Column Delimiter">
               <input value={src.csvDelimiter || ','} onChange={e => u('csvDelimiter', e.target.value)} placeholder="," maxLength="1" />
@@ -256,7 +237,7 @@ export default function SourceConfigStep() {
         ['Type',   srcMeta?.name || '—'],
         ['Mode',   srcMeta?.mode || '—'],
         ['Entry',  src.kafkaTopic || src.filePath || src.httpUrl || src.s3Bucket || '—'],
-        ['Format', `${src.format} · ${src.encoding}`],
+        ['Format', src.format || '—'],
       ]} />
     </div>
   )
