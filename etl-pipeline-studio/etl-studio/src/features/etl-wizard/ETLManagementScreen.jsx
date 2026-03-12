@@ -21,6 +21,7 @@ function formatDate(ts) {
 const COLUMNS = [
   { key: 'productType', label: 'Product Type' },
   { key: 'productSource', label: 'Product Source' },
+  { key: 'environment', label: 'Environment' },
   { key: 'deploymentStatus', label: 'Status' },
   { key: 'savedVersion', label: 'Saved Version' },
   { key: 'deployedVersion', label: 'Deployed Version' },
@@ -272,6 +273,7 @@ export default function ETLManagementScreen() {
                     <tr key={dep.id} style={{ borderTop: '1px solid var(--border)' }}>
                       <td style={{ padding: 8 }}>{dep.productType}</td>
                       <td style={{ padding: 8 }}>{dep.productSource}</td>
+                      <td style={{ padding: 8 }}>{dep.environment || '—'}</td>
                       <td style={{ padding: 8 }}>
                         <Chip c={STATUS_COLORS[dep.deploymentStatus] || 'muted'}>{dep.deploymentStatus}</Chip>
                       </td>
