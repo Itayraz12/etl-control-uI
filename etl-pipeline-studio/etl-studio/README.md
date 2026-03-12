@@ -1,6 +1,7 @@
 # ETL Pipeline Studio
 
-A React + Vite UI for configuring ETL pipelines through a **7-step wizard** with a visual field-mapping canvas, live/mock backend switching, and transformer property editing.
+A production-grade React UI for configuring ETL (Extract–Transform–Load) data pipelines.  
+Built as a **7-step wizard** with a visual field-mapping canvas, live/mock backend switching, and transformer property editing.
 
 ---
 
@@ -77,11 +78,8 @@ src/
 
 ## 🔌 Backend API Endpoints
 
-All live calls use the API base below:
-
-- `http://localhost:8080/api`
-
-When **mock mode is ON** the frontend uses built-in sample data — no backend required.
+All live calls go to `http://localhost:8080`.  
+When **mock mode is ON** the frontend uses its own built-in data — no backend required.
 
 | Data | Method | URL |
 |------|--------|-----|
@@ -94,7 +92,7 @@ When **mock mode is ON** the frontend uses built-in sample data — no backend r
 
 ## ⚙️ Config Service (`configService.js`)
 
-Central service that switches between **mock** and **live** data for transformers, filters, and entities.
+Central service that switches between **mock** and **live** data for the three config types, and also handles loading/saving ETL draft YAML.
 
 ### Mock / live switch
 
@@ -102,6 +100,8 @@ Central service that switches between **mock** and **live** data for transformer
 fetchTransformers(useMock)  // true → mock, false → GET /api/config/transformers
 fetchFilters(useMock)       // true → mock, false → GET /api/config/filters
 fetchEntities(useMock)      // true → mock, false → GET /api/backbone/entities
+fetchDraftConfiguration({ productType, source, team, environment }, useMock)
+saveDraftConfiguration({ productType, source, team, environment, yaml })
 ```
 
 ### Transformer shape (backend contract)
@@ -125,23 +125,23 @@ fetchEntities(useMock)      // true → mock, false → GET /api/backbone/entiti
 
 ### `buildPropsSchema(additionalProperties)`
 
-Converts `additionalProperties` into editable UI rows:
+Converts `additionalProperties` into an array of editable UI rows:
 
-- keys listed in `_required` are marked required and **are not rendered as rows**
-- `string` → text input
-- `number` → number input
-- `boolean` → select input
-- labels are generated from keys: `output_format` → **Output Format**
+- Keys in `_required` → marked `required: true`, **never rendered as a row**
+- `string` value → `text` input
+- `number` value → `number` input
+- `boolean` value → `select` with `[true, false]`
+- Label auto-generated from key: `output_format` → **Output Format**
 
 ```json
 [
-  { "key": "format",        "label": "Format",        "type": "text", "default": "dd/MM/yyyy",           "required": true  },
-  { "key": "zone",          "label": "Zone",          "type": "text", "default": "Asia/Jerusalem",      "required": true  },
-  { "key": "output_format", "label": "Output Format", "type": "text", "default": "yyyy-MM-dd'T'HH:mm:ss","required": false }
+  { "key": "format",        "label": "Format",        "type": "text", "default": "dd/MM/yyyy",  "required": true  },
+  { "key": "zone",          "label": "Zone",          "type": "text", "default": "Asia/Jerusalem","required": true  },
+  { "key": "output_format", "label": "Output Format", "type": "text", "default": "...",          "required": false }
 ]
 ```
 
-> **Note:** both `additionalProperties` and legacy `additionalProperites` are supported.
+> **Note:** Both spellings are supported — `additionalProperties` (correct) and `additionalProperites` (legacy backend typo).
 
 ### Entity shape (backend contract)
 
@@ -159,16 +159,25 @@ Converts `additionalProperties` into editable UI rows:
 
 ## 🔄 Config Context & Pre-fetching (`configContext.jsx`)
 
-`ConfigProvider` holds the three config lists and loading flags.
-`WizardShell` refreshes the required list **before** rendering the relevant step, so each step opens with fresh data.
+`ConfigProvider` holds the three config lists and their loading flags.  
+`WizardShell` calls `prefetchForStep(step, useMock)` every time the user navigates to a new step — **data is always refreshed** before the step renders.
 
 | Step | Data fetched | Loading flag |
 |------|-------------|--------------|
 | 0 — Metadata | `entities` | `loadingEntities` |
-| 3 — Filters | `filters` | `loadingFilters` |
+| 3 — Filters | `filters` (operators) | `loadingFilters` |
 | 4 — Field Mapping | `transformers` | `loadingTransformers` |
 
-While loading, `WizardShell` shows a full-height spinner instead of mounting the step.
+While loading, `WizardShell` renders a full-height spinner instead of the step component — the step never mounts until its data is ready.
+
+In-flight deduplication is handled via `useRef` flags (not state) to avoid infinite render loops.
+
+```jsx
+// Consuming data in a step component
+const { entities }     = useConfig()   // MetadataStep
+const { filters }      = useConfig()   // FiltersStep   (operator list)
+const { transformers } = useConfig()   // FieldMappingStepCanvas
+```
 
 ---
 
@@ -179,7 +188,7 @@ While loading, `WizardShell` shows a full-height spinner instead of mounting the
 | 0 | Metadata | `MetadataStep` | `entities` from config context |
 | 1 | Source Config | `SourceConfigStep` | Static |
 | 2 | Source Upload | `SourceUploadStep` | Static / schema upload |
-| 3 | Filters | `FiltersStep` | `filters` from config context |
+| 3 | Filters | `FiltersStep` | `filters` (operators) from config context |
 | 4 | Field Mapping | `FieldMappingStepCanvas` | `transformers` from config context |
 | 5 | Sink Config | `SinkConfigStep` | Static |
 | 6 | Summary | `SummaryStep` | Wizard state |
@@ -188,32 +197,24 @@ While loading, `WizardShell` shows a full-height spinner instead of mounting the
 
 ## 🗺️ Field Mapping Canvas
 
-- **Node-based** drag-and-drop interface — source fields on the left, target fields on the right
-- **Single incoming connection per target** — a target field cannot accept multiple connections
-- **SVG Bezier edges** connect source and target nodes
-- **Transformer node in the middle of an edge** when a transformer is assigned
-- **Shared transformer modal** for add, replace, and edit
-- **Right-click on `+` or transformer node** to add, replace, edit, or remove the transformer
-- **Transformer edit uses the same searchable modal** used for adding/replacing, including property editing
-- **Runtime property form** built from backend `additionalProperties`
+- **Node-based** drag-and-drop interface — source fields (left) → target fields (right)
+- **SVG Bezier edges** connect source to target nodes
+- **Right-click** on an edge → assign/replace transformer
+- **Transformer modal** — searchable list; selecting a transformer opens a **properties panel** with editable rows derived from `additionalProperties`
 - Required properties show a red **req** badge
-- **Multi-input transformers** display a **multi** badge in the list
-- Additional source fields can connect directly to an existing multi-input transformer without creating another target
-- If a transformer changes from multi-input to single-input, extra source connections are removed automatically
-- Extra input lines are rendered in the same style as the main source connection
-- **Map All Fields** auto-connects fields by name similarity and type
-- **Align** re-arranges nodes into two clean columns
-- Mapping edits persist automatically in wizard state
+- `isMultipleInput` flag shown as **multi** badge in the transformer list
+- **Map All Fields** — auto-connects fields by name similarity and type
+- **Align** — re-arranges nodes into two clean columns
 
 ---
 
 ## 🎛️ Mock Mode
 
-Toggle mock mode on the **Login page**.
+Toggle on the **Login page** (checkbox) or in the **ETL Management** header.
 
 | Mode | Transformers | Filters | Entities | Deployments |
 |------|-------------|---------|----------|-------------|
-| Mock ON | Built-in list | Built-in list | Sample entities | Mock deployments |
+| Mock ON | Built-in list | Built-in operators | 3 sample entities | Mock deployments |
 | Mock OFF | `GET /api/config/transformers` | `GET /api/config/filters` | `GET /api/backbone/entities` | `GET /api/config/deployments` |
 
 ---
@@ -225,8 +226,8 @@ Toggle mock mode on the **Login page**.
 ```jsx
 <UserProvider>
   <MockModeProvider>
-    <ConfigProvider>
-      <WizardProvider>
+    <ConfigProvider>       ← transformer / filter / entity lists
+      <WizardProvider>     ← wizard step state (inside App.jsx)
         <App />
       </WizardProvider>
     </ConfigProvider>
@@ -236,18 +237,20 @@ Toggle mock mode on the **Login page**.
 
 ### Wizard store shape
 
-Typical wizard state includes:
-
-- `navigationMode`: menu vs ETL configuration vs management view
-- `currentStep`: active wizard step index
-- `completedSteps`: completed-step tracking
-- `theme`: `dark` or `light`
-- `metadata`: entity, team, environment, and related metadata fields
-- `source`: source connection configuration
-- `upload`: upload status
-- `mappings`: source/target mappings, transformers, properties, and `extraInputs`
-- `filters`: nested filter groups and rules
-- `sink`: sink connection and deployment options
+```js
+{
+  navigationMode: 'menu' | 'etl-config' | 'etl-management',
+  currentStep: 0,
+  completedSteps: Set,
+  theme: 'dark' | 'light',
+  metadata: { productSource, productType, team, environment, entityName, tags },
+  source:   { sourceType, kafkaTopic, format, ... },
+  upload:   { done: false },
+  mappings: [ { src, tgt, transformer, transformerProps, transformerChain, ... } ],
+  filters:  [ { id, logic, rules: [...], subgroups: [...] } ],
+  sink:     { sinkType, sinkKafkaTopic, shadow, saknay, asg }
+}
+```
 
 ---
 
@@ -256,19 +259,19 @@ Typical wizard state includes:
 All colors use CSS variables defined in `index.css`:
 
 ```css
---accent:  #4f6ef7;
---success: #22c55e;
---danger:  #ef4444;
---warning: #f59e0b;
---bg:      #0f172a;
---surf:    #1e293b;
---surf2:   #334155;
---border:  #475569;
---text:    #f1f5f9;
---muted:   #94a3b8;
+--accent:  #4f6ef7;   /* primary blue      */
+--success: #22c55e;   /* green             */
+--danger:  #ef4444;   /* red               */
+--warning: #f59e0b;   /* amber             */
+--bg:      #0f172a;   /* page background   */
+--surf:    #1e293b;   /* card background   */
+--surf2:   #334155;   /* secondary surface */
+--border:  #475569;   /* borders           */
+--text:    #f1f5f9;   /* primary text      */
+--muted:   #94a3b8;   /* secondary text    */
 ```
 
-Dark mode is the default. Light mode is toggled from the top navigation and persisted in `localStorage`.
+Dark mode is the default. Light mode is toggled via the theme button in the top nav and persisted in `localStorage`.
 
 ---
 
@@ -286,12 +289,12 @@ npm run preview  # preview production build locally
 
 | Symptom | Fix |
 |---------|-----|
-| Blank transformer properties panel | Ensure backend returns `additionalProperties` (legacy typo also supported) |
-| Required transformer properties missing | Check `_required` inside `additionalProperties`; keys are marked required but hidden from the UI rows |
-| No entities in Metadata | Confirm `GET /api/backbone/entities` returns `[{ id, name, type, description }]` |
-| No filters in Filters step | Confirm `GET /api/config/filters` returns filter items and mock mode is off |
-| No transformers in Field Mapping | Confirm `GET /api/config/transformers` returns items with `_id` |
-| Styles not applying | Hard refresh (`Ctrl+Shift+R`) or restart the dev server |
+| Blank properties panel for transformers | Ensure backend sends `additionalProperties` key; both spellings are supported |
+| Infinite loading spinner on step | Check `configContext.jsx` — refs guard against duplicate in-flight requests |
+| `actions.setKafkaFilters is not a function` | Remove stale call; action does not exist in `wizardStore` |
+| Missing key warning in transformer list | Transformer items use `key={t._id}` — ensure backend returns `_id` |
+| No entities in Metadata dropdown | Confirm `GET /api/backbone/entities` returns `[{ id, name, type, description }]` |
+| Styles not applying | Hard refresh (`Ctrl+Shift+R`) or restart dev server |
 
 ---
 

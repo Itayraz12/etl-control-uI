@@ -39,7 +39,7 @@ const initialState = {
     productSource:  'ERP-System-v2',
     productType:    'Inventory',
     team:           'data-platform',
-    environment:    'production',
+    environment:    '',
     entityName:     '',
     tags:           '',
   },
@@ -97,6 +97,29 @@ function wizardReducer(state, action) {
       return { ...state, currentStep: action.payload }
     case 'COMPLETE_STEP':
       return { ...state, completedSteps: new Set([...state.completedSteps, action.payload]) }
+    case 'LOAD_STATE': {
+      const payload = action.payload || {}
+      return {
+        ...initialState,
+        ...payload,
+        theme: state.theme,
+        navigationMode: payload.navigationMode ?? initialState.navigationMode,
+        currentStep: Number.isInteger(payload.currentStep) ? payload.currentStep : 0,
+        completedSteps: new Set(
+          payload.completedSteps instanceof Set
+            ? Array.from(payload.completedSteps)
+            : Array.isArray(payload.completedSteps)
+              ? payload.completedSteps
+              : []
+        ),
+        metadata: { ...initialState.metadata, ...(payload.metadata || {}) },
+        source: { ...initialState.source, ...(payload.source || {}) },
+        upload: { ...initialState.upload, ...(payload.upload || {}) },
+        mappings: Array.isArray(payload.mappings) ? payload.mappings : [],
+        filters: Array.isArray(payload.filters) ? payload.filters : [],
+        sink: { ...initialState.sink, ...(payload.sink || {}) },
+      }
+    }
     case 'UPDATE_METADATA':
       return { ...state, metadata: { ...state.metadata, ...action.payload } }
     case 'UPDATE_SOURCE':
@@ -163,6 +186,7 @@ export function WizardProvider({ children }) {
     setNavigationMode: (mode) => dispatch({ type: 'SET_NAVIGATION_MODE', payload: mode }),
     setStep:        (step)    => dispatch({ type: 'SET_STEP', payload: step }),
     completeStep:   (step)    => dispatch({ type: 'COMPLETE_STEP', payload: step }),
+    loadState:      (next)    => dispatch({ type: 'LOAD_STATE', payload: next }),
     updateMetadata: (patch)   => dispatch({ type: 'UPDATE_METADATA', payload: patch }),
     updateSource:   (patch)   => dispatch({ type: 'UPDATE_SOURCE',   payload: patch }),
     setUploadDone:  (val)     => dispatch({ type: 'SET_UPLOAD_DONE', payload: val }),

@@ -4,11 +4,27 @@ import { useConfig } from '../../shared/store/configContext.jsx'
 import { MOCK_SCHEMA, TARGET_FIELDS } from '../../shared/types/index.js'
 
 // TRANSFORMER_PROPS_SCHEMA is now derived from each transformer's propsSchema field.
-// Helper: look up the propsSchema array for a transformer by its _id.
-function getPropsSchema(transformers, transformerId) {
-  const t = transformers.find(t => t._id === transformerId)
-  console.log('[getPropsSchema] id:', transformerId, '→ found:', t?.name, 'propsSchema:', JSON.stringify(t?.propsSchema))
+// Helper: resolve a transformer by either its backend _id or its YAML/display name.
+function findTransformer(transformers, transformerRef) {
+  if (!transformerRef || transformerRef === 'none') return null
+  return transformers.find(t => t._id === transformerRef || t.name === transformerRef) || null
+}
+
+function normalizeTransformerRef(transformers, transformerRef) {
+  return findTransformer(transformers, transformerRef)?._id || transformerRef || 'none'
+}
+
+// Helper: look up the propsSchema array for a transformer by its _id or name.
+function getPropsSchema(transformers, transformerRef) {
+  const t = findTransformer(transformers, transformerRef)
+  console.log('[getPropsSchema] ref:', transformerRef, '→ found:', t?.name, 'propsSchema:', JSON.stringify(t?.propsSchema))
   return t?.propsSchema || []
+}
+
+function getConnectedNodeIds(edges = []) {
+  return new Set(
+    edges.flatMap(edge => [edge.from, edge.to, ...(Array.isArray(edge.extraInputs) ? edge.extraInputs : [])])
+  )
 }
 
 export default function FieldMappingStep() {
@@ -16,6 +32,7 @@ export default function FieldMappingStep() {
   const { transformers } = useConfig()
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
+  const hasAutoAlignedOnEntryRef = useRef(false)
   // Stores { edgeIdx, x, y, w, h } for each edge that has a transformer node,
   // in SVG/canvas coordinates. Updated every render — used for multi-input drop detection.
   const tfBoxesRef = useRef([])
@@ -123,13 +140,18 @@ export default function FieldMappingStep() {
           })
         }
 
+        const normalizedTransformer = normalizeTransformerRef(
+          transformers,
+          mapping.transformer || mapping.transformerChain?.[0] || 'none'
+        )
+
         loadedEdges.push({
           from: nodeIdMap[srcKey],
           to: nodeIdMap[tgtKey],
           fromType: 'source',
           toType: 'target',
-          transformer: mapping.transformer || mapping.transformerChain?.[0] || 'none',
-          additionalTransformers: mapping.transformerChain?.slice(1) || [],
+          transformer: normalizedTransformer,
+          additionalTransformers: (mapping.transformerChain?.slice(1) || []).map(t => normalizeTransformerRef(transformers, t)),
           transformerInputType: mapping.transformerInputType,
           transformerOutputType: mapping.transformerOutputType,
           transformerProps: mapping.transformerProps || {},
@@ -292,7 +314,7 @@ export default function FieldMappingStep() {
             applyEdges(prev => {
               const targetEdge = prev[hit.edgeIdx]
               if (!targetEdge) return prev
-              const tf = transformers.find(t => t._id === targetEdge.transformer)
+              const tf = findTransformer(transformers, targetEdge.transformer)
               if (!tf?.isMultipleInput) return prev
               if (targetEdge.from === nodeId) return prev
               if (targetEdge.extraInputs?.includes(nodeId)) return prev
@@ -416,7 +438,7 @@ export default function FieldMappingStep() {
 
     const removeUnconnectedSourceFieldsFromCanvas = () => {
     applyNodes(prevNodes => {
-      const connectedNodeIds = new Set(edgesRef.current.flatMap(e => [e.from, e.to]))
+      const connectedNodeIds = getConnectedNodeIds(edgesRef.current)
       return prevNodes.filter(n => !(n.type === 'source' && !connectedNodeIds.has(n.id)))
     })
     }
@@ -464,7 +486,7 @@ export default function FieldMappingStep() {
 
     const removeUnconnectedTargetFieldsFromCanvas = () => {
     applyNodes(prevNodes => {
-      const connectedNodeIds = new Set(edgesRef.current.flatMap(e => [e.from, e.to]))
+      const connectedNodeIds = getConnectedNodeIds(edgesRef.current)
       return prevNodes.filter(n => !(n.type === 'target' && !connectedNodeIds.has(n.id)))
     })
     }
@@ -494,6 +516,7 @@ export default function FieldMappingStep() {
     return edgesInput.map(edge => {
       const srcNode = nodesInput.find(n => n.id === edge.from)
       const tgtNode = nodesInput.find(n => n.id === edge.to)
+      const normalizedTransformer = normalizeTransformerRef(transformers, edge.transformer)
 
       return {
         src: srcNode?.fieldId || srcNode?.name || '',
@@ -512,11 +535,11 @@ export default function FieldMappingStep() {
           sendToGP: tgtNode?.sendToGP ?? true,
           expression: tgtNode?.expression || '',
         },
-        transformer: edge.transformer || 'none',
+        transformer: normalizedTransformer,
         transformerInputType: edge.transformerInputType || 'any',
         transformerOutputType: edge.transformerOutputType || 'any',
         transformerProps: edge.transformerProps || {},
-        transformerChain: [edge.transformer, ...(edge.additionalTransformers || [])].filter(t => t && t !== 'none'),
+        transformerChain: [normalizedTransformer, ...(edge.additionalTransformers || []).map(t => normalizeTransformerRef(transformers, t))].filter(t => t && t !== 'none'),
         // Multi-input: extra source node IDs and their field names
         extraInputs: (edge.extraInputs || []).map(id => {
           const n = nodesInput.find(nd => nd.id === id)
@@ -593,6 +616,14 @@ export default function FieldMappingStep() {
       })
     })
     }
+
+    useEffect(() => {
+    if (hasAutoAlignedOnEntryRef.current) return
+    if (nodes.length === 0) return
+
+    hasAutoAlignedOnEntryRef.current = true
+    alignNodes()
+    }, [nodes.length])
 
   // Calculate string similarity (Levenshtein-inspired)
   const calculateSimilarity = (str1, str2) => {
@@ -796,7 +827,7 @@ export default function FieldMappingStep() {
     setTransformerSearch('')
 
     if (liveEdge?.transformer && liveEdge.transformer !== 'none') {
-      const transformer = transformers.find(t => t._id === liveEdge.transformer) || null
+      const transformer = findTransformer(transformers, liveEdge.transformer)
       const defaults = {}
       if (transformer) {
         getPropsSchema(transformers, transformer._id).forEach(p => { defaults[p.key] = p.default })
@@ -1075,7 +1106,7 @@ export default function FieldMappingStep() {
                 const d = bezier(x1, y1, x2, y2)
                 const midX = (x1 + x2) / 2
                 const midY = (y1 + y2) / 2
-                const transformer = transformers.find(t => t._id === edge.transformer)
+                const transformer = findTransformer(transformers, edge.transformer)
                 const tfWidth = 140
                 const tfHeight = 55
 
@@ -1225,6 +1256,7 @@ export default function FieldMappingStep() {
                     {/* Click area for empty transformer (to add one) */}
                     {(!transformer || transformer.id === 'none') && (
                       <g
+                        data-testid={`add-transformer-trigger-${idx}`}
                         onClick={(e) => {
                           e.stopPropagation()
                           setCurrentEdge(edge)
@@ -1545,7 +1577,6 @@ export default function FieldMappingStep() {
                 textAlign: 'center',
                 pointerEvents: 'none',
               }}>
-                <div style={{ fontSize: '48px', marginBottom: '12px' }}>→</div>
                 <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)', marginBottom: '4px' }}>Canvas is empty</h3>
                 <p style={{ fontSize: '12px', color: 'var(--muted)' }}>Drag fields from the side panels onto this canvas</p>
               </div>
@@ -1841,30 +1872,28 @@ export default function FieldMappingStep() {
             </div>
           ))}
           {currentEdge.transformer && currentEdge.transformer !== 'none' && (
-            <>
-              <div style={{ borderTop: '1px solid var(--border)' }}>
-                <div
-                  style={{
-                    padding: '8px 12px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    color: 'var(--text)',
-                    transition: 'background 0.15s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                  }}
-                  onClick={() => {
-                    openTransformerModal(currentEdge, 'edit')
-                    setTransformerMenu(null)
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.1)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                >
-                  ✏ Edit Properties
-                </div>
+            <div style={{ borderTop: '1px solid var(--border)' }}>
+              <div
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  color: 'var(--text)',
+                  transition: 'background 0.15s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+                onClick={() => {
+                  openTransformerModal(currentEdge, 'edit')
+                  setTransformerMenu(null)
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.1)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              >
+                ✏ Edit Properties
               </div>
-            </>
+            </div>
           )}
           <div style={{ borderTop: '1px solid var(--border)' }}>
             <div
@@ -1875,9 +1904,7 @@ export default function FieldMappingStep() {
                 color: 'var(--danger)',
                 transition: 'background 0.15s',
               }}
-              onClick={() => {
-                removeEdge(currentEdge)
-              }}
+              onClick={() => removeEdge(currentEdge)}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)' }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
             >
@@ -1887,13 +1914,14 @@ export default function FieldMappingStep() {
         </div>
       )}
 
-      {/* Add Transformer Modal (with search + properties table) */}
+      {/* Add / Edit Transformer Modal */}
       {addTransformerModal && (() => {
         const currentModalEdge = edges.find(e => e.from === addTransformerModal.edge?.from && e.to === addTransformerModal.edge?.to) || addTransformerModal.edge
         const hadAssignedTransformer = !!(currentModalEdge?.transformer && currentModalEdge.transformer !== 'none')
+        const currentAssignedTransformer = findTransformer(transformers, currentModalEdge?.transformer)
         const filtered = transformers.filter(t =>
-          (t.name.toLowerCase().includes(transformerSearch.toLowerCase()) ||
-           t._id.toLowerCase().includes(transformerSearch.toLowerCase()))
+          t.name.toLowerCase().includes(transformerSearch.toLowerCase()) ||
+          t._id.toLowerCase().includes(transformerSearch.toLowerCase())
         )
         const schema = selectedTf ? getPropsSchema(transformers, selectedTf._id) : []
         const hasProps = schema.length > 0
@@ -1902,13 +1930,15 @@ export default function FieldMappingStep() {
           setSelectedTf(t)
           const defaults = {}
           getPropsSchema(transformers, t._id).forEach(p => { defaults[p.key] = p.default })
-          const keepExisting = currentModalEdge?.transformer === t._id ? (currentModalEdge.transformerProps || {}) : {}
+          const keepExisting = currentAssignedTransformer?._id === t._id ? (currentModalEdge.transformerProps || {}) : {}
           setTfPropValues({ ...defaults, ...keepExisting })
           setTfInputType(currentModalEdge?.transformerInputType || 'any')
           setTfOutputType(currentModalEdge?.transformerOutputType || 'any')
         }
 
         const handleApply = () => {
+          if (!selectedTf) return
+
           applyEdges(prev => prev.map(e => {
             if (e.from !== currentModalEdge.from || e.to !== currentModalEdge.to) return e
             return {
@@ -1920,13 +1950,14 @@ export default function FieldMappingStep() {
               transformerOutputType: tfOutputType || 'any',
             }
           }))
+
           resetTransformerModal()
         }
 
         return (
           <>
             <div
-              style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1099 }}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1099 }}
               onClick={resetTransformerModal}
             />
             <div
@@ -2125,11 +2156,11 @@ export default function FieldMappingStep() {
         )
       })()}
 
-      {/* Transformers Modal */}
+      {/* Transformers list modal */}
       {transformerModal && (
         <>
           <div
-            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1099 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1099 }}
             onClick={() => setTransformerModal(false)}
           />
           <div

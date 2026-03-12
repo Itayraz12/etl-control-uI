@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Btn, Chip } from '../../shared/components/index.jsx';
 import * as deploymentsService from '../../shared/services/deploymentsService.js';
+import { fetchDraftConfiguration } from '../../shared/services/configService.js';
+import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js';
 import { useWizard } from '../../shared/store/wizardStore.jsx';
 import { useMockMode } from '../../shared/store/mockModeContext.jsx';
 import { useUser } from '../../shared/store/userContext.jsx';
@@ -33,6 +35,7 @@ export default function ETLManagementScreen() {
   const [sortKey, setSortKey] = useState('productType');
   const [sortOrder, setSortOrder] = useState('asc');
   const [filterText, setFilterText] = useState("");
+  const [screenError, setScreenError] = useState('');
   const { actions, state } = useWizard();
   const { useMock, setUseMock } = useMockMode();
   const { user } = useUser();
@@ -120,17 +123,38 @@ export default function ETLManagementScreen() {
     setActionLoading(a => ({ ...a, [id]: null }));
   };
 
-  const handleEdit = async (id) => {
-    setActionLoading(a => ({ ...a, [id]: 'edit' }));
+  const handleEdit = async (dep) => {
+    setActionLoading(a => ({ ...a, [dep.id]: 'edit' }));
+    setScreenError('');
     console.log('[ETLManagementScreen] handleEdit, useMock:', useMock);
-    const { config } = await deploymentsService.fetchDeploymentConfig(id, useMock);
-    setActionLoading(a => ({ ...a, [id]: null }));
-    // Load config into ETL configuration page
-    if (config && config.name) {
-      actions.setNavigationMode('etl-config');
-      actions.setStep(0);
-      actions.updateMetadata({ productType: config.name }); // Example: update metadata, adjust as needed
-      // You can update more fields here based on config structure
+
+    try {
+      const environment = dep.environment || state.metadata.environment || 'production';
+      const yamlText = await fetchDraftConfiguration({
+        productType: dep.productType,
+        source: dep.productSource,
+        team: teamName,
+        environment,
+      }, useMock);
+
+      const loadedState = hydrateWizardStateFromYaml(yamlText, {
+        productType: dep.productType,
+        source: dep.productSource,
+        teamName,
+        environment,
+      });
+
+      actions.loadState({
+        ...loadedState,
+        navigationMode: 'etl-config',
+        currentStep: 0,
+        completedSteps: [0, 1, 2, 3, 4, 5, 6],
+      });
+    } catch (error) {
+      console.error('[ETLManagementScreen] failed to edit deployment:', error);
+      setScreenError(error?.message || 'Failed to load deployment configuration.');
+    } finally {
+      setActionLoading(a => ({ ...a, [dep.id]: null }));
     }
   };
 
@@ -184,6 +208,21 @@ export default function ETLManagementScreen() {
           + Create New Deployment Configuration
         </Btn>
       </div>
+      {screenError && (
+        <div style={{
+          width: '100%',
+          maxWidth: 1300,
+          marginBottom: 16,
+          padding: '10px 12px',
+          borderRadius: 8,
+          background: 'rgba(239,68,68,0.12)',
+          border: '1px solid rgba(239,68,68,0.35)',
+          color: 'var(--danger)',
+          fontSize: 13,
+        }}>
+          {screenError}
+        </div>
+      )}
       {loading ? (
         <div>Loading deployments...</div>
       ) : (
@@ -279,7 +318,7 @@ export default function ETLManagementScreen() {
                         >
                           ⬆ Upgrade
                         </Btn>
-                        <Btn v="secondary" sm onClick={() => handleEdit(dep.id)} disabled={actionLoading[dep.id] === 'edit'}>
+                        <Btn v="secondary" sm onClick={() => handleEdit(dep)} disabled={actionLoading[dep.id] === 'edit'}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                             <span role="img" aria-label="edit">✏️</span> Edit
                           </span>

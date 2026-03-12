@@ -39,7 +39,8 @@ export default function MetadataStep() {
             </FormGroup>
             <FormGroup label="Environment" required>
               <select value={metadata.environment} onChange={e => u('environment', e.target.value)}>
-                {['dev', 'staging', 'production'].map(o => <option key={o}>{o}</option>)}
+                <option value="">select an environment...</option>
+                {['dev', 'staging', 'production'].map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </FormGroup>
           </FormRow>
