@@ -82,3 +82,13 @@ select option { background: var(--surf2); }
 .mono { font-family: var(--mono); }
 .muted { color: var(--muted); }
 .fadeIn { animation: fadeIn 0.25s ease; }
+
+/* ── Multi-input drop target highlight ───────────────────────────────────── */
+/* When a connection drag is active (body.connecting), glow multi-input
+   transformer nodes so the user knows they can drop a source onto them.    */
+body.connecting .tf-multi-input-node {
+  box-shadow: 0 0 0 2px #22c55e, 0 0 16px rgba(34,197,94,0.45) !important;
+  border-color: #22c55e !important;
+  cursor: crosshair !important;
+}
+

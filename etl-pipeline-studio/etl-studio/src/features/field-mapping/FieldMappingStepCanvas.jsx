@@ -16,6 +16,9 @@ export default function FieldMappingStep() {
   const { transformers } = useConfig()
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
+  // Stores { edgeIdx, x, y, w, h } for each edge that has a transformer node,
+  // in SVG/canvas coordinates. Updated every render — used for multi-input drop detection.
+  const tfBoxesRef = useRef([])
 
 
   const [nodes, setNodes] = useState([])
@@ -29,15 +32,16 @@ export default function FieldMappingStep() {
   const [targetSearch, setTargetSearch] = useState('')
   const [successModal, setSuccessModal] = useState(null)
   const [transformerModal, setTransformerModal] = useState(false)
-  const [editingTransformer, setEditingTransformer] = useState(null)
   const [fieldPropertiesModal, setFieldPropertiesModal] = useState(null)
   // Right-click context menu on + circle
   const [plusCtxMenu, setPlusCtxMenu] = useState(null) // { x, y, edge, mode }
-  // Add-transformer modal with search
-  const [addTransformerModal, setAddTransformerModal] = useState(null) // { edge, mode }
+  // Add/replace/edit transformer modal with search
+  const [addTransformerModal, setAddTransformerModal] = useState(null) // { edge, mode: 'add'|'replace'|'edit' }
   const [transformerSearch, setTransformerSearch] = useState('')
-  const [selectedTf, setSelectedTf] = useState(null)   // transformer object chosen in the list
-  const [tfPropValues, setTfPropValues] = useState({})  // { key: value } for the selected transformer
+  const [selectedTf, setSelectedTf] = useState(null)
+  const [tfPropValues, setTfPropValues] = useState({})
+  const [tfInputType, setTfInputType] = useState('any')
+  const [tfOutputType, setTfOutputType] = useState('any')
 
   // Load saved mappings from state on mount
   useEffect(() => {
@@ -89,6 +93,31 @@ export default function FieldMappingStep() {
         }
 
         // Create edge
+        const extraInputNodeIds = []
+        if (Array.isArray(mapping.extraInputs)) {
+          mapping.extraInputs.forEach(ei => {
+            const eiKey = ei.nodeId || `src-${ei.field}`
+            if (!nodeIdMap[eiKey]) {
+              const eiNode = {
+                id: eiKey,
+                name: ei.field,
+                emoji: '📄',
+                type: 'source',
+                fieldId: ei.field,
+                isRequired: false,
+                x: ei.pos?.x ?? 100,
+                y: ei.pos?.y ?? 100,
+                sendToSaknay: true,
+                sendToGP: true,
+                expression: '',
+              }
+              loadedNodes.push(eiNode)
+              nodeIdMap[eiKey] = eiNode.id
+            }
+            extraInputNodeIds.push(nodeIdMap[eiKey])
+          })
+        }
+
         loadedEdges.push({
           from: nodeIdMap[srcKey],
           to: nodeIdMap[tgtKey],
@@ -99,6 +128,7 @@ export default function FieldMappingStep() {
           transformerInputType: mapping.transformerInputType,
           transformerOutputType: mapping.transformerOutputType,
           transformerProps: mapping.transformerProps || {},
+          extraInputs: extraInputNodeIds,
         })
       })
 
@@ -129,9 +159,12 @@ export default function FieldMappingStep() {
 
     // Validate: source to target only
     if (fromType !== 'source' || toType !== 'target') return false
+    // Block duplicate from→to
     if (edges.some(e => e.from === fromId && e.to === toId)) return false
+    // Target can only have ONE incoming connection
+    if (edges.some(e => e.to === toId)) return false
 
-    setEdges(prev => [...prev, { from: fromId, to: toId, fromType, toType, transformer: 'none' }])
+    setEdges(prev => [...prev, { from: fromId, to: toId, fromType, toType, transformer: 'none', extraInputs: [] }])
     return true
   }
 
@@ -228,26 +261,54 @@ export default function FieldMappingStep() {
 
     const onUp = (me) => {
       try {
+        const canvasRect = canvasRef.current?.getBoundingClientRect()
+        const scrollLeft = canvasRef.current?.scrollLeft ?? 0
+        const scrollTop  = canvasRef.current?.scrollTop  ?? 0
+
+        // Canvas-space coordinates of the drop point
+        const dropX = me.clientX - (canvasRect?.left ?? 0) + scrollLeft
+        const dropY = me.clientY - (canvasRect?.top  ?? 0) + scrollTop
+
+        // ── Drop on a transformer node (multi-input) ──────────────────────
+        // Hit-test against registered transformer bounding boxes in canvas space.
+        // This avoids DOM closest() which cannot cross SVG foreignObject boundaries.
+        if (node.type === 'source') {
+          const hit = tfBoxesRef.current.find(box =>
+            dropX >= box.x && dropX <= box.x + box.w &&
+            dropY >= box.y && dropY <= box.y + box.h
+          )
+          if (hit) {
+            setEdges(prev => {
+              const targetEdge = prev[hit.edgeIdx]
+              if (!targetEdge) return prev
+              const tf = transformers.find(t => t._id === targetEdge.transformer)
+              if (!tf?.isMultipleInput) return prev              // transformer doesn't support multi-input
+              if (targetEdge.from === nodeId) return prev        // same primary source — skip
+              if (targetEdge.extraInputs?.includes(nodeId)) return prev  // already added
+              return prev.map((e, i) => i === hit.edgeIdx
+                ? { ...e, extraInputs: [...(e.extraInputs || []), nodeId] }
+                : e
+              )
+            })
+            return
+          }
+        }
+
+        // ── Drop on a target port (normal connection) ─────────────────────
         const el = document.elementFromPoint(me.clientX, me.clientY)
         const targetPortEl = el?.closest('[data-nid]')
-        
         if (targetPortEl) {
           const targetNodeId = targetPortEl.dataset.nid
           const targetNode = nodes.find(n => n.id === targetNodeId)
-          
           if (targetNode && targetNode.id !== nodeId) {
-            // Target should be the opposite type
             const isValidConnection = node.type === 'source' && targetNode.type === 'target'
-            
             if (isValidConnection) {
               const success = addEdge(nodeId, targetNodeId, node.type, targetNode.type)
               if (!success) {
-                // Connection rejected (duplicate or other reason)
                 targetPortEl.parentElement?.classList.add('shake')
                 setTimeout(() => targetPortEl.parentElement?.classList.remove('shake'), 250)
               }
             } else {
-              // Invalid connection type
               targetPortEl.parentElement?.classList.add('shake')
               setTimeout(() => targetPortEl.parentElement?.classList.remove('shake'), 250)
             }
@@ -268,7 +329,13 @@ export default function FieldMappingStep() {
 
   const removeNode = (nodeId) => {
     setNodes(prev => prev.filter(n => n.id !== nodeId))
-    setEdges(prev => prev.filter(e => e.from !== nodeId && e.to !== nodeId))
+    setEdges(prev => prev
+      .filter(e => e.from !== nodeId && e.to !== nodeId)
+      .map(e => e.extraInputs?.includes(nodeId)
+        ? { ...e, extraInputs: e.extraInputs.filter(id => id !== nodeId) }
+        : e
+      )
+    )
   }
 
   const dragFromPanel = (e, field, type) => {
@@ -438,6 +505,11 @@ export default function FieldMappingStep() {
         transformerOutputType: edge.transformerOutputType || 'any',
         transformerProps: edge.transformerProps || {},
         transformerChain: [edge.transformer, ...(edge.additionalTransformers || [])].filter(t => t && t !== 'none'),
+        // Multi-input: extra source node IDs and their field names
+        extraInputs: (edge.extraInputs || []).map(id => {
+          const n = nodesInput.find(nd => nd.id === id)
+          return { nodeId: id, field: n?.fieldId || n?.name || '', pos: { x: n?.x || 0, y: n?.y || 0 } }
+        }),
       }
     })
   }
@@ -446,15 +518,6 @@ export default function FieldMappingStep() {
   useEffect(() => {
     actions.setMappings(buildMappingsList(nodes, edges))
   }, [edges])
-
-  const saveMappings = () => {
-    const mappingsList = buildMappingsList(nodes, edges)
-
-    // Save to wizard state
-    actions.setMappings(mappingsList)
-    setSuccessModal(mappingsList.length)
-    setTimeout(() => setSuccessModal(null), 2500)
-  }
 
   const clearCanvas = () => {
     if (confirm('Clear all nodes and mappings?')) {
@@ -644,6 +707,41 @@ export default function FieldMappingStep() {
     const dx = Math.max(Math.abs(x2 - x1) * 0.55, 50)
     return `M ${x1},${y1} C ${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`
   }
+
+  const resetTransformerModal = () => {
+    setAddTransformerModal(null)
+    setTransformerSearch('')
+    setSelectedTf(null)
+    setTfPropValues({})
+    setTfInputType('any')
+    setTfOutputType('any')
+  }
+
+  const openTransformerModal = (edge, mode = 'replace') => {
+    const liveEdge = edges.find(e => e.from === edge?.from && e.to === edge?.to) || edge
+    setAddTransformerModal({ edge: liveEdge, mode })
+    setTransformerSearch('')
+
+    if (liveEdge?.transformer && liveEdge.transformer !== 'none') {
+      const transformer = transformers.find(t => t._id === liveEdge.transformer) || null
+      const defaults = {}
+      if (transformer) {
+        getPropsSchema(transformers, transformer._id).forEach(p => { defaults[p.key] = p.default })
+      }
+      setSelectedTf(transformer)
+      setTfPropValues({ ...defaults, ...(liveEdge.transformerProps || {}) })
+      setTfInputType(liveEdge.transformerInputType || 'any')
+      setTfOutputType(liveEdge.transformerOutputType || 'any')
+      return
+    }
+
+    setSelectedTf(null)
+    setTfPropValues({})
+    setTfInputType('any')
+    setTfOutputType('any')
+  }
+
+  tfBoxesRef.current = []
 
   return (
     <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', flex: 1, background: 'var(--bg)', height: '100%' }}>
@@ -907,36 +1005,48 @@ export default function FieldMappingStep() {
                 const transformer = transformers.find(t => t._id === edge.transformer)
                 const tfWidth = 140
                 const tfHeight = 55
-                
+
+                // Register bounding box for multi-input drop detection
+                if (transformer && transformer._id) {
+                  tfBoxesRef.current.push({
+                    edgeIdx: idx,
+                    x: midX - tfWidth / 2,
+                    y: midY - tfHeight / 2,
+                    w: tfWidth,
+                    h: tfHeight,
+                  })
+                }
+
                 return (
                   <g key={idx} style={{ cursor: 'pointer' }}>
                     <path d={d} stroke="#4f6ef7" strokeWidth="7" fill="none" opacity="0.12" />
                     <path d={d} stroke="#4f6ef7" strokeWidth="2.5" fill="none" markerEnd="url(#arr)" style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
                     
                     {/* Transformer Node - using foreignObject for field-style component */}
-                    {transformer && transformer._id && (
-                      <foreignObject
-                        x={midX - tfWidth / 2} 
-                        y={midY - tfHeight / 2} 
-                        width={tfWidth} 
-                        height={tfHeight}
-                        style={{ pointerEvents: 'auto' }}
-                      >
-                        <div
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            e.preventDefault()
-                            setCurrentEdge(edge)
-                            setTransformerSearch('')
-                            setAddTransformerModal({ edge, mode: 'replace' })
-                          }}
-                          onContextMenu={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            setCurrentEdge(edge)
-                            setPlusCtxMenu({ x: e.clientX, y: e.clientY, edge, mode: 'replace' })
-                          }}
-                          style={{
+                     {transformer && transformer._id && (
+                       <foreignObject
+                         x={midX - tfWidth / 2}
+                         y={midY - tfHeight / 2}
+                         width={tfWidth}
+                         height={tfHeight}
+                         data-edge-idx={idx}
+                         style={{ pointerEvents: 'auto' }}
+                       >
+                         <div
+                           onClick={(e) => {
+                             e.stopPropagation()
+                             e.preventDefault()
+                             setCurrentEdge(edge)
+                             openTransformerModal(edge, 'replace')
+                           }}
+                           onContextMenu={(e) => {
+                             e.preventDefault()
+                             e.stopPropagation()
+                             setCurrentEdge(edge)
+                             setPlusCtxMenu({ x: e.clientX, y: e.clientY, edge, mode: 'replace' })
+                           }}
+                           className={transformer?.isMultipleInput ? 'tf-multi-input-node' : ''}
+                           style={{
                             width: '100%',
                             height: '100%',
                             background: 'var(--surf2)',
@@ -1005,7 +1115,7 @@ export default function FieldMappingStep() {
                             }}>
                               {transformer?.name}
                             </div>
-                            <div style={{
+                             <div style={{
                               fontSize: '8px',
                               fontWeight: 600,
                               color: 'var(--muted)',
@@ -1013,6 +1123,27 @@ export default function FieldMappingStep() {
                             }}>
                               Transformer
                             </div>
+                            {/* Extra inputs badge */}
+                            {(edge.extraInputs?.length > 0) && (
+                              <div style={{
+                                fontSize: '8px', fontWeight: 700,
+                                color: 'var(--success)',
+                                display: 'flex', alignItems: 'center', gap: '2px',
+                              }}>
+                                <span>⇉</span>
+                                <span>{edge.extraInputs.length + 1} inputs</span>
+                              </div>
+                            )}
+                            {/* Drop hint for multi-input transformers with no extra inputs yet */}
+                            {transformer?.isMultipleInput && !edge.extraInputs?.length && (
+                              <div style={{
+                                fontSize: '8px', fontWeight: 600,
+                                color: 'rgba(79,110,247,0.6)',
+                                fontStyle: 'italic',
+                              }}>
+                                + drop src here
+                              </div>
+                            )}
                           </div>
                         </div>
                       </foreignObject>
@@ -1024,8 +1155,7 @@ export default function FieldMappingStep() {
                         onClick={(e) => {
                           e.stopPropagation()
                           setCurrentEdge(edge)
-                          setTransformerSearch('')
-                          setAddTransformerModal({ edge, mode: 'replace' })
+                          openTransformerModal(edge, 'replace')
                         }}
                         onContextMenu={(e) => {
                           e.preventDefault()
@@ -1051,6 +1181,23 @@ export default function FieldMappingStep() {
                         </text>
                       </g>
                     )}
+                    {/* Extra input lines — additional source nodes feeding the transformer */}
+                    {transformer && edge.extraInputs?.map((extraSrcId) => {
+                      const extraSrc = nodes.find(n => n.id === extraSrcId)
+                      if (!extraSrc) return null
+                      const ex1 = extraSrc.x + 172
+                      const ey1 = extraSrc.y + 29
+                      const ex2 = midX - tfWidth / 2
+                      const ed = bezier(ex1, ey1, ex2, midY)
+                      return (
+                        <g key={extraSrcId}>
+                          {/* Glow — matches primary line */}
+                          <path d={ed} stroke="#4f6ef7" strokeWidth="7" fill="none" opacity="0.12" />
+                          {/* Solid line with arrow — matches primary line */}
+                          <path d={ed} stroke="#4f6ef7" strokeWidth="2.5" fill="none" markerEnd="url(#arr)" style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
+                        </g>
+                      )
+                    })}
                   </g>
                 )
               })}
@@ -1264,7 +1411,7 @@ export default function FieldMappingStep() {
                         }}
                         onMouseEnter={(e) => { 
                           e.currentTarget.style.transform = 'translateY(-50%) scale(1.4)'
-                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(79,110,247,0.2)' 
+                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(79, 110, 247, 0.2)'
                         }}
                         onMouseLeave={(e) => { 
                           e.currentTarget.style.transform = 'translateY(-50%)'
@@ -1444,321 +1591,127 @@ export default function FieldMappingStep() {
       </div>
 
       {/* Plus circle right-click context menu */}
-      {plusCtxMenu && (
-        <div
-          style={{
-            position: 'fixed',
-            left: plusCtxMenu.x,
-            top: plusCtxMenu.y,
-            background: 'var(--surf)',
-            border: '1px solid var(--border)',
-            borderRadius: '10px',
-            boxShadow: '0 8px 28px rgba(0,0,0,0.18)',
-            zIndex: 1001,
-            minWidth: '190px',
-            animation: 'ctxIn 0.15s ease',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            Connection
-          </div>
-          <div
-            style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
-            onClick={() => {
-              const menu = plusCtxMenu
-              setPlusCtxMenu(null)
-              setTransformerSearch('')
-              if (menu?.edge) {
-                setAddTransformerModal({ edge: menu.edge, mode: menu.mode })
-              }
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(79,110,247,0.10)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-          >
-            <span style={{ fontSize: '16px' }}>⚙</span>
-            <span>Add Transformer</span>
-          </div>
-          <div style={{ borderTop: '1px solid var(--border)' }}>
-            <div
-              style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
-              onClick={() => {
-                removeEdge(plusCtxMenu.edge)
-                setPlusCtxMenu(null)
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-            >
-              <span style={{ fontSize: '16px' }}>🗑</span>
-              <span>Delete Connection</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Transformer Modal (with search + properties table) */}
-      {addTransformerModal && (() => {
-        const filtered = transformers.filter(t =>
-          (t.name.toLowerCase().includes(transformerSearch.toLowerCase()) ||
-           t._id.toLowerCase().includes(transformerSearch.toLowerCase()))
-        )
-        const schema = selectedTf ? getPropsSchema(transformers, selectedTf._id) : []
-        const hasProps = schema.length > 0
-
-        const handleSelectTf = (t) => {
-          setSelectedTf(t)
-          // Initialize prop values to defaults
-          const defaults = {}
-          getPropsSchema(transformers, t._id).forEach(p => { defaults[p.key] = p.default })
-          setTfPropValues(defaults)
-        }
-
-        const handleApply = () => {
-          setEdgeTransformer(addTransformerModal.edge, selectedTf._id)
-          // Persist custom props onto the edge
-          setEdges(prev => prev.map(e =>
-            (e.from === addTransformerModal.edge.from && e.to === addTransformerModal.edge.to)
-              ? { ...e, transformerProps: { ...tfPropValues } }
-              : e
-          ))
-          setAddTransformerModal(null)
-          setTransformerSearch('')
-          setSelectedTf(null)
-          setTfPropValues({})
-        }
+      {plusCtxMenu && (() => {
+        const liveEdge = edges.find(e => e.from === plusCtxMenu.edge?.from && e.to === plusCtxMenu.edge?.to) || plusCtxMenu.edge
+        const hasTransformer = !!(liveEdge?.transformer && liveEdge.transformer !== 'none')
 
         return (
-          <>
+          <div
+            style={{
+              position: 'fixed',
+              left: plusCtxMenu.x,
+              top: Math.min(plusCtxMenu.y, window.innerHeight - 320),
+              background: 'var(--surf)',
+              border: '1px solid var(--border)',
+              borderRadius: '10px',
+              boxShadow: '0 8px 28px rgba(0,0,0,0.18)',
+              zIndex: 1001,
+              minWidth: '200px',
+              maxHeight: '400px',
+              overflowY: 'auto',
+              animation: 'ctxIn 0.15s ease',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+              Connection
+            </div>
+
             <div
-              style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1099 }}
-              onClick={() => { setAddTransformerModal(null); setSelectedTf(null); setTfPropValues({}) }}
-            />
-            <div
-              style={{
-                position: 'fixed',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                background: 'var(--surf)',
-                border: '1px solid var(--border)',
-                borderRadius: '12px',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-                zIndex: 1100,
-                width: selectedTf && hasProps ? '680px' : '380px',
-                maxHeight: '600px',
-                display: 'flex',
-                flexDirection: 'column',
-                animation: 'scaleIn 0.22s ease',
-                transition: 'width 0.22s ease',
+              style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
+              onClick={() => {
+                setPlusCtxMenu(null)
+                openTransformerModal(liveEdge, hasTransformer ? 'replace' : 'add')
               }}
-              onClick={(e) => e.stopPropagation()}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(79,110,247,0.10)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
             >
-              {/* Header */}
-              <div style={{ background: 'var(--accent)', padding: '16px 18px', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                <span style={{ fontSize: '20px' }}>⚙</span>
-                <span style={{ fontSize: '15px', fontWeight: 700, color: '#fff', flex: 1 }}>
-                  {selectedTf ? `${selectedTf.name} — Properties` : 'Add Transformer'}
-                </span>
-                {selectedTf && (
-                  <button
-                    onClick={() => { setSelectedTf(null); setTfPropValues({}) }}
-                    style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', marginRight: '4px' }}
-                  >← Back</button>
-                )}
-                <button
-                  onClick={() => { setAddTransformerModal(null); setSelectedTf(null); setTfPropValues({}) }}
-                  style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', width: '26px', height: '26px', cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >×</button>
+              <span style={{ fontSize: '16px' }}>⚙</span>
+              <span>{hasTransformer ? 'Replace Transformer' : 'Add Transformer'}</span>
+            </div>
+
+            {hasTransformer && (
+              <div
+                style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s', borderTop: '1px solid var(--border)' }}
+                onClick={() => {
+                  setPlusCtxMenu(null)
+                  openTransformerModal(liveEdge, 'edit')
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(79,110,247,0.10)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <span style={{ fontSize: '16px' }}>✏️</span>
+                <span>Edit Transformer</span>
               </div>
+            )}
 
-              {/* Body: two-panel layout when transformer selected with props, else just list */}
-              <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-
-                {/* LEFT: list panel */}
-                <div style={{
-                  width: selectedTf && hasProps ? '260px' : '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  borderRight: selectedTf && hasProps ? '1px solid var(--border)' : 'none',
-                  flexShrink: 0,
-                }}>
-                  {/* Search input */}
-                  <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-                    <input
-                      autoFocus
-                      type="text"
-                      placeholder="Search transformers..."
-                      value={transformerSearch}
-                      onChange={(e) => setTransformerSearch(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        border: '1.5px solid var(--accent)',
-                        borderRadius: '7px',
-                        background: 'var(--surf2)',
-                        color: 'var(--text)',
-                        fontSize: '13px',
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                  </div>
-
-                  {/* Transformer list */}
-                  <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
-                    {filtered.length === 0 && (
-                      <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>
-                        No transformers found
-                      </div>
-                    )}
-                    {filtered.map((t) => {
-                      const isSelected = selectedTf?._id === t._id
-                      const propCount = getPropsSchema(transformers, t._id).length
-                      return (
-                        <div
-                          key={t._id}
-                          onClick={() => handleSelectTf(t)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            padding: '9px 10px',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            transition: 'background 0.15s',
-                            marginBottom: '2px',
-                            background: isSelected ? 'rgba(79,110,247,0.18)' : 'transparent',
-                            border: isSelected ? '1.5px solid rgba(79,110,247,0.5)' : '1.5px solid transparent',
-                          }}
-                          onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(79,110,247,0.09)' }}
-                          onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
-                        >
-                          <div style={{ width: '30px', height: '30px', borderRadius: '7px', background: isSelected ? 'rgba(79,110,247,0.25)' : 'rgba(79,110,247,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', flexShrink: 0 }}>
-                            {t.icon}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              {t.name}
-                              {t.isMultipleInput && (
-                                <span style={{
-                                  fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px',
-                                  background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)', color: 'var(--success)',
-                                  letterSpacing: '0.04em', textTransform: 'uppercase',
-                                }}>multi</span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                              {propCount > 0 ? `${propCount} propert${propCount === 1 ? 'y' : 'ies'}` : 'no properties'}
-                            </div>
-                          </div>
-                          {isSelected && <span style={{ color: '#4f6ef7', fontSize: '14px' }}>›</span>}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* RIGHT: properties panel */}
-                {selectedTf && (
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-                    {/* Selected transformer info */}
-                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(79,110,247,0.06)' }}>
-                      <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: 'rgba(79,110,247,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
-                        {selectedTf.icon}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>{selectedTf.name}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Configure properties below</div>
-                      </div>
-                    </div>
-
-                    {/* Properties table */}
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                        <thead>
-                          <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                            <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.07em', width: '36%' }}>Property</th>
-                            <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.07em', width: '40%' }}>Value</th>
-                            <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Description</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-
-                          {/* Configurable properties */}
-                          {schema.map((prop, pi) => (
-                            <tr key={prop.key} style={{ borderBottom: '1px solid rgba(71,85,105,0.4)', background: pi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
-                              <td style={{ padding: '8px 8px', fontWeight: 600, color: 'var(--text)', verticalAlign: 'middle' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                  {prop.label}
-                                  {prop.required && (
-                                    <span style={{
-                                      fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px',
-                                      background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)',
-                                      color: 'var(--danger)', letterSpacing: '0.04em', textTransform: 'uppercase',
-                                    }}>req</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td style={{ padding: '6px 8px', verticalAlign: 'middle' }}>
-                                {prop.type === 'select' ? (
-                                  <select
-                                    value={tfPropValues[prop.key] ?? prop.default}
-                                    onChange={(e) => setTfPropValues(v => ({ ...v, [prop.key]: e.target.value }))}
-                                    style={{ width: '100%', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '5px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', cursor: 'pointer' }}
-                                  >
-                                    {prop.options.map(o => <option key={o} value={o}>{o}</option>)}
-                                  </select>
-                                ) : (
-                                  <input
-                                    type={prop.type === 'number' ? 'number' : 'text'}
-                                    value={tfPropValues[prop.key] ?? prop.default}
-                                    onChange={(e) => setTfPropValues(v => ({ ...v, [prop.key]: e.target.value }))}
-                                    placeholder={String(prop.default)}
-                                    style={{ width: '100%', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '5px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', boxSizing: 'border-box' }}
-                                  />
-                                )}
-                              </td>
-                              <td style={{ padding: '8px 8px', color: 'var(--muted)', fontSize: '11px', verticalAlign: 'middle', lineHeight: '1.4' }}>
-                                {prop.description}
-                              </td>
-                            </tr>
-                          ))}
-
-                          {/* If no configurable props, show a note */}
-                          {!hasProps && (
-                            <tr>
-                              <td colSpan={3} style={{ padding: '14px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px', fontStyle: 'italic' }}>
-                                No additional configurable properties
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
+            {hasTransformer && (
+              <div
+                style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
+                onClick={() => {
+                  setEdges(prev => prev.map(e =>
+                    (e.from === liveEdge.from && e.to === liveEdge.to)
+                      ? { ...e, transformer: 'none', extraInputs: [], transformerProps: {} }
+                      : e
+                  ))
+                  setPlusCtxMenu(null)
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <span style={{ fontSize: '16px' }}>✕</span>
+                <span>Remove Transformer</span>
               </div>
+            )}
 
-              {/* Footer */}
-              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg)', borderRadius: '0 0 12px 12px', display: 'flex', justifyContent: 'flex-end', gap: '8px', flexShrink: 0 }}>
-                <button
-                  onClick={() => { setAddTransformerModal(null); setSelectedTf(null); setTfPropValues({}) }}
-                  style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
-                >
-                  Cancel
-                </button>
-                {selectedTf && (
-                  <button
-                    onClick={handleApply}
-                    style={{ padding: '7px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
-                  >
-                    ✓ Apply {selectedTf.name}
-                  </button>
-                )}
+            <div style={{ borderTop: '1px solid var(--border)' }}>
+              {liveEdge?.extraInputs?.length > 0 && (
+                <>
+                  <div style={{ padding: '6px 12px 2px', fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                    Extra Inputs
+                  </div>
+                  {liveEdge.extraInputs.map(extraId => {
+                    const extraNode = nodes.find(n => n.id === extraId)
+                    return (
+                      <div
+                        key={extraId}
+                        style={{ padding: '8px 14px', cursor: 'pointer', fontSize: '12px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
+                        onClick={() => {
+                          setEdges(prev => prev.map(e =>
+                            (e.from === liveEdge.from && e.to === liveEdge.to)
+                              ? { ...e, extraInputs: (e.extraInputs || []).filter(id => id !== extraId) }
+                              : e
+                          ))
+                          setPlusCtxMenu(null)
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                      >
+                        <span style={{ fontSize: '14px' }}>✕</span>
+                        <span>Remove "{extraNode?.name || extraId}"</span>
+                      </div>
+                    )
+                  })}
+                  <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+                </>
+              )}
+
+              <div
+                style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
+                onClick={() => {
+                  removeEdge(liveEdge)
+                  setPlusCtxMenu(null)
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <span style={{ fontSize: '16px' }}>🗑</span>
+                <span>Delete Connection</span>
               </div>
             </div>
-          </>
-        )})()}
+          </div>
+        )
+      })()}
 
       {/* Transformer menu (existing transformer square click) */}
       {transformerMenu && currentEdge && (
@@ -1829,14 +1782,7 @@ export default function FieldMappingStep() {
                     gap: '6px',
                   }}
                   onClick={() => {
-                    setEditingTransformer({
-                      edgeId: edges.indexOf(currentEdge),
-                      edge: currentEdge,
-                      transformer: transformers.find(t => t._id === currentEdge.transformer),
-                      transformerInputType: currentEdge.transformerInputType || 'any',
-                      transformerOutputType: currentEdge.transformerOutputType || 'any',
-                      transformerProps: currentEdge.transformerProps || {},
-                    })
+                    openTransformerModal(currentEdge, 'edit')
                     setTransformerMenu(null)
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.1)' }}
@@ -1859,7 +1805,7 @@ export default function FieldMappingStep() {
               onClick={() => {
                 removeEdge(currentEdge)
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.1)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)' }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
             >
               Delete Connection
@@ -1868,459 +1814,292 @@ export default function FieldMappingStep() {
         </div>
       )}
 
-      {/* Transformer Edit Modal */}
-      {editingTransformer && (
-        <>
-          <div 
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0,0,0,0.5)',
-              zIndex: 1099,
-            }}
-            onClick={() => setEditingTransformer(null)}
-          />
-          <div 
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: 'var(--surf)',
-              border: '1px solid var(--border)',
-              borderRadius: '12px',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-              zIndex: 1100,
-              width: '90%',
-              maxWidth: '420px',
-              animation: 'scaleIn 0.3s ease',
-              overflow: 'auto',
-              maxHeight: '80vh',
-            }}
-          >
-            {/* Header */}
-            <div style={{
-              background: 'var(--accent)',
-              padding: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-            }}>
-              <div style={{ fontSize: '24px' }}>⚙</div>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff' }}>Edit Transformer</h3>
-            </div>
+      {/* Add Transformer Modal (with search + properties table) */}
+      {addTransformerModal && (() => {
+        const currentModalEdge = edges.find(e => e.from === addTransformerModal.edge?.from && e.to === addTransformerModal.edge?.to) || addTransformerModal.edge
+        const hadAssignedTransformer = !!(currentModalEdge?.transformer && currentModalEdge.transformer !== 'none')
+        const filtered = transformers.filter(t =>
+          (t.name.toLowerCase().includes(transformerSearch.toLowerCase()) ||
+           t._id.toLowerCase().includes(transformerSearch.toLowerCase()))
+        )
+        const schema = selectedTf ? getPropsSchema(transformers, selectedTf._id) : []
+        const hasProps = schema.length > 0
 
-            {/* Body */}
-            <div style={{
-              padding: '20px',
-            }}>
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--text)',
-                  marginBottom: '8px',
-                }}>
-                  Transformer
-                </label>
-                <div style={{
-                  padding: '10px 12px',
-                  background: 'var(--surf2)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  color: 'var(--text)',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                }}>
-                  {editingTransformer.transformer?.name}
+        const handleSelectTf = (t) => {
+          setSelectedTf(t)
+          const defaults = {}
+          getPropsSchema(transformers, t._id).forEach(p => { defaults[p.key] = p.default })
+          const keepExisting = currentModalEdge?.transformer === t._id ? (currentModalEdge.transformerProps || {}) : {}
+          setTfPropValues({ ...defaults, ...keepExisting })
+          setTfInputType(currentModalEdge?.transformerInputType || 'any')
+          setTfOutputType(currentModalEdge?.transformerOutputType || 'any')
+        }
+
+        const handleApply = () => {
+          setEdges(prev => prev.map(e => {
+            if (e.from !== currentModalEdge.from || e.to !== currentModalEdge.to) return e
+            return {
+              ...e,
+              transformer: selectedTf._id,
+              transformerProps: { ...tfPropValues },
+              extraInputs: selectedTf.isMultipleInput ? (e.extraInputs || []) : [],
+              transformerInputType: tfInputType || 'any',
+              transformerOutputType: tfOutputType || 'any',
+            }
+          }))
+          resetTransformerModal()
+        }
+
+        return (
+          <>
+            <div
+              style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1099 }}
+              onClick={resetTransformerModal}
+            />
+            <div
+              style={{
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: 'var(--surf)',
+                border: '1px solid var(--border)',
+                borderRadius: '12px',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                zIndex: 1100,
+                width: selectedTf && hasProps ? '680px' : '380px',
+                maxHeight: '600px',
+                display: 'flex',
+                flexDirection: 'column',
+                animation: 'scaleIn 0.22s ease',
+                transition: 'width 0.22s ease',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ background: 'var(--accent)', padding: '16px 18px', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                <span style={{ fontSize: '20px' }}>⚙</span>
+                <span style={{ fontSize: '15px', fontWeight: 700, color: '#fff', flex: 1 }}>
+                  {selectedTf ? `${selectedTf.name} — Properties` : (hadAssignedTransformer ? 'Replace Transformer' : 'Add Transformer')}
+                </span>
+                {selectedTf && (
+                  <button
+                    onClick={() => { setSelectedTf(null); setTfPropValues({}) }}
+                    style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', marginRight: '4px' }}
+                  >← Back</button>
+                )}
+                <button
+                  onClick={resetTransformerModal}
+                  style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', width: '26px', height: '26px', cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >×</button>
+              </div>
+
+              <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+                <div style={{ width: selectedTf && hasProps ? '260px' : '100%', display: 'flex', flexDirection: 'column', borderRight: selectedTf && hasProps ? '1px solid var(--border)' : 'none', flexShrink: 0 }}>
+                  <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="Search transformers..."
+                      value={transformerSearch}
+                      onChange={(e) => setTransformerSearch(e.target.value)}
+                      style={{ width: '100%', padding: '9px 12px', border: '1.5px solid var(--accent)', borderRadius: '7px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+                    {filtered.length === 0 && (
+                      <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>No transformers found</div>
+                    )}
+                    {filtered.map((t) => {
+                      const isSelected = selectedTf?._id === t._id
+                      const propCount = getPropsSchema(transformers, t._id).length
+                      return (
+                        <div
+                          key={t._id}
+                          onClick={() => handleSelectTf(t)}
+                          style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.15s', marginBottom: '2px', background: isSelected ? 'rgba(79,110,247,0.18)' : 'transparent', border: isSelected ? '1.5px solid rgba(79,110,247,0.5)' : '1.5px solid transparent' }}
+                          onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(79,110,247,0.09)' }}
+                          onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                        >
+                          <div style={{ width: '30px', height: '30px', borderRadius: '7px', background: isSelected ? 'rgba(79,110,247,0.25)' : 'rgba(79,110,247,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', flexShrink: 0 }}>{t.icon}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {t.name}
+                              {t.isMultipleInput && <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)', color: 'var(--success)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>multi</span>}
+                            </div>
+                            <div style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              {propCount > 0 ? `${propCount} propert${propCount === 1 ? 'y' : 'ies'}` : 'no properties'}
+                            </div>
+                          </div>
+                          {isSelected && <span style={{ color: '#4f6ef7', fontSize: '14px' }}>›</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {selectedTf && (
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(79,110,247,0.06)' }}>
+                      <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: 'rgba(79,110,247,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>{selectedTf.icon}</div>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>{selectedTf.name}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Configure types and properties below</div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', padding: '12px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+                      <div>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Input Type</div>
+                        <select value={tfInputType} onChange={(e) => setTfInputType(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', cursor: 'pointer' }}>
+                          <option value="any">⊕ Any</option>
+                          <option value="string">" String</option>
+                          <option value="number"># Number</option>
+                          <option value="boolean">✓ Boolean</option>
+                          <option value="date">📅 Date</option>
+                          <option value="array">[] Array</option>
+                          <option value="object">{`{}`} Object</option>
+                          <option value="null">∅ Null</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Output Type</div>
+                        <select value={tfOutputType} onChange={(e) => setTfOutputType(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', cursor: 'pointer' }}>
+                          <option value="any">⊕ Any</option>
+                          <option value="string">" String</option>
+                          <option value="number"># Number</option>
+                          <option value="boolean">✓ Boolean</option>
+                          <option value="date">📅 Date</option>
+                          <option value="array">[] Array</option>
+                          <option value="object">{`{}`} Object</option>
+                          <option value="null">∅ Null</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                            <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.07em', width: '36%' }}>Property</th>
+                            <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.07em', width: '40%' }}>Value</th>
+                            <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {schema.map((prop, pi) => (
+                            <tr key={prop.key} style={{ borderBottom: '1px solid rgba(71,85,105,0.4)', background: pi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                              <td style={{ padding: '8px 8px', fontWeight: 600, color: 'var(--text)', verticalAlign: 'middle' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                  {prop.label}
+                                  {prop.required && <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--danger)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>req</span>}
+                                </div>
+                              </td>
+                              <td style={{ padding: '6px 8px', verticalAlign: 'middle' }}>
+                                {prop.type === 'select' ? (
+                                  <select value={tfPropValues[prop.key] ?? prop.default} onChange={(e) => setTfPropValues(v => ({ ...v, [prop.key]: e.target.value }))} style={{ width: '100%', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '5px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', cursor: 'pointer' }}>
+                                    {prop.options.map(o => <option key={o} value={o}>{o}</option>)}
+                                  </select>
+                                ) : (
+                                  <input type={prop.type === 'number' ? 'number' : 'text'} value={tfPropValues[prop.key] ?? prop.default} onChange={(e) => setTfPropValues(v => ({ ...v, [prop.key]: e.target.value }))} placeholder={String(prop.default)} style={{ width: '100%', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '5px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', boxSizing: 'border-box' }} />
+                                )}
+                              </td>
+                              <td style={{ padding: '8px 8px', color: 'var(--muted)', fontSize: '11px', verticalAlign: 'middle', lineHeight: '1.4' }}>{prop.description}</td>
+                            </tr>
+                          ))}
+                          {!hasProps && (
+                            <tr>
+                              <td colSpan={3} style={{ padding: '14px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px', fontStyle: 'italic' }}>No additional configurable properties</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg)', borderRadius: '0 0 12px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                <div>
+                  {hadAssignedTransformer && (
+                    <button
+                      onClick={() => {
+                        setEdges(prev => prev.map(e =>
+                          (e.from === currentModalEdge.from && e.to === currentModalEdge.to)
+                            ? { ...e, transformer: 'none', extraInputs: [], transformerProps: {}, transformerInputType: undefined, transformerOutputType: undefined }
+                            : e
+                        ))
+                        resetTransformerModal()
+                      }}
+                      style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
+                    >
+                      ✕ Remove Transformer
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={resetTransformerModal} style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>
+                    Cancel
+                  </button>
+                  {selectedTf && (
+                    <button onClick={handleApply} style={{ padding: '7px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>
+                      ✓ {hadAssignedTransformer ? 'Save' : 'Apply'} {selectedTf.name}
+                    </button>
+                  )}
                 </div>
               </div>
-
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--text)',
-                  marginBottom: '8px',
-                }}>
-                  Input Type
-                </label>
-                <select
-                  value={editingTransformer.transformerInputType || 'any'}
-                  onChange={(e) => setEditingTransformer({
-                    ...editingTransformer,
-                    transformerInputType: e.target.value,
-                  })}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    background: 'var(--surf2)',
-                    color: 'var(--text)',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="any">⊕ Any</option>
-                  <option value="string">" String</option>
-                  <option value="number"># Number</option>
-                  <option value="boolean">✓ Boolean</option>
-                  <option value="date">📅 Date</option>
-                  <option value="array">[] Array</option>
-                  <option value="object">{} Object</option>
-                  <option value="null">∅ Null</option>
-                </select>
-              </div>
-
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--text)',
-                  marginBottom: '8px',
-                }}>
-                  Output Type
-                </label>
-                <select
-                  value={editingTransformer.transformerOutputType || 'any'}
-                  onChange={(e) => setEditingTransformer({
-                    ...editingTransformer,
-                    transformerOutputType: e.target.value,
-                  })}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    background: 'var(--surf2)',
-                    color: 'var(--text)',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="any">⊕ Any</option>
-                  <option value="string">" String</option>
-                  <option value="number"># Number</option>
-                  <option value="boolean">✓ Boolean</option>
-                  <option value="date">📅 Date</option>
-                  <option value="array">[] Array</option>
-                  <option value="object">{} Object</option>
-                  <option value="null">∅ Null</option>
-                </select>
-              </div>
-
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--text)',
-                  marginBottom: '8px',
-                }}>
-                  Additional Properties (JSON)
-                </label>
-                <textarea
-                  value={JSON.stringify(editingTransformer.transformerProps || {}, null, 2)}
-                  onChange={(e) => {
-                    try {
-                      const parsed = JSON.parse(e.target.value)
-                      setEditingTransformer({
-                        ...editingTransformer,
-                        transformerProps: parsed,
-                      })
-                    } catch (err) {
-                      // Invalid JSON, allow editing
-                    }
-                  }}
-                  placeholder="{}"
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    background: 'var(--bg)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    color: 'var(--text)',
-                    fontFamily: 'var(--mono)',
-                    minHeight: '80px',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
             </div>
-
-            {/* Footer */}
-            <div style={{
-              padding: '16px 20px',
-              borderTop: '1px solid var(--border)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '12px',
-              background: 'var(--bg)',
-            }}>
-              <button
-                onClick={() => {
-                  // Remove transformer from edge
-                  if (editingTransformer.edgeId !== undefined) {
-                    setEdges(prev => prev.map((e, idx) => 
-                      idx === editingTransformer.edgeId
-                        ? { ...e, transformer: 'none', transformerInputType: undefined, transformerOutputType: undefined, transformerProps: undefined }
-                        : e
-                    ))
-                  }
-                  setEditingTransformer(null)
-                }}
-                style={{
-                  padding: '8px 16px',
-                  background: 'transparent',
-                  border: '1px solid var(--danger)',
-                  color: 'var(--danger)',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                }}
-              >
-                🗑 Remove
-              </button>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => setEditingTransformer(null)}
-                  style={{
-                    padding: '8px 16px',
-                    background: 'transparent',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text)',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    // Update the edge with transformer properties
-                    if (editingTransformer.edgeId !== undefined) {
-                      setEdges(prev => prev.map((e, idx) => 
-                        idx === editingTransformer.edgeId
-                          ? {
-                              ...e,
-                              transformerInputType: editingTransformer.transformerInputType,
-                              transformerOutputType: editingTransformer.transformerOutputType,
-                              transformerProps: editingTransformer.transformerProps || {},
-                            }
-                          : e
-                      ))
-                    }
-                    setEditingTransformer(null)
-                  }}
-                  style={{
-                    padding: '8px 16px',
-                    background: 'var(--accent)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                  }}
-                >
-                  Save Changes
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+          </>
+        )
+      })()}
 
       {/* Transformers Modal */}
       {transformerModal && (
         <>
-          <div 
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0,0,0,0.5)',
-              zIndex: 1099,
-            }}
+          <div
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1099 }}
             onClick={() => setTransformerModal(false)}
           />
-          <div 
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: 'var(--surf)',
-              border: '1px solid var(--border)',
-              borderRadius: '12px',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-              zIndex: 1100,
-              width: '90%',
-              maxWidth: '500px',
-              animation: 'scaleIn 0.3s ease',
-              overflow: 'auto',
-              maxHeight: '80vh',
-            }}
+          <div
+            style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', zIndex: 1100, width: '90%', maxWidth: '500px', maxHeight: '80vh', overflow: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div style={{
-              background: 'var(--accent)',
-              padding: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-            }}>
+            <div style={{ background: 'var(--accent)', padding: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ fontSize: '24px' }}>⚙</div>
               <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff', flex: 1 }}>Available Transformers</h3>
-              <div style={{
-                background: 'rgba(255,255,255,0.2)',
-                color: '#fff',
-                borderRadius: '50%',
-                width: '28px',
-                height: '28px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '13px',
-                fontWeight: 600,
-              }}>
-                {transformers.length}
-              </div>
+              <div style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600 }}>{transformers.length}</div>
             </div>
-
-            {/* Body */}
-            <div style={{
-              padding: '20px',
-            }}>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '12px',
-              }}>
+            <div style={{ padding: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 {transformers.map((transformer) => {
-                  // Count how many edges use this transformer
                   const usageCount = edges.filter(e => e.transformer === transformer._id).length
-
                   return (
                     <div
                       key={transformer._id}
-                      style={{
-                        padding: '14px',
-                        background: 'var(--surf2)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--accent)'
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(79,110,247,0.2)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--border)'
-                        e.currentTarget.style.boxShadow = 'none'
-                      }}
+                      style={{ padding: '14px', background: 'var(--surf2)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(79,110,247,0.2)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
                       onClick={() => {
-                        // If no current edge selected, show notification
                         if (!currentEdge) {
-                          alert('Please right-click on a field connection first')
+                          alert('Please select a connection first')
                           return
                         }
-                        setEdgeTransformer(currentEdge, transformer._id)
+                        openTransformerModal(currentEdge, 'replace')
                         setTransformerModal(false)
                       }}
                     >
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        marginBottom: '8px',
-                      }}>
-                        <div style={{
-                          fontSize: '18px',
-                          width: '28px',
-                          height: '28px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'rgba(79,110,247,0.1)',
-                          borderRadius: '6px',
-                        }}>
-                          {transformer.icon}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>
-                            {transformer.name}
-                          </div>
-                        </div>
-                        {usageCount > 0 && (
-                          <div style={{
-                            background: 'var(--accent)',
-                            color: 'white',
-                            borderRadius: '50%',
-                            width: '20px',
-                            height: '20px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '10px',
-                            fontWeight: 600,
-                          }}>
-                            {usageCount}
-                          </div>
-                        )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '18px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(79,110,247,0.1)', borderRadius: '6px' }}>{transformer.icon}</div>
+                        <div style={{ flex: 1 }}><div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>{transformer.name}</div></div>
+                        {usageCount > 0 && <div style={{ background: 'var(--accent)', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 600 }}>{usageCount}</div>}
                       </div>
-                      <p style={{
-                        fontSize: '11px',
-                        color: 'var(--muted)',
-                        margin: '8px 0 0 0',
-                      }}>
-                        {transformer.description || transformer.name}
-                      </p>
+                      <p style={{ fontSize: '11px', color: 'var(--muted)', margin: '8px 0 0 0' }}>{transformer.description || transformer.name}</p>
                     </div>
                   )
                 })}
               </div>
             </div>
-
-            {/* Footer */}
-            <div style={{
-              padding: '16px 20px',
-              borderTop: '1px solid var(--border)',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              background: 'var(--bg)',
-            }}>
-              <button
-                onClick={() => setTransformerModal(false)}
-                style={{
-                  padding: '8px 16px',
-                  background: 'var(--accent)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                }}
-              >
-                Close
-              </button>
+            <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', background: 'var(--bg)' }}>
+              <button onClick={() => setTransformerModal(false)} style={{ padding: '8px 16px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Close</button>
             </div>
           </div>
         </>
@@ -2329,231 +2108,42 @@ export default function FieldMappingStep() {
       {/* Field Properties Modal */}
       {fieldPropertiesModal && (
         <>
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.5)',
-            zIndex: 1100,
-            animation: 'fadeIn 0.2s ease',
-          }} onClick={() => setFieldPropertiesModal(null)} />
-          <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            background: 'var(--surf)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-            zIndex: 1101,
-            width: '90%',
-            maxWidth: '420px',
-            animation: 'modalIn 0.25s ease',
-          }}>
-            {/* Header */}
-            <div style={{
-              background: 'var(--accent)',
-              padding: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-            }}>
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1100 }} onClick={() => setFieldPropertiesModal(null)} />
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', zIndex: 1101, width: '90%', maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ background: 'var(--accent)', padding: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ fontSize: '20px' }}>{fieldPropertiesModal.emoji}</div>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
-                  Field Properties
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                  {fieldPropertiesModal.name}
-                </div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>Field Properties</div>
+                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.8)' }}>{fieldPropertiesModal.name}</div>
               </div>
             </div>
-
-            {/* Body */}
             <div style={{ padding: '20px' }}>
-              {/* Send to Saknay Toggle */}
-              <div style={{
-                marginBottom: '18px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <label style={{
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  color: 'var(--text)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}>
-                  <span>📤</span>
-                  <span>Send to Saknay</span>
-                </label>
-                <button
-                  onClick={() => {
-                    setFieldPropertiesModal({
-                      ...fieldPropertiesModal,
-                      sendToSaknay: !fieldPropertiesModal.sendToSaknay,
-                    })
-                  }}
-                  style={{
-                    padding: '6px 14px',
-                    background: fieldPropertiesModal.sendToSaknay ? 'var(--accent)' : 'var(--border)',
-                    color: fieldPropertiesModal.sendToSaknay ? 'white' : 'var(--muted)',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  {fieldPropertiesModal.sendToSaknay ? '✓ Yes' : '✕ No'}
-                </button>
+              <div style={{ marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📤</span><span>Send to Saknay</span></label>
+                <button onClick={() => setFieldPropertiesModal({ ...fieldPropertiesModal, sendToSaknay: !fieldPropertiesModal.sendToSaknay })} style={{ padding: '6px 14px', background: fieldPropertiesModal.sendToSaknay ? 'var(--accent)' : 'var(--border)', color: fieldPropertiesModal.sendToSaknay ? 'white' : 'var(--muted)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>{fieldPropertiesModal.sendToSaknay ? '✓ Yes' : '✕ No'}</button>
               </div>
-
-              {/* Send to GP Toggle */}
-              <div style={{
-                marginBottom: '18px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <label style={{
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  color: 'var(--text)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}>
-                  <span>📊</span>
-                  <span>Send to GP</span>
-                </label>
-                <button
-                  onClick={() => {
-                    setFieldPropertiesModal({
-                      ...fieldPropertiesModal,
-                      sendToGP: !fieldPropertiesModal.sendToGP,
-                    })
-                  }}
-                  style={{
-                    padding: '6px 14px',
-                    background: fieldPropertiesModal.sendToGP ? 'var(--accent)' : 'var(--border)',
-                    color: fieldPropertiesModal.sendToGP ? 'white' : 'var(--muted)',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  {fieldPropertiesModal.sendToGP ? '✓ Yes' : '✕ No'}
-                </button>
+              <div style={{ marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📊</span><span>Send to GP</span></label>
+                <button onClick={() => setFieldPropertiesModal({ ...fieldPropertiesModal, sendToGP: !fieldPropertiesModal.sendToGP })} style={{ padding: '6px 14px', background: fieldPropertiesModal.sendToGP ? 'var(--accent)' : 'var(--border)', color: fieldPropertiesModal.sendToGP ? 'white' : 'var(--muted)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>{fieldPropertiesModal.sendToGP ? '✓ Yes' : '✕ No'}</button>
               </div>
-
-              {/* Expression Input */}
-              <div style={{ marginBottom: '0' }}>
-                <label style={{
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  color: 'var(--text)',
-                  marginBottom: '8px',
-                  display: 'block',
-                }}>
-                  Expression
-                </label>
-                <textarea
-                  value={fieldPropertiesModal.expression || ''}
-                  onChange={(e) => {
-                    setFieldPropertiesModal({
-                      ...fieldPropertiesModal,
-                      expression: e.target.value,
-                    })
-                  }}
-                  placeholder="Enter custom expression..."
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    background: 'var(--bg)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    color: 'var(--text)',
-                    fontFamily: 'var(--ff-mono)',
-                    resize: 'vertical',
-                    minHeight: '80px',
-                    boxSizing: 'border-box',
-                  }}
-                />
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text)', marginBottom: '8px', display: 'block' }}>Expression</label>
+                <textarea value={fieldPropertiesModal.expression || ''} onChange={(e) => setFieldPropertiesModal({ ...fieldPropertiesModal, expression: e.target.value })} placeholder="Enter custom expression..." style={{ width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text)', fontFamily: 'var(--mono)', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }} />
               </div>
             </div>
-
-            {/* Footer */}
-            <div style={{
-              padding: '16px 20px',
-              borderTop: '1px solid var(--border)',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '12px',
-              background: 'var(--bg)',
-              borderRadius: '0 0 12px 12px',
-            }}>
-              <button
-                onClick={() => setFieldPropertiesModal(null)}
-                style={{
-                  padding: '8px 16px',
-                  background: 'transparent',
-                  color: 'var(--text)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  transition: 'all 0.15s',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.05)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-              >
-                Cancel
-              </button>
+            <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: 'var(--bg)', borderRadius: '0 0 12px 12px' }}>
+              <button onClick={() => setFieldPropertiesModal(null)} style={{ padding: '8px 16px', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Cancel</button>
               <button
                 onClick={() => {
-                  // Update the node with the new metadata
-                  setNodes(prevNodes =>
-                    prevNodes.map(n =>
-                      n.id === fieldPropertiesModal.id
-                        ? {
-                          ...n,
-                          sendToSaknay: fieldPropertiesModal.sendToSaknay,
-                          sendToGP: fieldPropertiesModal.sendToGP,
-                          expression: fieldPropertiesModal.expression,
-                        }
-                        : n
-                    )
-                  )
+                  setNodes(prevNodes => prevNodes.map(n =>
+                    n.id === fieldPropertiesModal.id
+                      ? { ...n, sendToSaknay: fieldPropertiesModal.sendToSaknay, sendToGP: fieldPropertiesModal.sendToGP, expression: fieldPropertiesModal.expression }
+                      : n
+                  ))
                   setFieldPropertiesModal(null)
                 }}
-                style={{
-                  padding: '8px 16px',
-                  background: 'var(--accent)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  transition: 'all 0.15s',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9' }}
-                onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
-              >
-                Save
-              </button>
+                style={{ padding: '8px 16px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
+              >Save</button>
             </div>
           </div>
         </>
