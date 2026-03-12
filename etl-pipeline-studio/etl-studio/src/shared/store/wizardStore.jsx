@@ -21,20 +21,22 @@ const initialState = {
 
   // Step 2 — Source Config
   source: {
-    sourceType:      'kafka',
-    kafkaEnv:        'prod',
-    kafkaTopic:      'source.products.raw',
-    kafkaKeys:       '',
-    kafkaKeyMode:    'include',
-    rmqIp:           '',
-    rmqPort:         '5672',
-    rmqUsername:     '',
-    rmqPassword:     '',
-    rmqQueue:        '',
-    rmqVhost:        '/',
-    format:          'JSON',
-    encoding:        'UTF-8',
-    csvDelimiter:    ',',
+    sourceType:           'kafka',
+    kafkaEnv:             'production',
+    kafkaTopic:           'source.products.raw',
+    kafkaKeys:            '',
+    kafkaKeyMode:         'include',
+    rmqIp:                '',
+    rmqPort:              '5672',
+    rmqUsername:          '',
+    rmqPassword:          '',
+    rmqQueue:             '',
+    rmqVhost:             '/',
+    format:               'JSON',
+    encoding:             'UTF-8',
+    csvDelimiter:         ',',
+    streamingContinuity:  'continuous',
+    recordsPerDay:        'millions',
   },
 
   // Step 3 — Source Upload
@@ -50,13 +52,14 @@ const initialState = {
 
   // Step 6 — Sink Config
   sink: {
-    sinkType:       'kafka',
-    sinkKafkaTopic: 'etl.products.v3',
-    shadow:         false,
-    shadowTopic:    '',
-    saknay:         false,
-    saknayTopic:    '',
-    asg:            false,
+    sinkType:        'kafka',
+    sinkKafkaTopic:  'etl.products.v3',
+    sinkKafkaEnv:    'production',
+    shadow:          false,
+    shadowTopic:     '',
+    saknay:          false,
+    saknayTopic:     '',
+    asg:             false,
   },
 }
 

@@ -14,10 +14,9 @@ function SourceConfigPanel({ type, state, u }) {
       <FormRow>
         <FormGroup label="Environment" required>
           <select value={state.kafkaEnv || ''} onChange={e => u('kafkaEnv', e.target.value)}>
-            <option value="">Select Environment</option>
-            <option value="prod">Production</option>
-            <option value="cap">Captive</option>
-            <option value="stage">Staging</option>
+            <option value="production">Production</option>
+            <option value="dev">Dev</option>
+            <option value="staging">Staging</option>
           </select>
         </FormGroup>
         <FormGroup label="Topic" required>
@@ -204,6 +203,31 @@ export default function SourceConfigStep() {
             })}
           </div>
           {src.sourceType && <SourceConfigPanel type={src.sourceType} state={src} u={u} />}
+        </Card>
+
+        <Card>
+          <CardTitle>📊 Data Stream Info</CardTitle>
+          <FormRow>
+            <FormGroup label="Streaming Continuity" required>
+              <select value={src.streamingContinuity || 'continuous'} onChange={e => u('streamingContinuity', e.target.value)}>
+                <option value="once">Once</option>
+                <option value="every-hour">Every Hour</option>
+                <option value="every-few-hours">Every Few Hours</option>
+                <option value="every-day">Once a Day</option>
+                <option value="continuous">Continuous</option>
+              </select>
+            </FormGroup>
+            <FormGroup label="Avg Records Per Day" required>
+              <select value={src.recordsPerDay || 'millions'} onChange={e => u('recordsPerDay', e.target.value)}>
+                <option value="hundreds">Hundreds</option>
+                <option value="thousands">Thousands</option>
+                <option value="hun-thousands">Hundred of Thousands</option>
+                <option value="millions">A Few Millions</option>
+                <option value="tens-millions">Tens of Millions</option>
+                <option value="hundreds-millions">Hundreds of Millions</option>
+              </select>
+            </FormGroup>
+          </FormRow>
         </Card>
 
         <Card>

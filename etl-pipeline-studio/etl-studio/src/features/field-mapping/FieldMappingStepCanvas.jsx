@@ -466,88 +466,20 @@ export default function FieldMappingStep() {
   const alignNodes = () => {
     const LEFT_X = 40
     const RIGHT_X = 650
-    const FALLBACK_GAP = 70
+    const GAP = 70
 
     setNodes(prev => {
       const sources = prev.filter(n => n.type === 'source').sort((a, b) => a.y - b.y)
       const targets = prev.filter(n => n.type === 'target').sort((a, b) => a.y - b.y)
-      if (sources.length === 0 && targets.length === 0) return prev
-
-      const sourceById = new Map(sources.map(n => [n.id, n]))
-      const targetById = new Map(targets.map(n => [n.id, n]))
-
-      const srcToTgts = new Map()
-      const tgtToSrcs = new Map()
-      edges.forEach(e => {
-        if (!sourceById.has(e.from) || !targetById.has(e.to)) return
-        if (!srcToTgts.has(e.from)) srcToTgts.set(e.from, new Set())
-        if (!tgtToSrcs.has(e.to)) tgtToSrcs.set(e.to, new Set())
-        srcToTgts.get(e.from).add(e.to)
-        tgtToSrcs.get(e.to).add(e.from)
-      })
-
-      // Only strict 1:1 links can be perfectly aligned without creating overlaps.
-      const uniquePairs = []
-      srcToTgts.forEach((tgtSet, srcId) => {
-        if (tgtSet.size !== 1) return
-        const tgtId = Array.from(tgtSet)[0]
-        if ((tgtToSrcs.get(tgtId)?.size || 0) !== 1) return
-        const src = sourceById.get(srcId)
-        const tgt = targetById.get(tgtId)
-        uniquePairs.push({ srcId, tgtId, avgY: ((src?.y || 0) + (tgt?.y || 0)) / 2 })
-      })
-      uniquePairs.sort((a, b) => a.avgY - b.avgY)
-
-      const totalRows = Math.max(sources.length, targets.length, uniquePairs.length, 1)
-      const allNodes = [...sources, ...targets]
-      const minY = Math.min(...allNodes.map(n => n.y))
-      const maxY = Math.max(...allNodes.map(n => n.y))
-      const gap = totalRows > 1 ? ((maxY - minY) / (totalRows - 1) || FALLBACK_GAP) : 0
-      const rowY = (rowIdx) => Math.round(minY + rowIdx * gap)
-
-      const sourceRowById = new Map()
-      const targetRowById = new Map()
-      const usedSourceRows = new Set()
-      const usedTargetRows = new Set()
-
-      let rowCursor = 0
-      const nextFreeRow = (used) => {
-        while (used.has(rowCursor)) rowCursor += 1
-        const row = rowCursor
-        rowCursor += 1
-        return row
-      }
-
-      uniquePairs.forEach(({ srcId, tgtId }) => {
-        const row = nextFreeRow(new Set([...usedSourceRows, ...usedTargetRows]))
-        sourceRowById.set(srcId, row)
-        targetRowById.set(tgtId, row)
-        usedSourceRows.add(row)
-        usedTargetRows.add(row)
-      })
-
-      sources.forEach(src => {
-        if (sourceRowById.has(src.id)) return
-        const row = nextFreeRow(usedSourceRows)
-        sourceRowById.set(src.id, row)
-        usedSourceRows.add(row)
-      })
-
-      targets.forEach(tgt => {
-        if (targetRowById.has(tgt.id)) return
-        const row = nextFreeRow(usedTargetRows)
-        targetRowById.set(tgt.id, row)
-        usedTargetRows.add(row)
-      })
 
       return prev.map(n => {
         if (n.type === 'source') {
-          const row = sourceRowById.get(n.id)
-          return { ...n, x: LEFT_X, y: row !== undefined ? rowY(row) : n.y }
+          const idx = sources.findIndex(s => s.id === n.id)
+          return { ...n, x: LEFT_X, y: 30 + idx * GAP }
         }
         if (n.type === 'target') {
-          const row = targetRowById.get(n.id)
-          return { ...n, x: RIGHT_X, y: row !== undefined ? rowY(row) : n.y }
+          const idx = targets.findIndex(t => t.id === n.id)
+          return { ...n, x: RIGHT_X, y: 30 + idx * GAP }
         }
         return n
       })
@@ -1279,6 +1211,64 @@ export default function FieldMappingStep() {
                       >
                         <span style={{ fontSize: '10px', lineHeight: 1 }}>⊘</span>
                         <span>Saknay</span>
+                      </div>
+                    )}
+
+                    {/* Send-to-Saknay enabled indicator */}
+                    {node.sendToSaknay === true && (
+                      <div
+                        title="Send to Saknay: Yes"
+                        style={{
+                          position: 'absolute',
+                          top: '4px',
+                          right: '20px',
+                          background: 'rgba(34,197,94,0.15)',
+                          border: '1px solid rgba(34,197,94,0.55)',
+                          borderRadius: '4px',
+                          padding: '1px 5px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          color: '#22c55e',
+                          letterSpacing: '0.04em',
+                          pointerEvents: 'none',
+                          userSelect: 'none',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <span style={{ fontSize: '10px', lineHeight: 1 }}>✓</span>
+                        <span>Saknay</span>
+                      </div>
+                    )}
+
+                    {/* Send-to-GP enabled indicator */}
+                    {node.sendToGP === true && (
+                      <div
+                        title="Send to GP: Yes"
+                        style={{
+                          position: 'absolute',
+                          top: node.sendToSaknay === true ? '24px' : '4px',
+                          right: '20px',
+                          background: 'rgba(79,110,247,0.15)',
+                          border: '1px solid rgba(79,110,247,0.55)',
+                          borderRadius: '4px',
+                          padding: '1px 5px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          color: '#4f6ef7',
+                          letterSpacing: '0.04em',
+                          pointerEvents: 'none',
+                          userSelect: 'none',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <span style={{ fontSize: '10px', lineHeight: 1 }}>✓</span>
+                        <span>GP</span>
                       </div>
                     )}
 
