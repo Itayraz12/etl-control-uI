@@ -171,6 +171,31 @@ describe('FieldMappingStep transformer modal regression', () => {
     })
   })
 
+  it('adds source and target fields to the canvas on double click without creating duplicates', async () => {
+    const user = userEvent.setup()
+
+    renderWithPersistedMappings([])
+
+    const sourceItem = await screen.findByTestId('source-list-item-price')
+    const targetItem = await screen.findByTestId('target-list-item-unitPrice')
+
+    await user.dblClick(sourceItem)
+    await user.dblClick(targetItem)
+
+    await waitFor(() => {
+      expect(document.querySelectorAll('[id^="nd-source-price-"]').length).toBe(1)
+      expect(document.querySelectorAll('[id^="nd-target-unitPrice-"]').length).toBe(1)
+    })
+
+    await user.dblClick(sourceItem)
+    await user.dblClick(targetItem)
+
+    await waitFor(() => {
+      expect(document.querySelectorAll('[id^="nd-source-price-"]').length).toBe(1)
+      expect(document.querySelectorAll('[id^="nd-target-unitPrice-"]').length).toBe(1)
+    })
+  })
+
   it('auto-aligns saved source and target nodes when entering the field mapping tab', async () => {
     renderWithPersistedState({
       srcPos: { x: 210, y: 190 },
@@ -181,6 +206,139 @@ describe('FieldMappingStep transformer modal regression', () => {
       expect(document.getElementById('nd-src-productName')).toHaveStyle({ left: '40px', top: '30px' })
       expect(document.getElementById('nd-tgt-name')).toHaveStyle({ left: '650px', top: '30px' })
     })
+  })
+
+  it('toggles the target Saknay badge and persists the updated target metadata', async () => {
+    renderWithPersistedState()
+
+    const saknayToggle = await screen.findByTestId('target-saknay-toggle-tgt-name')
+    expect(saknayToggle).toHaveAttribute('title', 'Send to Saknay: Yes')
+    expect(screen.queryByText('GP')).not.toBeInTheDocument()
+
+    fireEvent.click(saknayToggle)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('target-saknay-toggle-tgt-name')).toHaveAttribute('title', 'Send to Saknay: No')
+
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.mappings?.[0]?.tgtMetadata?.sendToSaknay).toBe(false)
+    })
+  })
+
+  it('shows an exp badge on target nodes only when the expression is not empty', async () => {
+    renderWithPersistedState({
+      tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: 'price * 1.2' },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('target-expression-badge-tgt-name')).toHaveTextContent('exp')
+      expect(document.getElementById('nd-tgt-name')).toHaveStyle({ height: '74px' })
+    })
+
+    expect(screen.queryByTestId('target-expression-badge-src-productName')).not.toBeInTheDocument()
+  })
+
+  it('wraps long field names in the side lists and on canvas nodes', async () => {
+    renderWithPersistedState({
+      tgt: 'unitPrice',
+      tgtNodeId: 'tgt-unitPrice',
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('target-list-name-unitPrice')).toHaveStyle({ whiteSpace: 'normal' })
+      expect(screen.getByTestId('target-list-name-unitPrice')).toHaveStyle({ overflowWrap: 'anywhere' })
+      expect(screen.getByTestId('canvas-node-name-tgt-unitPrice')).toHaveStyle({ whiteSpace: 'normal' })
+      expect(screen.getByTestId('canvas-node-name-tgt-unitPrice')).toHaveStyle({ overflowWrap: 'anywhere' })
+    })
+  })
+
+  it('does not show an exp badge when the target expression is empty or whitespace', async () => {
+    renderWithPersistedState({
+      tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: '   ' },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('target-saknay-toggle-tgt-name')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByTestId('target-expression-badge-tgt-name')).not.toBeInTheDocument()
+  })
+
+  it('does not open the context menu when right clicking a source node', async () => {
+    renderWithPersistedState()
+
+    const sourceNode = await waitFor(() => document.getElementById('nd-src-productName'))
+    fireEvent.contextMenu(sourceNode)
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('ctxmenu-saknay-toggle')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('ctxmenu-gp-toggle')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('ctxmenu-expression-input')).not.toBeInTheDocument()
+    })
+  })
+
+  it('suppresses right click on the empty canvas board without affecting connection menus', async () => {
+    renderWithPersistedState()
+
+    const edgesSvg = await waitFor(() => document.getElementById('edges-svg'))
+    const backgroundContextEvent = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    edgesSvg.dispatchEvent(backgroundContextEvent)
+
+    expect(backgroundContextEvent.defaultPrevented).toBe(true)
+
+    await waitFor(() => {
+      expect(screen.queryByText('Connection')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('ctxmenu-saknay-toggle')).not.toBeInTheDocument()
+    })
+
+    fireEvent.contextMenu(await screen.findByTestId('add-transformer-trigger-0'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Connection')).toBeInTheDocument()
+      expect(screen.getByText('Add Transformer')).toBeInTheDocument()
+    })
+  })
+
+  it('opens the target field context menu on right click and persists GP/expression edits', async () => {
+    const user = userEvent.setup()
+
+    renderWithPersistedState()
+
+    const targetNode = await waitFor(() => document.getElementById('nd-tgt-name'))
+    fireEvent.contextMenu(targetNode)
+
+    const saknayToggle = await screen.findByTestId('ctxmenu-saknay-toggle')
+    const gpToggle = await screen.findByTestId('ctxmenu-gp-toggle')
+    const expressionInput = await screen.findByTestId('ctxmenu-expression-input')
+
+    expect(saknayToggle).toBeChecked()
+    expect(gpToggle).toBeChecked()
+    expect(expressionInput).toHaveValue('')
+
+    await user.click(gpToggle)
+    await user.type(expressionInput, 'price * 1.2')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.mappings?.[0]?.tgtMetadata?.sendToGP).toBe(false)
+      expect(persisted.mappings?.[0]?.tgtMetadata?.expression).toBe('price * 1.2')
+    })
+  })
+
+  it('suppresses a second right click while the target context menu is already open', async () => {
+    renderWithPersistedState()
+
+    const targetNode = await waitFor(() => document.getElementById('nd-tgt-name'))
+    fireEvent.contextMenu(targetNode)
+
+    await screen.findByTestId('ctxmenu-saknay-toggle')
+
+    const backdrop = await screen.findByTestId('ctxmenu-backdrop')
+    const secondContextEvent = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    backdrop.dispatchEvent(secondContextEvent)
+
+    expect(secondContextEvent.defaultPrevented).toBe(true)
+    expect(screen.getByTestId('ctxmenu-saknay-toggle')).toBeInTheDocument()
   })
 
   it('keeps extra-input source fields when bulk source cleanup runs on a multi-input transformer mapping', async () => {
@@ -290,8 +448,8 @@ describe('FieldMappingStep transformer modal regression', () => {
 
     const pathData = Array.from(document.querySelectorAll('path')).map(path => path.getAttribute('d')).filter(Boolean)
 
-    expect(pathData.some(d => /^M 212,59 C .* 361,59$/.test(d))).toBe(true)
-    expect(pathData.some(d => /^M 501,59 C .* 650,59$/.test(d))).toBe(true)
+    expect(pathData.some(d => /^M 300,67 C .* 405,67$/.test(d))).toBe(true)
+    expect(pathData.some(d => /^M 545,67 C .* 650,67$/.test(d))).toBe(true)
   })
 
   it('reserves virtual target rows for extra multi-input sources during align', async () => {
@@ -337,11 +495,11 @@ describe('FieldMappingStep transformer modal regression', () => {
       expect(document.getElementById('nd-src-productName')).toHaveStyle({ top: '30px' })
       expect(document.getElementById('nd-tgt-name')).toHaveStyle({ top: '30px' })
 
-      expect(document.getElementById('nd-src-price-extra')).toHaveStyle({ top: '100px' })
-      expect(document.getElementById('nd-src-id-extra')).toHaveStyle({ top: '170px' })
+      expect(document.getElementById('nd-src-price-extra')).toHaveStyle({ top: '114px' })
+      expect(document.getElementById('nd-src-id-extra')).toHaveStyle({ top: '198px' })
 
-      expect(document.getElementById('nd-src-category')).toHaveStyle({ top: '240px' })
-      expect(document.getElementById('nd-tgt-id')).toHaveStyle({ top: '240px' })
+      expect(document.getElementById('nd-src-category')).toHaveStyle({ top: '282px' })
+      expect(document.getElementById('nd-tgt-id')).toHaveStyle({ top: '282px' })
     })
   })
 })

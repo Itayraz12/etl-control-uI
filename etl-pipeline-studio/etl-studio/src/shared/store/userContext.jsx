@@ -2,9 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { SESSION_TIMEOUTS_MS } from '../services/sessionConfig.js'
 import { clearPersistedWizardStateForUser, normalizeStorageUserId } from './wizardPersistence.js'
 import {
+  clearPersistedActiveUser,
+  readPersistedActiveUser,
   removePendingScopeReset,
   splitPendingScopeResetsByExpiry,
   upsertPendingScopeReset,
+  writePersistedActiveUser,
 } from './userSessionPersistence.js'
 
 const IDLE_LOGOUT_MS = SESSION_TIMEOUTS_MS.idleLogout
@@ -30,7 +33,7 @@ function normalizeUser(user) {
 }
 
 export function UserProvider({ children }) {
-  const [user, setUserState] = useState(null)
+  const [user, setUserState] = useState(() => normalizeUser(readPersistedActiveUser()))
   const idleLogoutTimerRef = useRef(null)
   const pendingResetTimersRef = useRef(new Map())
   const lastMouseMoveAtRef = useRef(0)
@@ -38,6 +41,15 @@ export function UserProvider({ children }) {
 
   useEffect(() => {
     userRef.current = user
+  }, [user])
+
+  useEffect(() => {
+    if (user?.userId) {
+      writePersistedActiveUser(user)
+      return
+    }
+
+    clearPersistedActiveUser()
   }, [user])
 
   const clearIdleLogoutTimer = useCallback(() => {

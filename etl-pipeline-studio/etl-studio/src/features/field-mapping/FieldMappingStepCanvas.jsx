@@ -27,6 +27,13 @@ function getConnectedNodeIds(edges = []) {
   )
 }
 
+const NODE_WIDTH = 260
+const NODE_HEIGHT = 74
+const NODE_HALF_WIDTH = NODE_WIDTH / 2
+const NODE_HALF_HEIGHT = NODE_HEIGHT / 2
+const NODE_ROW_GAP = 84
+const CANVAS_NODE_BOUND_HEIGHT = NODE_HEIGHT + 28
+
 export default function FieldMappingStep() {
   const { state, actions } = useWizard()
   const { transformers } = useConfig()
@@ -279,8 +286,8 @@ export default function FieldMappingStep() {
     const node = nodes.find(n => n.id === nodeId)
     if (!node) return
 
-    const fx = node.type === 'source' ? node.x + 172 : node.x
-    const fy = node.y + 29
+    const fx = node.type === 'source' ? node.x + NODE_WIDTH : node.x
+    const fy = node.y + NODE_HALF_HEIGHT
 
     setDrag({
       type: 'connect',
@@ -391,6 +398,35 @@ export default function FieldMappingStep() {
     applyCanvas(nextNodes, nextEdges)
     }
 
+  const buildCanvasFieldNode = (field, type, x, y) => ({
+    id: `${type}-${field.id}-${Date.now()}-${Math.random()}`,
+    name: field.name,
+    emoji: type === 'source' ? '📄' : '🎯',
+    type,
+    fieldId: field.id,
+    isRequired: field.required,
+    x: Math.max(0, x),
+    y: Math.max(0, y),
+    sendToSaknay: true,
+    sendToGP: true,
+    expression: '',
+  })
+
+  const addFieldToCanvas = (field, type, position = null) => {
+    applyNodes(prev => {
+      const exists = prev.some(n => n.type === type && n.fieldId === field.id)
+      if (exists) return prev
+
+      const x = position?.x ?? (type === 'source' ? 40 : 650)
+      const baseY = type === 'source'
+        ? (prev.length ? Math.max(...prev.filter(n => n.type === 'source').map(n => n.y), -NODE_ROW_GAP) + NODE_ROW_GAP : 30)
+        : (prev.length ? Math.max(...prev.filter(n => n.type === 'target').map(n => n.y), -NODE_ROW_GAP) + NODE_ROW_GAP : 80)
+      const y = position?.y ?? baseY
+
+      return [...prev, buildCanvasFieldNode(field, type, x, y)]
+    })
+  }
+
   const dragFromPanel = (e, field, type) => {
     e.preventDefault()
 
@@ -399,30 +435,17 @@ export default function FieldMappingStep() {
     if (exists) return
 
     const { x: canvasX, y: canvasY } = toCanvasPoint(e.clientX, e.clientY)
-    const x = canvasX - 86
-    const y = canvasY - 29
+    const x = canvasX - NODE_HALF_WIDTH
+    const y = canvasY - NODE_HALF_HEIGHT
 
     if (x >= 0 && y >= 0) {
-      const newNode = {
-        id: `${type}-${Date.now()}-${Math.random()}`,
-        name: field.name,
-        emoji: type === 'source' ? '📄' : '🎯',
-        type,
-        fieldId: field.id,
-        isRequired: field.required,
-        x: Math.max(0, x),
-        y: Math.max(0, y),
-        sendToSaknay: true,
-        sendToGP: true,
-        expression: '',
-      }
-      applyNodes(prev => [...prev, newNode])
+      addFieldToCanvas(field, type, { x, y })
     }
     }
 
     const addAllSourceFieldsToCanvas = () => {
     const xPos = 40
-    const yGap = 60
+    const yGap = NODE_ROW_GAP
 
     applyNodes(prev => {
       const existingSourceFieldIds = new Set(
@@ -470,7 +493,7 @@ export default function FieldMappingStep() {
 
     const addAllTargetFieldsToCanvas = () => {
     const xPos = 650
-    const yGap = 60
+    const yGap = NODE_ROW_GAP
 
     applyNodes(prev => {
       const existingTargetFieldIds = new Set(
@@ -519,6 +542,14 @@ export default function FieldMappingStep() {
   const showContextMenu = (e, nodeId) => {
     const node = nodes.find(n => n.id === nodeId)
     e.preventDefault()
+    e.stopPropagation()
+    if (!node || node.type !== 'target') {
+      setCurrentCtxId(null)
+      setCtxMenu(null)
+      return
+    }
+    setTransformerMenu(null)
+    setPlusCtxMenu(null)
     setCurrentCtxId(nodeId)
     setCtxMenu({
       x: e.clientX,
@@ -611,11 +642,33 @@ export default function FieldMappingStep() {
     }
     }
 
+    const toggleTargetNodeFlag = (nodeId, flagKey) => {
+    applyNodes(prev => prev.map(node =>
+      node.id === nodeId && node.type === 'target'
+        ? { ...node, [flagKey]: !(node[flagKey] ?? true) }
+        : node
+    ))
+    }
+
+    const updateTargetNodeMeta = (nodeId, patch) => {
+    applyNodes(prev => prev.map(node =>
+      node.id === nodeId && node.type === 'target'
+        ? { ...node, ...patch }
+        : node
+    ))
+    }
+
+    const suppressEmptyCanvasContextMenu = (e) => {
+    if (e.target === e.currentTarget) {
+      e.preventDefault()
+    }
+    }
+
     const alignNodes = () => {
     const LEFT_X = 40
     const RIGHT_X = 650
     const START_Y = 30
-    const GAP = 70
+    const GAP = NODE_ROW_GAP
 
     applyNodes(prev => {
       const nextById = new Map(prev.map(node => [node.id, { ...node }]))
@@ -756,7 +809,7 @@ export default function FieldMappingStep() {
     const nextEdges = [...existingEdges]
     const sourceNodeIds = {}
     const targetNodeIds = {}
-    const yGap = 75
+    const yGap = NODE_ROW_GAP
     const sourceBaseY = existingNodes.filter(n => n.type === 'source').length
       ? Math.max(...existingNodes.filter(n => n.type === 'source').map(n => n.y)) + yGap
       : 30
@@ -985,8 +1038,10 @@ export default function FieldMappingStep() {
             {filteredSource.map((field) => (
               <div
                 key={field.id}
+                data-testid={`source-list-item-${field.id}`}
                 draggable={!existingSourceFieldIds.has(field.id)}
                 onDragEnd={(e) => !existingSourceFieldIds.has(field.id) && dragFromPanel(e, field, 'source')}
+                onDoubleClick={() => !existingSourceFieldIds.has(field.id) && addFieldToCanvas(field, 'source')}
                 style={{
                   padding: '10px 8px',
                   marginBottom: '6px',
@@ -998,7 +1053,7 @@ export default function FieldMappingStep() {
                   color: existingSourceFieldIds.has(field.id) ? 'var(--muted)' : 'var(--text)',
                   display: 'flex',
                   gap: '8px',
-                  alignItems: 'center',
+                  alignItems: 'flex-start',
                   transition: 'all 0.2s',
                   opacity: existingSourceFieldIds.has(field.id) ? 0.55 : 1,
                 }}
@@ -1015,11 +1070,13 @@ export default function FieldMappingStep() {
                 }}
               >
                 <span>📄</span>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <span>{field.name}</span>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <span data-testid={`source-list-name-${field.id}`} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.3 }}>
+                    {field.name}
+                  </span>
                   <span style={{ fontSize: '10px', color: 'var(--muted)', contentVisibility: 'auto' }}>{field.type}</span>
                 </div>
-                {field.required && <span style={{ color: 'var(--danger)', fontSize: '10px' }}>*</span>}
+                {field.required && <span style={{ color: 'var(--danger)', fontSize: '10px', marginTop: '2px' }}>*</span>}
               </div>
             ))}
             {filteredSource.length === 0 && (
@@ -1153,6 +1210,7 @@ export default function FieldMappingStep() {
           <div
             ref={canvasRef}
             data-testid="field-mapping-canvas"
+            onContextMenu={suppressEmptyCanvasContextMenu}
             style={{
               flex: 1,
               position: 'relative',
@@ -1165,12 +1223,13 @@ export default function FieldMappingStep() {
             {/* SVG Edges */}
             <svg
               id="edges-svg"
+              onContextMenu={suppressEmptyCanvasContextMenu}
               style={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
-                width: nodes.length > 0 ? Math.max(1000, Math.max(...nodes.map(n => n.x + 172)) + 200) : 1000,
-                height: nodes.length > 0 ? Math.max(700, Math.max(...nodes.map(n => n.y + 86)) + 200) : 700,
+                width: nodes.length > 0 ? Math.max(1000, Math.max(...nodes.map(n => n.x + NODE_WIDTH)) + 200) : 1000,
+                height: nodes.length > 0 ? Math.max(700, Math.max(...nodes.map(n => n.y + CANVAS_NODE_BOUND_HEIGHT)) + 200) : 700,
                 pointerEvents: 'auto',
                 zIndex: 5,
               }}
@@ -1185,10 +1244,10 @@ export default function FieldMappingStep() {
                 const toNode = nodes.find(n => n.id === edge.to)
                 if (!fromNode || !toNode) return null
 
-                const x1 = fromNode.x + 172
-                const y1 = fromNode.y + 29
+                const x1 = fromNode.x + NODE_WIDTH
+                const y1 = fromNode.y + NODE_HALF_HEIGHT
                 const x2 = toNode.x
-                const y2 = toNode.y + 29
+                const y2 = toNode.y + NODE_HALF_HEIGHT
                 const transformer = findTransformer(transformers, edge.transformer)
                 const tf = getTransformerGeometry(x1, y1, x2, y2)
                 const directPath = bezier(x1, y1, x2, y2)
@@ -1386,8 +1445,8 @@ export default function FieldMappingStep() {
                     {transformer && edge.extraInputs?.map((extraSrcId) => {
                       const extraSrc = nodes.find(n => n.id === extraSrcId)
                       if (!extraSrc) return null
-                      const ex1 = extraSrc.x + 172
-                      const ey1 = extraSrc.y + 29
+                      const ex1 = extraSrc.x + NODE_WIDTH
+                      const ey1 = extraSrc.y + NODE_HALF_HEIGHT
                       const ed = bezier(ex1, ey1, tf.leftX, tf.midY)
                       return (
                         <g key={extraSrcId}>
@@ -1414,7 +1473,7 @@ export default function FieldMappingStep() {
             </svg>
 
             {/* Nodes */}
-            <div style={{ position: 'absolute', top: 0, left: 0, width: nodes.length > 0 ? Math.max(1000, Math.max(...nodes.map(n => n.x + 172)) + 200) : 1000, height: nodes.length > 0 ? Math.max(700, Math.max(...nodes.map(n => n.y + 86)) + 200) : 700, pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, width: nodes.length > 0 ? Math.max(1000, Math.max(...nodes.map(n => n.x + NODE_WIDTH)) + 200) : 1000, height: nodes.length > 0 ? Math.max(700, Math.max(...nodes.map(n => n.y + CANVAS_NODE_BOUND_HEIGHT)) + 200) : 700, pointerEvents: 'none' }}>
               {nodes.map((node) => {
                 const isRequired = node.type === 'source' 
                   ? MOCK_SCHEMA.find(f => f.id === node.fieldId)?.required
@@ -1432,8 +1491,8 @@ export default function FieldMappingStep() {
                       position: 'absolute',
                       left: node.x + 'px',
                       top: node.y + 'px',
-                      width: '172px',
-                      height: '58px',
+                      width: `${NODE_WIDTH}px`,
+                      height: `${NODE_HEIGHT}px`,
                       background: 'var(--surf2)',
                       border: isRequired ? '2px solid var(--danger)' : '1.5px solid var(--border)',
                       borderRadius: '8px',
@@ -1510,86 +1569,107 @@ export default function FieldMappingStep() {
                         {node.emoji}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
+                        <div data-testid={`canvas-node-name-${node.id}`} style={{
                           fontSize: '12px',
                           fontWeight: 600,
                           color: 'var(--text)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
+                          whiteSpace: 'normal',
+                          overflowWrap: 'anywhere',
+                          wordBreak: 'break-word',
+                          lineHeight: 1.25,
                         }}>
                           {node.name}
                           {isRequired && <span style={{ color: 'var(--danger)', marginLeft: '4px' }}>*</span>}
                         </div>
                         <div style={{
-                          fontSize: '9px',
-                          fontWeight: 600,
-                          color: 'var(--muted)',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.06em',
+                          display: 'flex',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          columnGap: '8px',
+                          rowGap: '4px',
+                          marginTop: '2px',
                         }}>
-                          {node.type === 'source' ? 'SOURCE' : 'TARGET'}
+                          <div style={{
+                            fontSize: '9px',
+                            fontWeight: 600,
+                            color: 'var(--muted)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.06em',
+                            minWidth: 0,
+                            flexShrink: 0,
+                          }}>
+                            {node.type === 'source' ? 'SOURCE' : 'TARGET'}
+                          </div>
+
+                          {node.type === 'target' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flexShrink: 0, marginLeft: 'auto', maxWidth: '100%' }}>
+                              {!!node.expression?.trim() && (
+                                <span
+                                  data-testid={`target-expression-badge-${node.id}`}
+                                  title="Expression configured"
+                                  style={{
+                                    background: 'rgba(79,110,247,0.12)',
+                                    border: '1px solid rgba(79,110,247,0.45)',
+                                    borderRadius: '4px',
+                                    padding: '1px 5px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    fontSize: '9px',
+                                    fontWeight: 700,
+                                    color: 'var(--accent)',
+                                    letterSpacing: '0.04em',
+                                    userSelect: 'none',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  exp
+                                </span>
+                              )}
+
+                              <button
+                                type="button"
+                                data-testid={`target-saknay-toggle-${node.id}`}
+                                title={node.sendToSaknay ? 'Send to Saknay: Yes' : 'Send to Saknay: No'}
+                                aria-label={`Toggle Saknay for ${node.name}`}
+                                onMouseDown={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                }}
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  toggleTargetNodeFlag(node.id, 'sendToSaknay')
+                                }}
+                                style={{
+                                  background: node.sendToSaknay ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                                  border: node.sendToSaknay ? '1px solid rgba(34,197,94,0.55)' : '1px solid rgba(239,68,68,0.55)',
+                                  borderRadius: '4px',
+                                  padding: '1px 5px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  fontSize: '9px',
+                                  fontWeight: 700,
+                                  color: node.sendToSaknay ? '#22c55e' : '#ef4444',
+                                  letterSpacing: '0.04em',
+                                  userSelect: 'none',
+                                  whiteSpace: 'nowrap',
+                                  cursor: 'pointer',
+                                  pointerEvents: 'auto',
+                                  appearance: 'none',
+                                  outline: 'none',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <span style={{ fontSize: '10px', lineHeight: 1 }}>{node.sendToSaknay ? '✓' : '⊘'}</span>
+                                <span>Saknay</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
-
-                    {/* Send-to-Saknay indicator (target nodes only) */}
-                    {node.type === 'target' && (
-                      <div
-                        title={node.sendToSaknay ? 'Send to Saknay: Yes' : 'Send to Saknay: No'}
-                        style={{
-                          position: 'absolute',
-                          top: '4px',
-                          right: '20px',
-                          background: node.sendToSaknay ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-                          border: node.sendToSaknay ? '1px solid rgba(34,197,94,0.55)' : '1px solid rgba(239,68,68,0.55)',
-                          borderRadius: '4px',
-                          padding: '1px 5px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '3px',
-                          fontSize: '9px',
-                          fontWeight: 700,
-                          color: node.sendToSaknay ? '#22c55e' : '#ef4444',
-                          letterSpacing: '0.04em',
-                          pointerEvents: 'none',
-                          userSelect: 'none',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        <span style={{ fontSize: '10px', lineHeight: 1 }}>{node.sendToSaknay ? '✓' : '⊘'}</span>
-                        <span>Saknay</span>
-                      </div>
-                    )}
-
-                    {/* Send-to-GP indicator (target nodes only) */}
-                    {node.type === 'target' && (
-                      <div
-                        title={node.sendToGP ? 'Send to GP: Yes' : 'Send to GP: No'}
-                        style={{
-                          position: 'absolute',
-                          top: '24px',
-                          right: '20px',
-                          background: node.sendToGP ? 'rgba(79,110,247,0.15)' : 'rgba(239,68,68,0.15)',
-                          border: node.sendToGP ? '1px solid rgba(79,110,247,0.55)' : '1px solid rgba(239,68,68,0.55)',
-                          borderRadius: '4px',
-                          padding: '1px 5px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '3px',
-                          fontSize: '9px',
-                          fontWeight: 700,
-                          color: node.sendToGP ? '#4f6ef7' : '#ef4444',
-                          letterSpacing: '0.04em',
-                          pointerEvents: 'none',
-                          userSelect: 'none',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        <span style={{ fontSize: '10px', lineHeight: 1 }}>{node.sendToGP ? '✓' : '⊘'}</span>
-                        <span>GP</span>
-                      </div>
-                    )}
 
                     {/* Output port */}
                     {rules.hasOut && (
@@ -1745,8 +1825,10 @@ export default function FieldMappingStep() {
             {filteredTarget.map((field) => (
               <div
                 key={field.id}
+                data-testid={`target-list-item-${field.id}`}
                 draggable={!existingTargetFieldIds.has(field.id)}
                 onDragEnd={(e) => !existingTargetFieldIds.has(field.id) && dragFromPanel(e, field, 'target')}
+                onDoubleClick={() => !existingTargetFieldIds.has(field.id) && addFieldToCanvas(field, 'target')}
                 style={{
                   padding: '10px 8px',
                   marginBottom: '6px',
@@ -1758,7 +1840,7 @@ export default function FieldMappingStep() {
                   color: existingTargetFieldIds.has(field.id) ? 'var(--muted)' : 'var(--text)',
                   display: 'flex',
                   gap: '8px',
-                  alignItems: 'center',
+                  alignItems: 'flex-start',
                   transition: 'all 0.2s',
                   opacity: existingTargetFieldIds.has(field.id) ? 0.55 : 1,
                 }}
@@ -1775,11 +1857,13 @@ export default function FieldMappingStep() {
                 }}
               >
                 <span>🎯</span>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <span>{field.name}</span>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <span data-testid={`target-list-name-${field.id}`} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.3 }}>
+                    {field.name}
+                  </span>
                   <span style={{ fontSize: '10px', color: 'var(--muted)', contentVisibility: 'auto' }}>{field.type}</span>
                 </div>
-                {field.required && <span style={{ color: 'var(--danger)', fontSize: '10px' }}>*</span>}
+                {field.required && <span style={{ color: 'var(--danger)', fontSize: '10px', marginTop: '2px' }}>*</span>}
               </div>
             ))}
             {filteredTarget.length === 0 && (
@@ -1790,6 +1874,107 @@ export default function FieldMappingStep() {
           </div>
         </div>
       </div>
+
+      {/* Target field context menu */}
+      {ctxMenu && (() => {
+        const liveNode = nodes.find(n => n.id === (currentCtxId || ctxMenu.nodeId)) || ctxMenu.node
+        if (!liveNode || liveNode.type !== 'target') return null
+
+        return (
+          <>
+            <div
+              data-testid="ctxmenu-backdrop"
+              style={{ position: 'fixed', inset: 0, zIndex: 1000 }}
+              onClick={() => {
+                setCtxMenu(null)
+                setCurrentCtxId(null)
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+            />
+            <div
+              style={{
+                position: 'fixed',
+                left: Math.min(ctxMenu.x, window.innerWidth - 360),
+                top: Math.min(ctxMenu.y, window.innerHeight - 320),
+                width: '320px',
+                background: 'var(--surf)',
+                border: '1px solid var(--border)',
+                borderRadius: '12px',
+                boxShadow: '0 14px 36px rgba(0,0,0,0.22)',
+                zIndex: 1001,
+                overflow: 'hidden',
+                animation: 'ctxIn 0.16s ease',
+              }}
+              onClick={(e) => e.stopPropagation()}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+            >
+              <div style={{
+                padding: '12px 14px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                  Target Field
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>{liveNode.name}</div>
+              </div>
+
+              <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', fontSize: '13px', color: 'var(--text)' }}>
+                  <span>Saknay</span>
+                  <input
+                    data-testid="ctxmenu-saknay-toggle"
+                    type="checkbox"
+                    checked={liveNode.sendToSaknay ?? true}
+                    onChange={(e) => updateTargetNodeMeta(liveNode.id, { sendToSaknay: e.target.checked })}
+                  />
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', fontSize: '13px', color: 'var(--text)' }}>
+                  <span>GP</span>
+                  <input
+                    data-testid="ctxmenu-gp-toggle"
+                    type="checkbox"
+                    checked={liveNode.sendToGP ?? true}
+                    onChange={(e) => updateTargetNodeMeta(liveNode.id, { sendToGP: e.target.checked })}
+                  />
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', color: 'var(--text)' }}>
+                  <span>Expression</span>
+                  <textarea
+                    data-testid="ctxmenu-expression-input"
+                    value={liveNode.expression || ''}
+                    onChange={(e) => updateTargetNodeMeta(liveNode.id, { expression: e.target.value })}
+                    placeholder="Enter expression..."
+                    rows={4}
+                    style={{
+                      width: '100%',
+                      resize: 'vertical',
+                      padding: '8px 10px',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      background: 'var(--surf2)',
+                      color: 'var(--text)',
+                      fontSize: '12px',
+                      boxSizing: 'border-box',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+          </>
+        )
+      })()}
 
       {/* Plus circle right-click context menu */}
       {plusCtxMenu && (() => {
@@ -2307,11 +2492,10 @@ export default function FieldMappingStep() {
       )}
 
       {/* Close menus on canvas click */}
-      {(ctxMenu || transformerMenu || plusCtxMenu) && (
+      {(transformerMenu || plusCtxMenu) && (
         <div
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} 
           onClick={() => {
-            setCtxMenu(null)
             setTransformerMenu(null)
             setPlusCtxMenu(null)
           }}

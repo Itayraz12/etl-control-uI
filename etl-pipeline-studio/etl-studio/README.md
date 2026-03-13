@@ -1,18 +1,29 @@
 # ETL Pipeline Studio
 
-A production-grade React UI for configuring ETL (Extract–Transform–Load) data pipelines.  
-Built as a **7-step wizard** with a visual field-mapping canvas, live/mock backend switching, and transformer property editing.
+React + Vite frontend for configuring and managing ETL pipelines.
 
----
+The application combines a login flow, a management screen for existing deployments, and a 7-step ETL wizard with a visual source-to-target field-mapping canvas.
 
-## 🚀 Quick Start
+## Current highlights
+
+- Persisted login session with refresh-safe user restoration
+- Per-user wizard draft persistence in local storage
+- Idle logout with configurable grace-based draft reset
+- Mock/live backend switching for configuration data and deployments
+- Searchable transformer modal with runtime-generated property forms
+- Visual field mapping with single-target enforcement and multi-input transformers
+- Target metadata editing for Saknay, GP, and expression values
+- Deployment edit flow that hydrates wizard state from backend YAML
+
+## Quick start
 
 ### Prerequisites
-- **Node.js** v16+
-- **npm** v7+
-- **Backend** (optional) — `etl-control-bff` running on `http://localhost:8080`
 
-### Install & run
+- Node.js 18+ recommended
+- npm 9+ recommended
+- Optional backend at `http://localhost:8080`
+
+### Install and run
 
 ```bash
 cd etl-pipeline-studio/etl-studio
@@ -20,16 +31,34 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173** in your browser.
+Open `http://localhost:5173`.
 
-### Session timeout configuration
+## Verified scripts
 
-The UI supports build-time session timeout properties via Vite environment variables:
+The following commands were run successfully in this workspace on March 14, 2026:
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| `VITE_IDLE_LOGOUT_MINUTES` | `15` | Logs out the current user after this many minutes of inactivity |
-| `VITE_SCOPE_RESET_GRACE_MINUTES` | `10` | Clears the timed-out user's saved ETL scope if they do not log back in within this many minutes |
+```bash
+npm run test
+npm run build
+```
+
+Project scripts:
+
+```bash
+npm run dev
+npm run test
+npm run build
+npm run preview
+```
+
+## Session timeout configuration
+
+The UI reads these Vite environment variables at build time:
+
+| Variable | Default | Description |
+|---|---:|---|
+| `VITE_IDLE_LOGOUT_MINUTES` | `15` | Logs out the active user after this many minutes of inactivity |
+| `VITE_SCOPE_RESET_GRACE_MINUTES` | `10` | Clears a timed-out user's saved wizard scope after this many additional minutes |
 
 Example `.env` values:
 
@@ -38,95 +67,130 @@ VITE_IDLE_LOGOUT_MINUTES=20
 VITE_SCOPE_RESET_GRACE_MINUTES=15
 ```
 
----
+## Application flow
 
-## 🏗️ Project Architecture
+`App.jsx` switches between four primary UI states:
 
-```
+1. `LoginPage` — sign in and choose mock/live mode
+2. `menu` — landing screen after login
+3. `etl-config` — the 7-step configuration wizard
+4. `etl-management` — deployment list and actions
+
+## Wizard steps
+
+| Step | Key | Component |
+|---|---|---|
+| 0 | `metadata` | `features/file-upload/MetadataStep.jsx` |
+| 1 | `source-config` | `features/source-config/SourceConfigStep.jsx` |
+| 2 | `source-upload` | `features/source-config/SourceUploadStep.jsx` |
+| 3 | `filters` | `features/filters/FiltersStep.jsx` |
+| 4 | `field-mapping` | `features/field-mapping/FieldMappingStep.jsx` |
+| 5 | `sink-config` | `features/sink-config/SinkConfigStep.jsx` |
+| 6 | `summary` | `features/summary/SummaryStep.jsx` |
+
+## Project structure
+
+```text
 src/
-├── main.jsx                          # Entry point — provider tree
-├── index.css                         # Global styles & CSS variables
-│
+├── main.jsx
+├── index.css
 ├── app/
-│   └── App.jsx                       # Navigation router (login / management / wizard)
-│
+│   └── App.jsx
 ├── features/
 │   ├── etl-wizard/
-│   │   ├── LoginPage.jsx             # Login + mock-mode toggle
-│   │   ├── MainMenu.jsx              # Side navigation + logout
-│   │   ├── TopNav.jsx                # Top bar
-│   │   ├── StepBar.jsx               # Step progress indicator
-│   │   ├── WizardShell.jsx           # Step router + pre-fetch spinner
-│   │   ├── WizardFooter.jsx          # Next / Back buttons
-│   │   └── ETLManagementScreen.jsx   # Deployments table + actions
-│   │
-│   ├── file-upload/
-│   │   └── MetadataStep.jsx          # Step 0 — entity, team, environment
-│   ├── source-config/
-│   │   ├── SourceConfigStep.jsx      # Step 1 — Kafka / RabbitMQ config
-│   │   └── SourceUploadStep.jsx      # Step 2 — schema upload / preview
+│   │   ├── ETLManagementScreen.jsx
+│   │   ├── LoginPage.jsx
+│   │   ├── MainMenu.jsx
+│   │   ├── StepBar.jsx
+│   │   ├── TopNav.jsx
+│   │   ├── WizardFooter.jsx
+│   │   └── WizardShell.jsx
 │   ├── field-mapping/
-│   │   ├── FieldMappingStep.jsx      # Step 3 wrapper
-│   │   └── FieldMappingStepCanvas.jsx# Visual node-canvas with transformers
+│   │   ├── FieldMappingStep.jsx
+│   │   └── FieldMappingStepCanvas.jsx
+│   ├── file-upload/
+│   │   └── MetadataStep.jsx
 │   ├── filters/
-│   │   └── FiltersStep.jsx           # Step 4 — filter rule builder
+│   │   └── FiltersStep.jsx
 │   ├── sink-config/
-│   │   └── SinkConfigStep.jsx        # Step 5 — sink configuration
+│   │   └── SinkConfigStep.jsx
+│   ├── source-config/
+│   │   ├── SourceConfigStep.jsx
+│   │   └── SourceUploadStep.jsx
 │   └── summary/
-│       └── SummaryStep.jsx           # Step 6 — review & create pipeline
-│
+│       └── SummaryStep.jsx
 └── shared/
     ├── components/
-    │   └── index.jsx                 # Card, Btn, FormGroup, TypeBadge, Spinner…
     ├── services/
-    │   ├── configService.js          # Transformer / filter / entity API + mock data
-    │   └── deploymentsService.js     # Deployments API + mock data
     ├── store/
-    │   ├── wizardStore.jsx           # Global wizard state (Context + useReducer)
-    │   ├── configContext.jsx         # Pre-fetched config data + loading flags
-    │   ├── mockModeContext.jsx       # Global mock / live toggle
-    │   └── userContext.jsx           # Logged-in user state
     └── types/
-        └── index.js                  # MOCK_SCHEMA, TARGET_FIELDS, type helpers
 ```
 
----
+## Provider and state architecture
 
-## 🔌 Backend API Endpoints
+Provider tree from `src/main.jsx` and `src/app/App.jsx`:
 
-All live calls go to `http://localhost:8080`.  
-When **mock mode is ON** the frontend uses its own built-in data — no backend required.
-
-| Data | Method | URL |
-|------|--------|-----|
-| Transformers | GET | `http://localhost:8080/api/config/transformers` |
-| Filters | GET | `http://localhost:8080/api/config/filters` |
-| Entities | GET | `http://localhost:8080/api/backbone/entities` |
-| Deployments | GET | `http://localhost:8080/api/config/deployments` |
-
----
-
-## ⚙️ Config Service (`configService.js`)
-
-Central service that switches between **mock** and **live** data for the three config types, and also handles loading/saving ETL draft YAML.
-
-### Mock / live switch
-
-```js
-fetchTransformers(useMock)  // true → mock, false → GET /api/config/transformers
-fetchFilters(useMock)       // true → mock, false → GET /api/config/filters
-fetchEntities(useMock)      // true → mock, false → GET /api/backbone/entities
-fetchDraftConfiguration({ productType, source, team, environment }, useMock)
-saveDraftConfiguration({ productType, source, team, environment, yaml })
+```jsx
+<UserProvider>
+  <MockModeProvider>
+    <ConfigProvider>
+      <App>
+        <WizardProvider user={user}>
+          <AppContent />
+        </WizardProvider>
+      </App>
+    </ConfigProvider>
+  </MockModeProvider>
+</UserProvider>
 ```
 
-### Transformer shape (backend contract)
+State responsibilities:
+
+- `userContext.jsx` — login/logout, activity tracking, idle timeout, active-user hydration
+- `userSessionPersistence.js` — persisted user key and pending scope reset bookkeeping
+- `mockModeContext.jsx` — global mock/live toggle (defaults to mock mode on first load)
+- `configContext.jsx` — pre-fetched entities, filter operators, and transformers
+- `wizardStore.jsx` — wizard state, navigation mode, theme, mappings, filters, and sink settings
+- `wizardPersistence.js` — per-user draft serialization/hydration
+
+## Config prefetching
+
+`WizardShell.jsx` prefetches only the step-specific config that needs remote data before rendering the step component:
+
+| Step index | Data | Loading flag |
+|---:|---|---|
+| `0` | entities | `loadingEntities` |
+| `3` | filter operators | `loadingFilters` |
+| `4` | transformers | `loadingTransformers` |
+
+While those requests are in flight, the shell shows a centered loading spinner instead of mounting the target step.
+
+## Backend endpoints
+
+All live calls use `http://localhost:8080/api`.
+
+| Area | Method | Endpoint |
+|---|---|---|
+| Transformers | GET | `/config/transformers` |
+| Filter operators | GET | `/config/filters` |
+| Entities | GET | `/backbone/entities` |
+| Deployments list | GET | `/backend/deployments?teamName=<team>` |
+| Deploy deployment | POST | `/backend/deployments/{id}/deploy` |
+| Stop deployment | POST | `/backend/deployments/{id}/stop` |
+| Draft YAML | GET | `/backend/configuration/yaml?productType=...&source=...&team=...&environment=...` |
+| Save draft YAML | POST | `/backend/configuration/yaml?productType=...&source=...&team=...&environment=...` |
+
+When mock mode is enabled, these calls are replaced with in-memory sample data and simulated responses.
+
+## Backend data contracts
+
+### Transformer contract
 
 ```json
 {
   "_id": "00000000-0000-0000-0000-000000000001",
   "name": "ToTimestamp",
-  "description": "convert TZ",
+  "description": "Convert a date string to a canonical timestamp",
   "format": "string",
   "canonize": false,
   "isMultipleInput": false,
@@ -139,187 +203,80 @@ saveDraftConfiguration({ productType, source, team, environment, yaml })
 }
 ```
 
-### `buildPropsSchema(additionalProperties)`
+`configService.js` derives a `propsSchema` array from `additionalProperties` so the UI can render editable transformer fields without hardcoding each transformer type.
 
-Converts `additionalProperties` into an array of editable UI rows:
+Notes:
 
-- Keys in `_required` → marked `required: true`, **never rendered as a row**
-- `string` value → `text` input
-- `number` value → `number` input
-- `boolean` value → `select` with `[true, false]`
-- Label auto-generated from key: `output_format` → **Output Format**
+- `_required` marks required keys and is not rendered as its own field
+- Primitive values are mapped to text, number, or boolean-style controls
+- Both `additionalProperties` and legacy `additionalProperites` are accepted
 
-```json
-[
-  { "key": "format",        "label": "Format",        "type": "text", "default": "dd/MM/yyyy",  "required": true  },
-  { "key": "zone",          "label": "Zone",          "type": "text", "default": "Asia/Jerusalem","required": true  },
-  { "key": "output_format", "label": "Output Format", "type": "text", "default": "...",          "required": false }
-]
-```
-
-> **Note:** Both spellings are supported — `additionalProperties` (correct) and `additionalProperites` (legacy backend typo).
-
-### Entity shape (backend contract)
+### Entity contract
 
 ```json
 { "id": "ent-1", "name": "CustomerEntity", "type": "Customer", "description": "..." }
 ```
 
-### Filter shape (backend contract)
+### Filter operator contract
 
 ```json
-{ "id": "f-1", "name": "Filter 1", "rule": "severity >= warning", "isInclude": true }
+{ "id": "eq", "name": "Equals", "rule": "=", "isInclude": true }
 ```
 
----
+## Field mapping canvas behavior
 
-## 🔄 Config Context & Pre-fetching (`configContext.jsx`)
+`FieldMappingStepCanvas.jsx` provides the richest interaction surface in the app.
 
-`ConfigProvider` holds the three config lists and their loading flags.  
-`WizardShell` calls `prefetchForStep(step, useMock)` every time the user navigates to a new step — **data is always refreshed** before the step renders.
+Key behaviors:
 
-| Step | Data fetched | Loading flag |
-|------|-------------|--------------|
-| 0 — Metadata | `entities` | `loadingEntities` |
-| 3 — Filters | `filters` (operators) | `loadingFilters` |
-| 4 — Field Mapping | `transformers` | `loadingTransformers` |
+- Source and target fields can be added to the canvas without duplicates
+- Connections are source-to-target only
+- A target field allows only one incoming connection
+- Right-click on a connection or transformer opens add / replace / edit / remove actions
+- Transformer properties come from the selected transformer's generated `propsSchema`
+- Multi-input transformers can accept extra source nodes on the same mapping
+- Switching from multi-input to single-input removes extra inputs automatically
+- Right-click on a target node opens metadata editing for `sendToSaknay`, `sendToGP`, and `expression`
+- Target cards surface inline badges/toggles derived from that metadata
+- Alignment helpers keep connected rows visually grouped
 
-While loading, `WizardShell` renders a full-height spinner instead of the step component — the step never mounts until its data is ready.
+## Mock mode
 
-In-flight deduplication is handled via `useRef` flags (not state) to avoid infinite render loops.
+Mock mode is enabled by default on a fresh load.
 
-```jsx
-// Consuming data in a step component
-const { entities }     = useConfig()   // MetadataStep
-const { filters }      = useConfig()   // FiltersStep   (operator list)
-const { transformers } = useConfig()   // FieldMappingStepCanvas
-```
+You can toggle it from:
 
----
+- `LoginPage.jsx`
+- `ETLManagementScreen.jsx`
 
-## 🪄 Wizard Steps
+Mock mode affects:
 
-| # | Step | Component | Data source |
-|---|------|-----------|-------------|
-| 0 | Metadata | `MetadataStep` | `entities` from config context |
-| 1 | Source Config | `SourceConfigStep` | Static |
-| 2 | Source Upload | `SourceUploadStep` | Static / schema upload |
-| 3 | Filters | `FiltersStep` | `filters` (operators) from config context |
-| 4 | Field Mapping | `FieldMappingStepCanvas` | `transformers` from config context |
-| 5 | Sink Config | `SinkConfigStep` | Static |
-| 6 | Summary | `SummaryStep` | Wizard state |
+- transformers
+- filter operators
+- entities
+- deployments
+- draft YAML retrieval for edit flows
 
----
+## Persistence behavior
 
-## 🗺️ Field Mapping Canvas
+- Active user is stored under `etl-studio-active-user`
+- Wizard drafts are stored per user via keys derived from the current `userId`
+- Manual logout clears the persisted active user immediately
+- Idle logout schedules a grace window before clearing the timed-out user's saved draft
+- Theme is persisted in local storage via `wizardStore.jsx`
 
-- **Node-based** drag-and-drop interface — source fields (left) → target fields (right)
-- **SVG Bezier edges** connect source to target nodes
-- **Right-click** on an edge → assign/replace transformer
-- **Transformer modal** — searchable list; selecting a transformer opens a **properties panel** with editable rows derived from `additionalProperties`
-- Required properties show a red **req** badge
-- `isMultipleInput` flag shown as **multi** badge in the transformer list
-- **Map All Fields** — auto-connects fields by name similarity and type
-- **Align** — re-arranges nodes into two clean columns
+## Docker
 
----
-
-## 🎛️ Mock Mode
-
-Toggle on the **Login page** (checkbox) or in the **ETL Management** header.
-
-| Mode | Transformers | Filters | Entities | Deployments |
-|------|-------------|---------|----------|-------------|
-| Mock ON | Built-in list | Built-in operators | 3 sample entities | Mock deployments |
-| Mock OFF | `GET /api/config/transformers` | `GET /api/config/filters` | `GET /api/backbone/entities` | `GET /api/config/deployments` |
-
----
-
-## 🧰 State Management
-
-### Provider tree (`main.jsx`)
-
-```jsx
-<UserProvider>
-  <MockModeProvider>
-    <ConfigProvider>       ← transformer / filter / entity lists
-      <WizardProvider>     ← wizard step state (inside App.jsx)
-        <App />
-      </WizardProvider>
-    </ConfigProvider>
-  </MockModeProvider>
-</UserProvider>
-```
-
-### Wizard store shape
-
-```js
-{
-  navigationMode: 'menu' | 'etl-config' | 'etl-management',
-  currentStep: 0,
-  completedSteps: Set,
-  theme: 'dark' | 'light',
-  metadata: { productSource, productType, team, environment, entityName, tags },
-  source:   { sourceType, kafkaTopic, format, ... },
-  upload:   { done: false },
-  mappings: [ { src, tgt, transformer, transformerProps, transformerChain, ... } ],
-  filters:  [ { id, logic, rules: [...], subgroups: [...] } ],
-  sink:     { sinkType, sinkKafkaTopic, shadow, saknay, asg }
-}
-```
-
----
-
-## 🎨 Styling
-
-All colors use CSS variables defined in `index.css`:
-
-```css
---accent:  #4f6ef7;   /* primary blue      */
---success: #22c55e;   /* green             */
---danger:  #ef4444;   /* red               */
---warning: #f59e0b;   /* amber             */
---bg:      #0f172a;   /* page background   */
---surf:    #1e293b;   /* card background   */
---surf2:   #334155;   /* secondary surface */
---border:  #475569;   /* borders           */
---text:    #f1f5f9;   /* primary text      */
---muted:   #94a3b8;   /* secondary text    */
-```
-
-Dark mode is the default. Light mode is toggled via the theme button in the top nav and persisted in `localStorage`.
-
----
-
-## 🛠️ Scripts
-
-```bash
-npm run dev      # dev server with HMR — http://localhost:5173
-npm run build    # production build → dist/
-npm run preview  # preview production build locally
-```
-
----
-
-## 🐳 Docker
-
-Build the production image from `etl-pipeline-studio/etl-studio`:
+Build from `etl-pipeline-studio/etl-studio`:
 
 ```bash
 docker build -t etl-pipeline-studio .
-```
-
-Run it on port `8081`:
-
-```bash
 docker run --rm -p 8081:80 etl-pipeline-studio
 ```
 
 Then open `http://localhost:8081`.
 
-### Docker build-time configuration
-
-The app uses Vite build-time variables, so pass them as build args when you need non-default session timeout values:
+Optional build-time overrides:
 
 ```bash
 docker build \
@@ -328,30 +285,25 @@ docker build \
   -t etl-pipeline-studio .
 ```
 
-### Docker files
+Relevant files:
 
-- `Dockerfile` — multi-stage Node + Nginx production image
-- `nginx.conf` — SPA fallback (`/index.html`) for client-side navigation
-- `.dockerignore` — trims local build context
+- `Dockerfile`
+- `nginx.conf`
+- `.dockerignore`
 
----
+## Troubleshooting
 
-## 🚨 Troubleshooting
+| Symptom | Check |
+|---|---|
+| Transformer properties do not appear | Verify the backend returns `additionalProperties` (or legacy `additionalProperites`) |
+| Metadata step has no entities | Check `/api/backbone/entities` or enable mock mode |
+| Deployments screen is empty in live mode | Verify `/api/backend/deployments?teamName=...` returns an array |
+| Refresh returns to login | Check whether `etl-studio-active-user` exists in local storage |
+| Step spinner never clears | Inspect the relevant request in `configContext.jsx` and browser network logs |
 
-| Symptom | Fix |
-|---------|-----|
-| Blank properties panel for transformers | Ensure backend sends `additionalProperties` key; both spellings are supported |
-| Infinite loading spinner on step | Check `configContext.jsx` — refs guard against duplicate in-flight requests |
-| `actions.setKafkaFilters is not a function` | Remove stale call; action does not exist in `wizardStore` |
-| Missing key warning in transformer list | Transformer items use `key={t._id}` — ensure backend returns `_id` |
-| No entities in Metadata dropdown | Confirm `GET /api/backbone/entities` returns `[{ id, name, type, description }]` |
-| Styles not applying | Hard refresh (`Ctrl+Shift+R`) or restart dev server |
+## Version
 
----
-
-## 📝 Version
-
-- **App version**: 1.0.0
-- **React**: 18.3 · **Vite**: 5.4
-- **Node.js required**: v16+
-- **Last updated**: March 2026
+- App version: `1.0.0`
+- React: `18.3.1`
+- Vite: `5.4.x`
+- Last updated: March 2026

@@ -123,7 +123,7 @@ export const MOCK_SCHEMA = [
 
 export const TARGET_FIELDS = [
   { id: 'name',      name: 'name',      type: 'string',  required: true  },
-  { id: 'unitPrice', name: 'unitPrice', type: 'number',  required: true  },
+  { id: 'unitPrice', name: 'unitPrice_unitPrice_unitPrice', type: 'number',  required: true  },
   { id: 'quantity',  name: 'quantity',  type: 'number',  required: false },
   { id: 'status',    name: 'status',    type: 'string',  required: false },
   { id: 'sku',       name: 'sku',       type: 'string',  required: false },
