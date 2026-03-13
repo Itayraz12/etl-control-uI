@@ -285,12 +285,63 @@ describe('FieldMappingStep transformer modal regression', () => {
     await waitFor(() => {
       expect(screen.getByText('Concatenate')).toBeInTheDocument()
       expect(document.getElementById('nd-src-productName')).toHaveStyle({ top: '30px' })
-      expect(document.getElementById('nd-tgt-name')).toHaveStyle({ top: '100px' })
+      expect(document.getElementById('nd-tgt-name')).toHaveStyle({ top: '30px' })
     })
 
     const pathData = Array.from(document.querySelectorAll('path')).map(path => path.getAttribute('d')).filter(Boolean)
 
-    expect(pathData.some(d => /^M 212,59 C .* 361,94$/.test(d))).toBe(true)
-    expect(pathData.some(d => /^M 501,94 C .* 650,129$/.test(d))).toBe(true)
+    expect(pathData.some(d => /^M 212,59 C .* 361,59$/.test(d))).toBe(true)
+    expect(pathData.some(d => /^M 501,59 C .* 650,59$/.test(d))).toBe(true)
+  })
+
+  it('reserves virtual target rows for extra multi-input sources during align', async () => {
+    renderWithPersistedMappings([
+      {
+        src: 'productName',
+        tgt: 'name',
+        srcNodeId: 'src-productName',
+        tgtNodeId: 'tgt-name',
+        srcPos: { x: 40, y: 10 },
+        tgtPos: { x: 650, y: 10 },
+        srcMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+        tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+        transformer: 'tf-1',
+        transformerInputType: 'string',
+        transformerOutputType: 'string',
+        transformerProps: { separator: '-' },
+        extraInputs: [
+          { nodeId: 'src-price-extra', field: 'price', pos: { x: 40, y: 120 } },
+          { nodeId: 'src-id-extra', field: 'id', pos: { x: 40, y: 220 } },
+        ],
+      },
+      {
+        src: 'category',
+        tgt: 'id',
+        srcNodeId: 'src-category',
+        tgtNodeId: 'tgt-id',
+        srcPos: { x: 40, y: 320 },
+        tgtPos: { x: 650, y: 320 },
+        srcMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+        tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+        transformer: 'none',
+        transformerInputType: 'any',
+        transformerOutputType: 'any',
+        transformerProps: {},
+        extraInputs: [],
+      },
+    ])
+
+    await waitFor(() => {
+      expect(screen.getByText('Concatenate')).toBeInTheDocument()
+
+      expect(document.getElementById('nd-src-productName')).toHaveStyle({ top: '30px' })
+      expect(document.getElementById('nd-tgt-name')).toHaveStyle({ top: '30px' })
+
+      expect(document.getElementById('nd-src-price-extra')).toHaveStyle({ top: '100px' })
+      expect(document.getElementById('nd-src-id-extra')).toHaveStyle({ top: '170px' })
+
+      expect(document.getElementById('nd-src-category')).toHaveStyle({ top: '240px' })
+      expect(document.getElementById('nd-tgt-id')).toHaveStyle({ top: '240px' })
+    })
   })
 })

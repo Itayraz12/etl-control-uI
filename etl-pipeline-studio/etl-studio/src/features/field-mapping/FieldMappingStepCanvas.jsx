@@ -614,23 +614,78 @@ export default function FieldMappingStep() {
     const alignNodes = () => {
     const LEFT_X = 40
     const RIGHT_X = 650
+    const START_Y = 30
     const GAP = 70
 
     applyNodes(prev => {
-      const sources = prev.filter(n => n.type === 'source').sort((a, b) => a.y - b.y)
-      const targets = prev.filter(n => n.type === 'target').sort((a, b) => a.y - b.y)
+      const nextById = new Map(prev.map(node => [node.id, { ...node }]))
+      const currentById = new Map(prev.map(node => [node.id, node]))
+      const placedSources = new Set()
+      const placedTargets = new Set()
 
-      return prev.map(n => {
-        if (n.type === 'source') {
-          const idx = sources.findIndex(s => s.id === n.id)
-          return { ...n, x: LEFT_X, y: 30 + idx * GAP }
-        }
-        if (n.type === 'target') {
-          const idx = targets.findIndex(t => t.id === n.id)
-          return { ...n, x: RIGHT_X, y: 30 + idx * GAP }
-        }
-        return n
+      const getNodeY = (id) => currentById.get(id)?.y ?? 0
+      const rows = []
+
+      const orderedEdges = [...edgesRef.current].sort((a, b) => {
+        const aPrimaryY = getNodeY(a.from)
+        const bPrimaryY = getNodeY(b.from)
+        if (aPrimaryY !== bPrimaryY) return aPrimaryY - bPrimaryY
+        return getNodeY(a.to) - getNodeY(b.to)
       })
+
+      orderedEdges.forEach(edge => {
+        rows.push({ sourceId: edge.from, targetId: edge.to })
+
+        const transformer = findTransformer(transformers, edge.transformer)
+        if (transformer?.isMultipleInput) {
+          ;[...(edge.extraInputs || [])]
+            .sort((a, b) => getNodeY(a) - getNodeY(b))
+            .forEach(extraId => {
+              rows.push({ sourceId: extraId, targetId: null })
+            })
+        }
+      })
+
+      const reservedSourceIds = new Set(rows.map(row => row.sourceId).filter(Boolean))
+      const reservedTargetIds = new Set(rows.map(row => row.targetId).filter(Boolean))
+
+      prev
+        .filter(n => n.type === 'source' && !reservedSourceIds.has(n.id))
+        .sort((a, b) => a.y - b.y)
+        .forEach(node => {
+          rows.push({ sourceId: node.id, targetId: null })
+        })
+
+      prev
+        .filter(n => n.type === 'target' && !reservedTargetIds.has(n.id))
+        .sort((a, b) => a.y - b.y)
+        .forEach(node => {
+          rows.push({ sourceId: null, targetId: node.id })
+        })
+
+      rows.forEach((row, index) => {
+        const y = START_Y + index * GAP
+
+        if (row.sourceId && !placedSources.has(row.sourceId)) {
+          const src = nextById.get(row.sourceId)
+          if (src) {
+            src.x = LEFT_X
+            src.y = y
+            placedSources.add(row.sourceId)
+          }
+        }
+
+        if (row.targetId && !placedTargets.has(row.targetId)) {
+          const tgt = nextById.get(row.targetId)
+          if (tgt) {
+            tgt.x = RIGHT_X
+            tgt.y = y
+            placedTargets.add(row.targetId)
+          }
+        }
+      })
+
+      return prev.map(node => nextById.get(node.id) ?? node)
     })
     }
 
