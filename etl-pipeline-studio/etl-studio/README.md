@@ -301,6 +301,41 @@ npm run preview  # preview production build locally
 
 ---
 
+## 🐳 Docker
+
+Build the production image from `etl-pipeline-studio/etl-studio`:
+
+```bash
+docker build -t etl-pipeline-studio .
+```
+
+Run it on port `8081`:
+
+```bash
+docker run --rm -p 8081:80 etl-pipeline-studio
+```
+
+Then open `http://localhost:8081`.
+
+### Docker build-time configuration
+
+The app uses Vite build-time variables, so pass them as build args when you need non-default session timeout values:
+
+```bash
+docker build \
+  --build-arg VITE_IDLE_LOGOUT_MINUTES=20 \
+  --build-arg VITE_SCOPE_RESET_GRACE_MINUTES=15 \
+  -t etl-pipeline-studio .
+```
+
+### Docker files
+
+- `Dockerfile` — multi-stage Node + Nginx production image
+- `nginx.conf` — SPA fallback (`/index.html`) for client-side navigation
+- `.dockerignore` — trims local build context
+
+---
+
 ## 🚨 Troubleshooting
 
 | Symptom | Fix |
