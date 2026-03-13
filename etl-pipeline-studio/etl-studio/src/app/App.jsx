@@ -84,6 +84,7 @@ function AppContent() {
       }}>
         <MainMenu />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <TopNav />
           <ETLManagementScreen />
         </div>
       </div>
