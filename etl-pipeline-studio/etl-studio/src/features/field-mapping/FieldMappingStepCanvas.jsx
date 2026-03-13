@@ -188,6 +188,16 @@ export default function FieldMappingStep() {
   const allSourceOnCanvas = existingSourceFieldIds.size === MOCK_SCHEMA.length
   const allTargetOnCanvas = existingTargetFieldIds.size === TARGET_FIELDS.length
 
+  const toCanvasPoint = (clientX, clientY) => {
+    const canvas = canvasRef.current
+    const rect = canvas?.getBoundingClientRect()
+
+    return {
+      x: clientX - (rect?.left ?? 0) + (canvas?.scrollLeft ?? 0),
+      y: clientY - (rect?.top ?? 0) + (canvas?.scrollTop ?? 0),
+    }
+  }
+
     const addEdge = (fromId, toId, fromType, toType) => {
     if (fromId === toId) return false
 
@@ -285,22 +295,29 @@ export default function FieldMappingStep() {
     const pendingPath = document.getElementById('pending-path')
     if (pendingPath) pendingPath.style.display = 'block'
 
-    const onMove = (me) => {
-      const rect = canvasRef.current?.getBoundingClientRect()
-      if (!rect) return
-      const d = bezier(fx, fy, me.clientX - rect.left, me.clientY - rect.top)
+    let lastPointer = null
+
+    const renderPendingPath = (clientX, clientY) => {
+      const { x, y } = toCanvasPoint(clientX, clientY)
+      const d = bezier(fx, fy, x, y)
       if (pendingPath) pendingPath.setAttribute('d', d)
+    }
+
+    const onMove = (me) => {
+      lastPointer = { clientX: me.clientX, clientY: me.clientY }
+      renderPendingPath(me.clientX, me.clientY)
+    }
+
+    const scrollCanvas = canvasRef.current
+    const onScroll = () => {
+      if (!lastPointer) return
+      renderPendingPath(lastPointer.clientX, lastPointer.clientY)
     }
 
     const onUp = (me) => {
       try {
-        const canvasRect = canvasRef.current?.getBoundingClientRect()
-        const scrollLeft = canvasRef.current?.scrollLeft ?? 0
-        const scrollTop  = canvasRef.current?.scrollTop  ?? 0
-
         // Canvas-space coordinates of the drop point
-        const dropX = me.clientX - (canvasRect?.left ?? 0) + scrollLeft
-        const dropY = me.clientY - (canvasRect?.top  ?? 0) + scrollTop
+        const { x: dropX, y: dropY } = toCanvasPoint(me.clientX, me.clientY)
 
         // ── Drop on a transformer node (multi-input) ──────────────────────
         // Hit-test against registered transformer bounding boxes in canvas space.
@@ -352,12 +369,14 @@ export default function FieldMappingStep() {
         document.body.classList.remove('connecting')
         document.removeEventListener('mousemove', onMove)
         document.removeEventListener('mouseup', onUp)
+        scrollCanvas?.removeEventListener('scroll', onScroll)
         setDrag(null)
       }
     }
 
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
+    scrollCanvas?.addEventListener('scroll', onScroll, { passive: true })
   }
 
     const removeNode = (nodeId) => {
@@ -379,11 +398,9 @@ export default function FieldMappingStep() {
     const exists = nodes.some(n => n.type === type && n.fieldId === field.id)
     if (exists) return
 
-    const canvasRect = canvasRef.current.getBoundingClientRect()
-    const scrollLeft = canvasRef.current.scrollLeft
-    const scrollTop = canvasRef.current.scrollTop
-    const x = e.clientX - canvasRect.left + scrollLeft - 86
-    const y = e.clientY - canvasRect.top + scrollTop - 29
+    const { x: canvasX, y: canvasY } = toCanvasPoint(e.clientX, e.clientY)
+    const x = canvasX - 86
+    const y = canvasY - 29
 
     if (x >= 0 && y >= 0) {
       const newNode = {
@@ -812,6 +829,20 @@ export default function FieldMappingStep() {
     return `M ${x1},${y1} C ${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`
   }
 
+  const getTransformerGeometry = (x1, y1, x2, y2, tfWidth = 140, tfHeight = 55) => {
+    const midX = (x1 + x2) / 2
+    const midY = (y1 + y2) / 2
+
+    return {
+      midX,
+      midY,
+      tfWidth,
+      tfHeight,
+      leftX: midX - tfWidth / 2,
+      rightX: midX + tfWidth / 2,
+    }
+  }
+
   const resetTransformerModal = () => {
     setAddTransformerModal(null)
     setTransformerSearch('')
@@ -1066,6 +1097,7 @@ export default function FieldMappingStep() {
           {/* Canvas Area */}
           <div
             ref={canvasRef}
+            data-testid="field-mapping-canvas"
             style={{
               flex: 1,
               position: 'relative',
@@ -1102,37 +1134,46 @@ export default function FieldMappingStep() {
                 const y1 = fromNode.y + 29
                 const x2 = toNode.x
                 const y2 = toNode.y + 29
-
-                const d = bezier(x1, y1, x2, y2)
-                const midX = (x1 + x2) / 2
-                const midY = (y1 + y2) / 2
                 const transformer = findTransformer(transformers, edge.transformer)
-                const tfWidth = 140
-                const tfHeight = 55
+                const tf = getTransformerGeometry(x1, y1, x2, y2)
+                const directPath = bezier(x1, y1, x2, y2)
+                const inboundPath = bezier(x1, y1, tf.leftX, tf.midY)
+                const outboundPath = bezier(tf.rightX, tf.midY, x2, y2)
 
                 // Register bounding box for multi-input drop detection
                 if (transformer && transformer._id) {
                   tfBoxesRef.current.push({
                     edgeIdx: idx,
-                    x: midX - tfWidth / 2,
-                    y: midY - tfHeight / 2,
-                    w: tfWidth,
-                    h: tfHeight,
+                    x: tf.leftX,
+                    y: tf.midY - tf.tfHeight / 2,
+                    w: tf.tfWidth,
+                    h: tf.tfHeight,
                   })
                 }
 
                 return (
                   <g key={idx} style={{ cursor: 'pointer' }}>
-                    <path d={d} stroke="#4f6ef7" strokeWidth="7" fill="none" opacity="0.12" />
-                    <path d={d} stroke="#4f6ef7" strokeWidth="2.5" fill="none" markerEnd="url(#arr)" style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
+                    {transformer && transformer._id ? (
+                      <>
+                        <path d={inboundPath} stroke="#4f6ef7" strokeWidth="7" fill="none" opacity="0.12" />
+                        <path d={inboundPath} stroke="#4f6ef7" strokeWidth="2.5" fill="none" style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
+                        <path d={outboundPath} stroke="#4f6ef7" strokeWidth="7" fill="none" opacity="0.12" />
+                        <path d={outboundPath} stroke="#4f6ef7" strokeWidth="2.5" fill="none" markerEnd="url(#arr)" style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
+                      </>
+                    ) : (
+                      <>
+                        <path d={directPath} stroke="#4f6ef7" strokeWidth="7" fill="none" opacity="0.12" />
+                        <path d={directPath} stroke="#4f6ef7" strokeWidth="2.5" fill="none" markerEnd="url(#arr)" style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
+                      </>
+                    )}
                     
                     {/* Transformer Node - using foreignObject for field-style component */}
                      {transformer && transformer._id && (
                        <foreignObject
-                         x={midX - tfWidth / 2}
-                         y={midY - tfHeight / 2}
-                         width={tfWidth}
-                         height={tfHeight}
+                         x={tf.leftX}
+                         y={tf.midY - tf.tfHeight / 2}
+                         width={tf.tfWidth}
+                         height={tf.tfHeight}
                          data-edge-idx={idx}
                          style={{ pointerEvents: 'auto' }}
                        >
@@ -1270,11 +1311,11 @@ export default function FieldMappingStep() {
                         }}
                         style={{ cursor: 'pointer' }}
                       >
-                        <circle cx={midX} cy={midY} r="18" fill="transparent" />
-                        <circle cx={midX} cy={midY} r="11" fill="var(--surf)" stroke="#4f6ef7" strokeWidth="2" />
+                        <circle cx={tf.midX} cy={tf.midY} r="18" fill="transparent" />
+                        <circle cx={tf.midX} cy={tf.midY} r="11" fill="var(--surf)" stroke="#4f6ef7" strokeWidth="2" />
                         <text
-                          x={midX}
-                          y={midY}
+                          x={tf.midX}
+                          y={tf.midY}
                           textAnchor="middle"
                           dominantBaseline="middle"
                           fill="#4f6ef7"
@@ -1292,8 +1333,7 @@ export default function FieldMappingStep() {
                       if (!extraSrc) return null
                       const ex1 = extraSrc.x + 172
                       const ey1 = extraSrc.y + 29
-                      const ex2 = midX - tfWidth / 2
-                      const ed = bezier(ex1, ey1, ex2, midY)
+                      const ed = bezier(ex1, ey1, tf.leftX, tf.midY)
                       return (
                         <g key={extraSrcId}>
                           {/* Glow — matches primary line */}
@@ -1374,6 +1414,7 @@ export default function FieldMappingStep() {
                     {/* Input port */}
                     {rules.hasIn && (
                       <div
+                        data-testid={`target-port-${node.id}`}
                         data-nid={node.id}
                         className="port-in"
                         style={{
@@ -1498,6 +1539,7 @@ export default function FieldMappingStep() {
                     {/* Output port */}
                     {rules.hasOut && (
                       <div
+                        data-testid={`source-port-${node.id}`}
                         data-nid={node.id}
                         onMouseDown={(e) => startConnection(e, node.id, node.type)}
                         style={{

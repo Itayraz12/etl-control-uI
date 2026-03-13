@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import FieldMappingStep from './FieldMappingStepCanvas.jsx'
@@ -94,6 +94,54 @@ function renderWithPersistedState(mappingOverrides = {}) {
   )
 }
 
+function renderWithPersistedMappings(mappings) {
+  localStorage.setItem(
+    WIZARD_STORAGE_KEY,
+    JSON.stringify({
+      navigationMode: 'etl-config',
+      currentStep: 4,
+      completedSteps: [0, 1, 2, 3],
+      metadata: {
+        productSource: 'ERP',
+        productType: 'Inventory',
+        team: 'data-platform',
+        environment: 'production',
+        entityName: 'Product',
+        tags: '',
+      },
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: 'source_products_raw',
+        format: 'JSON',
+        jsonSplit: '',
+        streamingContinuity: 'continuous',
+        recordsPerDay: 'millions',
+      },
+      upload: { done: true },
+      mappings,
+      filters: [],
+      sink: {
+        sinkType: 'kafka',
+        sinkKafkaTopic: 'etl_products_v3',
+        sinkKafkaEnv: 'production',
+        shadow: false,
+        shadowTopic: '',
+        saknay: false,
+        saknayTopic: '',
+        asg: false,
+      },
+      theme: 'dark',
+    })
+  )
+
+  return render(
+    <WizardProvider>
+      <FieldMappingStep />
+    </WizardProvider>
+  )
+}
+
 describe('FieldMappingStep transformer modal regression', () => {
   it('opens the transformer modal when clicking the add-transformer plus on a connection', async () => {
     const user = userEvent.setup()
@@ -160,5 +208,89 @@ describe('FieldMappingStep transformer modal regression', () => {
       expect(screen.getByText('Concatenate')).toBeInTheDocument()
       expect(document.getElementById('nd-src-price-extra')).toBeInTheDocument()
     })
+  })
+
+  it('keeps the pending connector aligned with canvas coordinates after scrolling', async () => {
+    renderWithPersistedState()
+
+    const canvas = await screen.findByTestId('field-mapping-canvas')
+    const sourcePort = await screen.findByTestId('source-port-src-productName')
+
+    Object.defineProperty(canvas, 'scrollLeft', {
+      configurable: true,
+      get: () => 35,
+    })
+
+    Object.defineProperty(canvas, 'scrollTop', {
+      configurable: true,
+      get: () => 280,
+    })
+
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      x: 100,
+      y: 40,
+      left: 100,
+      top: 40,
+      right: 1100,
+      bottom: 740,
+      width: 1000,
+      height: 700,
+      toJSON: () => ({}),
+    })
+
+    fireEvent.mouseDown(sourcePort, { button: 0, clientX: 212, clientY: 59 })
+    fireEvent.mouseMove(document, { clientX: 620, clientY: 210 })
+
+    const pendingPath = document.getElementById('pending-path')
+
+    await waitFor(() => {
+      expect(pendingPath).toHaveAttribute('d', expect.stringContaining('555,450'))
+    })
+  })
+
+  it('anchors transformed connections to the transformer middle left and right when source and target rows differ', async () => {
+    renderWithPersistedMappings([
+      {
+        src: 'productName',
+        tgt: 'name',
+        srcNodeId: 'src-productName',
+        tgtNodeId: 'tgt-name',
+        srcPos: { x: 40, y: 10 },
+        tgtPos: { x: 650, y: 300 },
+        srcMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+        tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+        transformer: 'tf-1',
+        transformerInputType: 'string',
+        transformerOutputType: 'string',
+        transformerProps: { separator: '-' },
+        extraInputs: [],
+      },
+      {
+        src: 'price',
+        tgt: 'id',
+        srcNodeId: 'src-price',
+        tgtNodeId: 'tgt-id',
+        srcPos: { x: 40, y: 300 },
+        tgtPos: { x: 650, y: 10 },
+        srcMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+        tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+        transformer: 'none',
+        transformerInputType: 'any',
+        transformerOutputType: 'any',
+        transformerProps: {},
+        extraInputs: [],
+      },
+    ])
+
+    await waitFor(() => {
+      expect(screen.getByText('Concatenate')).toBeInTheDocument()
+      expect(document.getElementById('nd-src-productName')).toHaveStyle({ top: '30px' })
+      expect(document.getElementById('nd-tgt-name')).toHaveStyle({ top: '100px' })
+    })
+
+    const pathData = Array.from(document.querySelectorAll('path')).map(path => path.getAttribute('d')).filter(Boolean)
+
+    expect(pathData.some(d => /^M 212,59 C .* 361,94$/.test(d))).toBe(true)
+    expect(pathData.some(d => /^M 501,94 C .* 650,129$/.test(d))).toBe(true)
   })
 })
