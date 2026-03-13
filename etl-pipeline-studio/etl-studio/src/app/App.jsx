@@ -1,4 +1,5 @@
 import { WizardProvider, useWizard } from '../shared/store/wizardStore.jsx'
+import { getWizardStorageKeyForUser } from '../shared/store/wizardPersistence.js'
 import { useUser } from '../shared/store/userContext.jsx';
 import TopNav      from '../features/etl-wizard/TopNav.jsx'
 import StepBar     from '../features/etl-wizard/StepBar.jsx'
@@ -95,8 +96,10 @@ function AppContent() {
 }
 
 export default function App() {
+  const { user } = useUser()
+
   return (
-    <WizardProvider>
+    <WizardProvider key={getWizardStorageKeyForUser(user?.userId)} user={user}>
       <AppContent />
     </WizardProvider>
   )

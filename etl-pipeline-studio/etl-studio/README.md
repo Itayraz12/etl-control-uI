@@ -22,6 +22,22 @@ npm run dev
 
 Open **http://localhost:5173** in your browser.
 
+### Session timeout configuration
+
+The UI supports build-time session timeout properties via Vite environment variables:
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `VITE_IDLE_LOGOUT_MINUTES` | `15` | Logs out the current user after this many minutes of inactivity |
+| `VITE_SCOPE_RESET_GRACE_MINUTES` | `10` | Clears the timed-out user's saved ETL scope if they do not log back in within this many minutes |
+
+Example `.env` values:
+
+```bash
+VITE_IDLE_LOGOUT_MINUTES=20
+VITE_SCOPE_RESET_GRACE_MINUTES=15
+```
+
 ---
 
 ## 🏗️ Project Architecture

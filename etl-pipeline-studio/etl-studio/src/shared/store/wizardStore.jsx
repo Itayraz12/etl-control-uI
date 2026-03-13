@@ -1,31 +1,11 @@
 import { createContext, useContext, useReducer, useEffect, useMemo } from 'react'
+import {
+  buildDefaultWizardStateForUser,
+  buildStateFromPersisted,
+  loadPersistedWizardStateForUser,
+  serializeWizardState,
+} from './wizardPersistence.js'
 
-const WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
-
-function loadPersistedWizardState() {
-  try {
-    const raw = localStorage.getItem(WIZARD_STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    return {
-      ...parsed,
-      currentStep: Number.isInteger(parsed.currentStep) ? parsed.currentStep : 0,
-      completedSteps: new Set(Array.isArray(parsed.completedSteps) ? parsed.completedSteps : []),
-      mappings: Array.isArray(parsed.mappings) ? parsed.mappings : [],
-      filters: Array.isArray(parsed.filters) ? parsed.filters : [],
-      metadata: parsed.metadata && typeof parsed.metadata === 'object' ? parsed.metadata : undefined,
-      source: parsed.source && typeof parsed.source === 'object' ? parsed.source : undefined,
-      upload: parsed.upload && typeof parsed.upload === 'object' ? parsed.upload : undefined,
-      sink: parsed.sink && typeof parsed.sink === 'object' ? parsed.sink : undefined,
-      navigationMode: ['menu', 'etl-config', 'etl-management'].includes(parsed.navigationMode) ? parsed.navigationMode : 'menu',
-      theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'dark',
-    }
-  } catch {
-    return null
-  }
-}
-
-// ── Initial State ─────────────────────────────────────────────────────────
 const initialState = {
   // Global navigation mode
   navigationMode: 'menu', // 'menu' | 'etl-config' | 'etl-management'
@@ -144,17 +124,13 @@ function wizardReducer(state, action) {
 // ── Context ───────────────────────────────────────────────────────────────
 const WizardContext = createContext(null)
 
-export function WizardProvider({ children }) {
+export function WizardProvider({ children, user = null }) {
   const [state, dispatch] = useReducer(wizardReducer, initialState, (baseState) => {
-    const persistedState = loadPersistedWizardState()
-    return persistedState ? {
-      ...baseState,
-      ...persistedState,
-      metadata: persistedState.metadata ? { ...baseState.metadata, ...persistedState.metadata } : baseState.metadata,
-      source: persistedState.source ? { ...baseState.source, ...persistedState.source } : baseState.source,
-      upload: persistedState.upload ? { ...baseState.upload, ...persistedState.upload } : baseState.upload,
-      sink: persistedState.sink ? { ...baseState.sink, ...persistedState.sink } : baseState.sink,
-    } : baseState
+    const persistedState = loadPersistedWizardStateForUser(user?.userId)
+    return buildStateFromPersisted(
+      buildDefaultWizardStateForUser(baseState, user),
+      persistedState,
+    )
   })
 
   // apply theme when it changes & persist
@@ -164,23 +140,26 @@ export function WizardProvider({ children }) {
   }, [state.theme])
 
   useEffect(() => {
-    try {
-      localStorage.setItem(WIZARD_STORAGE_KEY, JSON.stringify({
-        ...state,
-        completedSteps: Array.from(state.completedSteps),
-      }))
-    } catch {}
-  }, [state])
+    const persistedState = loadPersistedWizardStateForUser(user?.userId)
+    dispatch({
+      type: 'LOAD_STATE',
+      payload: buildStateFromPersisted(
+        buildDefaultWizardStateForUser(initialState, user),
+        persistedState,
+      ),
+    })
+  }, [user?.userId, user?.teamName])
 
-  // on mount, load saved theme
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('theme')
-      if (saved === 'light' || saved === 'dark') {
-        dispatch({ type: 'SET_THEME', payload: saved })
-      }
+      localStorage.setItem(
+        user?.userId
+          ? `etl-studio-wizard-draft:${String(user.userId).trim().toLowerCase().replace(/\s+/g, '-')}`
+          : 'etl-studio-wizard-draft',
+        serializeWizardState(state),
+      )
     } catch {}
-  }, [])
+  }, [state, user?.userId])
 
   const actions = useMemo(() => ({
     setNavigationMode: (mode) => dispatch({ type: 'SET_NAVIGATION_MODE', payload: mode }),

@@ -3,7 +3,7 @@ import { useUser } from '../../shared/store/userContext.jsx';
 
 export default function MainMenu() {
   const { state, actions } = useWizard()
-  const { user, setUser } = useUser();
+  const { user, logout } = useUser();
 
   const handleETLConfiguration = () => {
     actions.setNavigationMode('etl-config')
@@ -15,7 +15,7 @@ export default function MainMenu() {
   }
 
   function handleLogout() {
-    setUser(null);
+    logout('manual');
   }
 
   return (

@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { useUser } from '../../shared/store/userContext.jsx';
-import { useWizard } from '../../shared/store/wizardStore.jsx';
 import { useMockMode } from '../../shared/store/mockModeContext.jsx';
 
 export default function LoginPage() {
-  const { setUser } = useUser();
-  const { actions } = useWizard();
+  const { login } = useUser();
   const { useMock, setUseMock } = useMockMode();
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
@@ -13,8 +11,7 @@ export default function LoginPage() {
 
   function handleSubmit(e) {
     e.preventDefault();
-    setUser({ userId, teamName });
-    actions.setNavigationMode('etl-management');
+    login({ userId, teamName });
   }
 
   return (
