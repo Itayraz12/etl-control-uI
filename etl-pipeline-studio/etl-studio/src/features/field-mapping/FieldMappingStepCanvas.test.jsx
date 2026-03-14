@@ -247,6 +247,38 @@ describe('FieldMappingStep transformer modal regression', () => {
     expect(screen.queryByTestId('target-list-item-unitPrice')).not.toBeInTheDocument()
   })
 
+  it('shows referenced array target fields from the selected entity schema', async () => {
+    renderWithPersistedMappings([], {}, {
+      type: 'object',
+      properties: {
+        persons: {
+          type: 'array',
+          items: {
+            $ref: '#/$defs/Person',
+          },
+        },
+      },
+      $defs: {
+        Person: {
+          type: 'object',
+          properties: {
+            firstName: { type: 'string' },
+            lastName: { type: 'string' },
+          },
+        },
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('target-list-item-persons')).toBeInTheDocument()
+      expect(screen.getByTestId('target-list-item-person.*.firstName')).toBeInTheDocument()
+      expect(screen.getByTestId('target-list-item-person.*.lastName')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('target-list-name-person.*.firstName')).toHaveTextContent('person.*.firstName')
+    expect(screen.queryByTestId('target-list-item-persons[]')).not.toBeInTheDocument()
+  })
+
   it('auto-aligns saved source and target nodes when entering the field mapping tab', async () => {
     renderWithPersistedState({
       srcPos: { x: 210, y: 190 },

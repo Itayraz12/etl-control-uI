@@ -118,5 +118,156 @@ describe('SourceUploadStep', () => {
     const persisted = JSON.parse(localStorage.getItem('etl-studio-wizard-draft') || '{}')
     expect(persisted.upload?.done).not.toBe(true)
   })
+
+  it('shows all nested fields when the uploaded schema contains arrays', async () => {
+    fetchSchemaByExample.mockResolvedValue({
+      type: 'object',
+      properties: {
+        orders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['id'],
+            properties: {
+              id: { type: 'string' },
+              lines: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    sku: { type: 'string' },
+                    quantity: { type: 'number' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    renderStep()
+
+    const input = screen.getByTestId('sample-file-input')
+    const file = new File(['{"orders":[]}'], 'orders.json', { type: 'application/json' })
+
+    fireEvent.change(input, { target: { files: [file] } })
+
+    await screen.findByText('Detected Schema')
+
+    expect(screen.getByText('orders')).toBeInTheDocument()
+    expect(screen.getByText('order.*.id')).toBeInTheDocument()
+    expect(screen.getByText('order.*.lines')).toBeInTheDocument()
+    expect(screen.getByText('order.*.line.*.sku')).toBeInTheDocument()
+    expect(screen.getByText('order.*.line.*.quantity')).toBeInTheDocument()
+    expect(screen.queryByText('order.*.line.*.*')).not.toBeInTheDocument()
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem('etl-studio-wizard-draft') || '{}')
+      expect(persisted.upload.schema).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'orders', type: 'array' }),
+          expect.objectContaining({ id: 'order.*.id', type: 'string', required: true }),
+          expect.objectContaining({ id: 'order.*.lines', type: 'array' }),
+          expect.objectContaining({ id: 'order.*.line.*.sku', type: 'string' }),
+          expect.objectContaining({ id: 'order.*.line.*.quantity', type: 'number' }),
+        ])
+      )
+    })
+  })
+
+  it('shows child fields when array items are provided as a schema list', async () => {
+    fetchSchemaByExample.mockResolvedValue({
+      type: 'object',
+      properties: {
+        batches: {
+          type: 'array',
+          items: [
+            {
+              type: 'object',
+              properties: {
+                batchId: { type: 'string' },
+                createdAt: { type: 'string', format: 'date-time' },
+              },
+            },
+          ],
+        },
+      },
+    })
+
+    renderStep()
+
+    const input = screen.getByTestId('sample-file-input')
+    const file = new File(['{"batches":[]}'], 'batches.json', { type: 'application/json' })
+
+    fireEvent.change(input, { target: { files: [file] } })
+
+    await screen.findByText('Detected Schema')
+
+    expect(screen.getByText('batches')).toBeInTheDocument()
+    expect(screen.getByText('batch.*.batchId')).toBeInTheDocument()
+    expect(screen.getByText('batch.*.createdAt')).toBeInTheDocument()
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem('etl-studio-wizard-draft') || '{}')
+      expect(persisted.upload.schema).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'batches', type: 'array' }),
+          expect.objectContaining({ id: 'batch.*.batchId', type: 'string' }),
+          expect.objectContaining({ id: 'batch.*.createdAt', type: 'string', inferredFormat: 'date-time' }),
+        ])
+      )
+    })
+  })
+
+  it('shows referenced array item fields like person.*.firstName', async () => {
+    fetchSchemaByExample.mockResolvedValue({
+      type: 'object',
+      required: ['persons'],
+      properties: {
+        persons: {
+          type: 'array',
+          items: {
+            $ref: '#/$defs/Person',
+          },
+        },
+      },
+      $defs: {
+        Person: {
+          type: 'object',
+          required: ['firstName'],
+          properties: {
+            firstName: { type: 'string' },
+            lastName: { type: 'string' },
+          },
+        },
+      },
+    })
+
+    renderStep()
+
+    const input = screen.getByTestId('sample-file-input')
+    const file = new File(['{"persons":[]}'], 'persons.json', { type: 'application/json' })
+
+    fireEvent.change(input, { target: { files: [file] } })
+
+    await screen.findByText('Detected Schema')
+
+    expect(screen.getByText('persons')).toBeInTheDocument()
+    expect(screen.getByText('person.*.firstName')).toBeInTheDocument()
+    expect(screen.getByText('person.*.lastName')).toBeInTheDocument()
+    expect(screen.queryByText('persons[]')).not.toBeInTheDocument()
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem('etl-studio-wizard-draft') || '{}')
+      expect(persisted.upload.schema).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'persons', type: 'array', required: true }),
+          expect.objectContaining({ id: 'person.*.firstName', type: 'string', required: true }),
+          expect.objectContaining({ id: 'person.*.lastName', type: 'string' }),
+        ])
+      )
+    })
+  })
 })
 

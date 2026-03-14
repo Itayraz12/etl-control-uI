@@ -158,6 +158,88 @@ describe('MetadataStep entity target schema', () => {
       )
     })
   })
+
+  it('persists nested array target fields when the selected entity schema contains arrays', async () => {
+    const user = userEvent.setup()
+    fetchEntitySchema.mockResolvedValue({
+      type: 'object',
+      properties: {
+        persons: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['firstName'],
+            properties: {
+              firstName: { type: 'string' },
+              lastName: { type: 'string' },
+            },
+          },
+        },
+      },
+    })
+
+    renderStep()
+
+    await user.selectOptions(screen.getAllByRole('combobox')[1], 'Product')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.targetSchema).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'persons', type: 'array' }),
+          expect.objectContaining({ id: 'person.*.firstName', type: 'string', required: true }),
+          expect.objectContaining({ id: 'person.*.lastName', type: 'string' }),
+        ])
+      )
+    })
+  })
+
+  it('persists referenced array target fields like person.*.firstName after entity change', async () => {
+    const user = userEvent.setup()
+    fetchEntitySchema.mockResolvedValue({
+      type: 'object',
+      properties: {
+        persons: {
+          type: 'array',
+          items: {
+            $ref: '#/$defs/Person',
+          },
+        },
+      },
+      $defs: {
+        Person: {
+          type: 'object',
+          required: ['firstName'],
+          properties: {
+            firstName: { type: 'string' },
+            lastName: { type: 'string' },
+          },
+        },
+      },
+    })
+
+    renderStep()
+
+    await user.selectOptions(screen.getAllByRole('combobox')[1], 'Product')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.targetSchema).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'persons', type: 'array' }),
+          expect.objectContaining({ id: 'person.*.firstName', type: 'string', required: true }),
+          expect.objectContaining({ id: 'person.*.lastName', type: 'string' }),
+        ])
+      )
+      expect(persisted.targetSchema).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'persons[]' }),
+        ])
+      )
+    })
+  })
 })
+
+
 
 

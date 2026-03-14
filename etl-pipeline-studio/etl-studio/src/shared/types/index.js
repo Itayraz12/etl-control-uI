@@ -148,12 +148,44 @@ function isJsonSchemaObject(schema) {
   )
 }
 
-function normalizeJsonSchemaField(path, schema = {}, required = false) {
-  const type = normalizeFieldType(schema.type, schema.properties ? 'object' : schema.items ? 'array' : 'string')
+function resolveJsonPointer(rootSchema, pointer) {
+  if (!pointer || typeof pointer !== 'string' || !pointer.startsWith('#/')) return null
+
+  return pointer
+    .slice(2)
+    .split('/')
+    .reduce((current, segment) => {
+      if (!current || typeof current !== 'object') return null
+      const key = segment.replace(/~1/g, '/').replace(/~0/g, '~')
+      return current[key] ?? null
+    }, rootSchema)
+}
+
+function dereferenceJsonSchema(schema, rootSchema, seenRefs = new Set()) {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return schema
+  if (!schema.$ref || typeof schema.$ref !== 'string') return schema
+  if (seenRefs.has(schema.$ref)) return schema
+
+  const resolved = resolveJsonPointer(rootSchema, schema.$ref)
+  if (!resolved || resolved === schema) return schema
+
+  const nextSeenRefs = new Set(seenRefs)
+  nextSeenRefs.add(schema.$ref)
+
+  return {
+    ...dereferenceJsonSchema(resolved, rootSchema, nextSeenRefs),
+    ...schema,
+    $ref: undefined,
+  }
+}
+
+function normalizeJsonSchemaField(path, schema = {}, required = false, rootSchema = null) {
+  const resolvedSchema = dereferenceJsonSchema(schema, rootSchema || schema)
+  const type = normalizeFieldType(resolvedSchema.type, resolvedSchema.properties ? 'object' : resolvedSchema.items ? 'array' : 'string')
   const id = path || 'root'
   const name = id.includes('.') ? id.split('.').at(-1) : id
-  const itemType = schema.items
-    ? normalizeFieldType(schema.items.type, schema.items?.properties ? 'object' : 'string')
+  const itemType = resolvedSchema.items
+    ? normalizeFieldType(resolvedSchema.items.type, resolvedSchema.items?.properties ? 'object' : 'string')
     : undefined
 
   return {
@@ -162,43 +194,102 @@ function normalizeJsonSchemaField(path, schema = {}, required = false) {
     name,
     type,
     arrayItemType: type === 'array' ? itemType : undefined,
-    nullable: Array.isArray(schema.type)
-      ? schema.type.some(value => String(value).trim().toLowerCase() === 'null')
-      : Boolean(schema.nullable),
+    nullable: Array.isArray(resolvedSchema.type)
+      ? resolvedSchema.type.some(value => String(value).trim().toLowerCase() === 'null')
+      : Boolean(resolvedSchema.nullable),
     required,
     isArray: type === 'array',
-    description: typeof schema.description === 'string' ? schema.description : undefined,
-    inferredFormat: typeof schema.format === 'string' ? schema.format : undefined,
+    description: typeof resolvedSchema.description === 'string' ? resolvedSchema.description : undefined,
+    inferredFormat: typeof resolvedSchema.format === 'string' ? resolvedSchema.format : undefined,
   }
 }
 
-function flattenJsonSchemaProperties(properties = {}, requiredFields = [], basePath = '') {
+function flattenJsonSchemaProperties(properties = {}, requiredFields = [], basePath = '', rootSchema = null) {
   const requiredSet = new Set(Array.isArray(requiredFields) ? requiredFields : [])
 
   return Object.entries(properties).flatMap(([key, value]) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return []
 
     const path = basePath ? `${basePath}.${key}` : key
-    return flattenJsonSchemaNode(path, value, requiredSet.has(key))
+    return flattenJsonSchemaNode(path, value, requiredSet.has(key), rootSchema)
   })
 }
 
-function flattenJsonSchemaNode(path, schema = {}, required = false) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return []
+function singularizeSchemaSegment(segment = '') {
+  const value = String(segment ?? '').trim()
+  if (!value) return value
+  if (/ies$/i.test(value) && value.length > 3) return value.replace(/ies$/i, 'y')
+  if (/(sses|shes|ches|xes|zes)$/i.test(value)) return value.replace(/es$/i, '')
+  if (/s$/i.test(value) && !/ss$/i.test(value) && value.length > 1) return value.slice(0, -1)
+  return value
+}
 
-  const type = normalizeFieldType(schema.type, schema.properties ? 'object' : schema.items ? 'array' : 'string')
-  const field = normalizeJsonSchemaField(path, schema, required)
+function buildJsonSchemaArrayPath(path = '') {
+  const segments = String(path ?? '').split('.').filter(Boolean)
+  if (segments.length === 0) return 'item.*'
 
-  if (type === 'object' && schema.properties && typeof schema.properties === 'object') {
-    return flattenJsonSchemaProperties(schema.properties, schema.required, path)
+  const baseSegments = segments.slice(0, -1)
+  const lastSegment = singularizeSchemaSegment(segments[segments.length - 1])
+  return [...baseSegments, `${lastSegment}.*`].join('.')
+}
+
+function getJsonSchemaArrayItemSchemas(schema = {}, rootSchema = null) {
+  const resolvedSchema = dereferenceJsonSchema(schema, rootSchema || schema)
+  const tupleItems = Array.isArray(resolvedSchema?.items) ? resolvedSchema.items : []
+  const prefixedItems = Array.isArray(resolvedSchema?.prefixItems) ? resolvedSchema.prefixItems : []
+  const directItem = resolvedSchema?.items && typeof resolvedSchema.items === 'object' && !Array.isArray(resolvedSchema.items)
+    ? [resolvedSchema.items]
+    : []
+
+  return [...directItem, ...tupleItems, ...prefixedItems]
+    .filter(item => item && typeof item === 'object' && !Array.isArray(item))
+}
+
+function flattenJsonSchemaArrayItems(path, itemsSchema, required = false, rootSchema = null) {
+  if (!itemsSchema || typeof itemsSchema !== 'object' || Array.isArray(itemsSchema)) return []
+
+  const resolvedItemsSchema = dereferenceJsonSchema(itemsSchema, rootSchema || itemsSchema)
+
+  const arrayPath = buildJsonSchemaArrayPath(path)
+  const itemType = normalizeFieldType(
+    resolvedItemsSchema.type,
+    resolvedItemsSchema.properties ? 'object' : resolvedItemsSchema.items ? 'array' : 'string'
+  )
+
+  if (itemType === 'object' && resolvedItemsSchema.properties && typeof resolvedItemsSchema.properties === 'object') {
+    return flattenJsonSchemaProperties(resolvedItemsSchema.properties, resolvedItemsSchema.required, arrayPath, rootSchema)
   }
 
-  if (type === 'array' && schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
-    const itemType = normalizeFieldType(schema.items.type, schema.items.properties ? 'object' : 'string')
-    if (itemType === 'object' && schema.items.properties && typeof schema.items.properties === 'object') {
+  if (itemType === 'array' && getJsonSchemaArrayItemSchemas(resolvedItemsSchema, rootSchema).length > 0) {
+    return [
+      normalizeJsonSchemaField(arrayPath, resolvedItemsSchema, required, rootSchema),
+      ...getJsonSchemaArrayItemSchemas(resolvedItemsSchema, rootSchema).flatMap(itemSchema => (
+        flattenJsonSchemaArrayItems(arrayPath, itemSchema, false, rootSchema)
+      )),
+    ]
+  }
+
+  return [normalizeJsonSchemaField(arrayPath, resolvedItemsSchema, required, rootSchema)]
+}
+
+function flattenJsonSchemaNode(path, schema = {}, required = false, rootSchema = null) {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return []
+
+  const resolvedSchema = dereferenceJsonSchema(schema, rootSchema || schema)
+
+  const type = normalizeFieldType(resolvedSchema.type, resolvedSchema.properties ? 'object' : resolvedSchema.items ? 'array' : 'string')
+  const field = normalizeJsonSchemaField(path, resolvedSchema, required, rootSchema || resolvedSchema)
+
+  if (type === 'object' && resolvedSchema.properties && typeof resolvedSchema.properties === 'object') {
+    return flattenJsonSchemaProperties(resolvedSchema.properties, resolvedSchema.required, path, rootSchema || resolvedSchema)
+  }
+
+  if (type === 'array') {
+    const itemSchemas = getJsonSchemaArrayItemSchemas(resolvedSchema, rootSchema || resolvedSchema)
+    if (itemSchemas.length > 0) {
       return [
         field,
-        ...flattenJsonSchemaProperties(schema.items.properties, schema.items.required, `${path}[]`),
+        ...itemSchemas.flatMap(itemSchema => flattenJsonSchemaArrayItems(path, itemSchema, required, rootSchema || resolvedSchema)),
       ]
     }
   }
@@ -212,17 +303,17 @@ function normalizeSourceSchemaFromJsonSchema(schema) {
   const rootType = normalizeFieldType(schema.type, schema.properties ? 'object' : schema.items ? 'array' : 'string')
 
   if (rootType === 'object' && schema.properties && typeof schema.properties === 'object') {
-    return flattenJsonSchemaProperties(schema.properties, schema.required)
+    return flattenJsonSchemaProperties(schema.properties, schema.required, '', schema)
   }
 
-  if (rootType === 'array' && schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
-    const itemType = normalizeFieldType(schema.items.type, schema.items.properties ? 'object' : 'string')
-    if (itemType === 'object' && schema.items.properties && typeof schema.items.properties === 'object') {
-      return flattenJsonSchemaProperties(schema.items.properties, schema.items.required)
+  if (rootType === 'array') {
+    const itemSchemas = getJsonSchemaArrayItemSchemas(schema, schema)
+    if (itemSchemas.length > 0) {
+      return itemSchemas.flatMap(itemSchema => flattenJsonSchemaArrayItems('items', itemSchema, false, schema))
     }
   }
 
-  return flattenJsonSchemaNode('value', schema, false)
+  return flattenJsonSchemaNode('value', schema, false, schema)
 }
 
 export function normalizeSchemaField(field, index = 0) {
