@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useWizard } from "../../shared/store/wizardStore";
 import { useConfig } from "../../shared/store/configContext.jsx";
 import { Card, CardTitle, ValidationItem, Btn } from '../../shared/components/index.jsx'
-import { SOURCE_TYPES, MOCK_SCHEMA, TARGET_FIELDS } from '../../shared/types/index.js'
+import { SOURCE_TYPES, resolveSourceSchema, resolveTargetSchema } from '../../shared/types/index.js'
 import { MOCK_FILTER_OPERATORS, saveDraftConfiguration } from '../../shared/services/configService.js'
 import { formatTransformationYamlItem } from '../../shared/services/configurationYaml.js'
 import { formatInputFieldsYamlSection } from '../../shared/services/configurationYaml.js'
@@ -78,6 +78,8 @@ function YamlPreview({ yaml }) {
 export default function SummaryStep() {
   const { state, actions } = useWizard()
   const { transformers } = useConfig()
+  const sourceSchema = resolveSourceSchema(state.upload)
+  const targetSchema = resolveTargetSchema(state.targetSchema)
   const [submitted, setSubmitted] = useState(false)
   const [copying, setCopying] = useState(false)
   const [copiedDash, setCopiedDash] = useState(false)
@@ -85,9 +87,9 @@ export default function SummaryStep() {
   const [savingDraft, setSavingDraft] = useState(false)
   const [draftModal, setDraftModal] = useState(null)
   const srcMeta = SOURCE_TYPES.find(t => t.id === state.source.sourceType)
-  const reqMapped = state.mappings.filter(m => ['name', 'unitPrice'].includes(m.tgt)).length
-  const REQUIRED_FIELDS = ['name', 'unitPrice']
-  const unmappedRequired = REQUIRED_FIELDS.filter(f => !state.mappings.some(m => m.tgt === f))
+  const requiredTargetFieldIds = targetSchema.filter(field => field.required).map(field => field.id)
+  const reqMapped = state.mappings.filter(m => requiredTargetFieldIds.includes(m.tgt)).length
+  const unmappedRequired = requiredTargetFieldIds.filter(f => !state.mappings.some(m => m.tgt === f))
 
   const getMappingSources = (mapping) => [
     mapping.src,
@@ -133,11 +135,11 @@ export default function SummaryStep() {
     }
 
     // Find source and target field types
-    const sourceFieldsYaml = formatInputFieldsYamlSection(MOCK_SCHEMA)
+    const sourceFieldsYaml = formatInputFieldsYamlSection(sourceSchema)
 
     const getFieldType = (fieldName, isTarget = false) => {
-      const schema = isTarget ? TARGET_FIELDS : MOCK_SCHEMA
-      const field = schema.find(f => f.name === fieldName)
+      const schema = isTarget ? targetSchema : sourceSchema
+      const field = schema.find(f => f.name === fieldName || f.id === fieldName || f.path === fieldName)
       return field?.type || 'unknown'
     }
 
@@ -205,7 +207,7 @@ ${state.sink.shadow ? `  shadow: true\n  shadow_topic: ${state.sink.shadowTopic 
   const yaml = generateYaml()
 
   const validations = [
-    { type: reqMapped >= 2 ? 'ok' : 'err',  text: `Required fields mapped (${reqMapped}/2)` },
+    { type: unmappedRequired.length === 0 ? 'ok' : 'err',  text: `Required fields mapped (${reqMapped}/${requiredTargetFieldIds.length || 0})` },
     { type: state.mappings.length > 0 ? 'ok' : 'warn', text: `${state.mappings.length} field mapping(s) defined` },
     { type: state.source.kafkaTopic ? 'ok' : 'warn', text: `Source configured: ${srcMeta?.name || 'unknown'}` },
     { type: state.metadata.productSource ? 'ok' : 'err', text: `Metadata: product source "${state.metadata.productSource}"` },

@@ -29,7 +29,7 @@ vi.mock('../../shared/store/configContext.jsx', () => ({
 
 const WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
 
-function renderWithPersistedState(mappingOverrides = {}) {
+function renderWithPersistedState(mappingOverrides = {}, uploadOverrides = {}, targetSchema = []) {
   localStorage.setItem(
     WIZARD_STORAGE_KEY,
     JSON.stringify({
@@ -53,7 +53,8 @@ function renderWithPersistedState(mappingOverrides = {}) {
         streamingContinuity: 'continuous',
         recordsPerDay: 'millions',
       },
-      upload: { done: true },
+      upload: { done: true, ...uploadOverrides },
+      targetSchema,
       mappings: [
         {
           src: 'productName',
@@ -94,7 +95,7 @@ function renderWithPersistedState(mappingOverrides = {}) {
   )
 }
 
-function renderWithPersistedMappings(mappings) {
+function renderWithPersistedMappings(mappings, uploadOverrides = {}, targetSchema = []) {
   localStorage.setItem(
     WIZARD_STORAGE_KEY,
     JSON.stringify({
@@ -118,7 +119,8 @@ function renderWithPersistedMappings(mappings) {
         streamingContinuity: 'continuous',
         recordsPerDay: 'millions',
       },
-      upload: { done: true },
+      upload: { done: true, ...uploadOverrides },
+      targetSchema,
       mappings,
       filters: [],
       sink: {
@@ -194,6 +196,55 @@ describe('FieldMappingStep transformer modal regression', () => {
       expect(document.querySelectorAll('[id^="nd-source-price-"]').length).toBe(1)
       expect(document.querySelectorAll('[id^="nd-target-unitPrice-"]').length).toBe(1)
     })
+  })
+
+  it('uses the uploaded response schema as the source-field list', async () => {
+    renderWithPersistedMappings([], {
+      schema: {
+        type: 'object',
+        required: ['customerId'],
+        properties: {
+          customerId: { type: 'string' },
+          netAmount: { type: 'number' },
+          customer: {
+            type: 'object',
+            properties: {
+              email: { type: 'string' },
+            },
+          },
+        },
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('source-list-item-customerId')).toBeInTheDocument()
+      expect(screen.getByTestId('source-list-item-netAmount')).toBeInTheDocument()
+      expect(screen.getByTestId('source-list-item-customer.email')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('source-list-name-customer.email')).toHaveTextContent('customer.email')
+    expect(screen.queryByTestId('source-list-item-productName')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('source-list-item-price')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('source-list-item-customer')).not.toBeInTheDocument()
+  })
+
+  it('uses the selected entity schema as the target-field list', async () => {
+    renderWithPersistedMappings([], {}, {
+      type: 'object',
+      required: ['product.code'],
+      properties: {
+        'product.code': { type: 'string' },
+        totalAmount: { type: 'number' },
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('target-list-item-product.code')).toBeInTheDocument()
+      expect(screen.getByTestId('target-list-item-totalAmount')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('target-list-name-product.code')).toHaveTextContent('product.code')
+    expect(screen.queryByTestId('target-list-item-unitPrice')).not.toBeInTheDocument()
   })
 
   it('auto-aligns saved source and target nodes when entering the field mapping tab', async () => {

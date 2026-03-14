@@ -1,20 +1,72 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { Card, CardTitle, SidePanel, ValidationItem, Btn, Spinner, TypeBadge } from '../../shared/components/index.jsx'
-import { MOCK_SCHEMA } from '../../shared/types/index.js'
+import { normalizeSourceSchema, resolveSourceSchema } from '../../shared/types/index.js'
+import { fetchSchemaByExample } from '../../shared/services/configService.js'
+import { useMockMode } from '../../shared/store/mockModeContext.jsx'
 
 export default function SourceUploadStep() {
   const { state, actions } = useWizard()
+  const { useMock } = useMockMode()
+  const fileInputRef = useRef(null)
   const [sampleMode, setSampleMode] = useState('local')
   const [phase, setPhase] = useState(state.upload.done ? 'done' : 'idle')
+  const [error, setError] = useState('')
+  const sourceSchema = resolveSourceSchema(state.upload)
 
-  const handleUpload = () => {
+  useEffect(() => {
+    setPhase(state.upload.done ? 'done' : 'idle')
+  }, [state.upload.done])
+
+  const openFilePicker = () => {
     if (phase === 'parsing') return
+    fileInputRef.current?.click()
+  }
+
+  const inferSchemaFromFile = async (file) => {
+    if (!file || phase === 'parsing') return
+
+    const previousPhase = phase
+    if (phase === 'parsing') return
+
+    setError('')
     setPhase('parsing')
-    setTimeout(() => {
+
+    try {
+      const example = await file.text()
+      const schemaResponse = await fetchSchemaByExample({
+        example,
+        fileName: file.name,
+        contentType: file.type || (file.name.toLowerCase().endsWith('.json') ? 'application/json' : 'text/plain'),
+      }, useMock)
+      const schema = normalizeSourceSchema(schemaResponse)
+      if (schema.length === 0) {
+        throw new Error('Schema inference returned no fields')
+      }
+
+      actions.updateUpload({
+        done: true,
+        schema,
+        fileName: file.name,
+        fileType: file.type || inferFileType(file.name),
+        fileSize: file.size || 0,
+      })
       setPhase('done')
-      actions.setUploadDone(true)
-    }, 1300)
+    } catch (uploadError) {
+      setError(uploadError?.message || 'Failed to infer schema from the selected sample file.')
+      setPhase(state.upload.done ? previousPhase : 'idle')
+    }
+  }
+
+  const handleUploadButtonClick = () => {
+    setSampleMode('local')
+    openFilePicker()
+  }
+
+  const handleInputChange = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    await inferSchemaFromFile(file)
   }
 
   return (
@@ -26,35 +78,56 @@ export default function SourceUploadStep() {
           {/* Mode toggle */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>Sample origin:</span>
-            <Btn sm v={sampleMode === 'local' ? 'primary' : 'ghost'} onClick={() => setSampleMode('local')}>Upload sample</Btn>
+            <Btn sm v={sampleMode === 'local' ? 'primary' : 'ghost'} onClick={handleUploadButtonClick}>Upload sample</Btn>
             <Btn sm v={sampleMode === 'source' ? 'primary' : 'ghost'} onClick={() => setSampleMode('source')}>Pull from source config</Btn>
           </div>
 
+          <input
+            ref={fileInputRef}
+            data-testid="sample-file-input"
+            type="file"
+            accept=".json,.csv,application/json,text/csv,text/plain"
+            style={{ display: 'none' }}
+            onChange={handleInputChange}
+          />
+
           {/* Drop zone */}
-          <DropZone phase={phase} sampleMode={sampleMode} onUpload={handleUpload} />
+          <DropZone
+            phase={phase}
+            sampleMode={sampleMode}
+            onBrowse={openFilePicker}
+            onFileSelected={inferSchemaFromFile}
+            detectedFieldCount={sourceSchema.length}
+          />
 
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10 }}>
             {sampleMode === 'source'
               ? 'Uses Kafka / RabbitMQ settings from Source Config to pull a live sample.'
-              : 'Drop a JSON or CSV file — schema is extracted automatically via Web Worker.'}
+              : 'Drop a JSON or CSV file — the selected sample is sent to the backend for schema inference.'}
           </div>
+
+          {!!error && (
+            <div data-testid="source-upload-error" style={{ marginTop: 12, fontSize: 12, color: 'var(--danger)' }}>
+              {error}
+            </div>
+          )}
         </Card>
 
-        {phase === 'done' && <SchemaCard />}
+        {phase === 'done' && <SchemaCard schema={sourceSchema} />}
       </div>
 
       <SidePanel title="Sample Info" items={[
         ['Mode',     sampleMode === 'local' ? 'Upload' : 'From Source'],
         ['Status',   phase === 'done' ? '✓ Ready' : phase === 'parsing' ? 'Parsing…' : 'Waiting…'],
-        ['Type',     phase === 'done' ? 'JSON' : '—'],
-        ['Size',     phase === 'done' ? '14.2 MB' : '—'],
-        ['Fields',   phase === 'done' ? String(MOCK_SCHEMA.length) : '—'],
+        ['Type',     phase === 'done' ? displayUploadedType(state.upload) : '—'],
+        ['Size',     phase === 'done' ? formatFileSize(state.upload.fileSize) : '—'],
+        ['Fields',   phase === 'done' ? String(sourceSchema.length) : '—'],
         ['Encoding', phase === 'done' ? 'UTF-8' : '—'],
       ]}>
         {phase === 'done' && (
           <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: .5, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Worker</div>
-            <ValidationItem type="ok">Web Worker completed</ValidationItem>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: .5, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Schema Inference</div>
+            <ValidationItem type="ok">Backend schema inference completed</ValidationItem>
           </div>
         )}
       </SidePanel>
@@ -62,19 +135,27 @@ export default function SourceUploadStep() {
   )
 }
 
-function DropZone({ phase, sampleMode, onUpload }) {
+function DropZone({ phase, sampleMode, onBrowse, onFileSelected, detectedFieldCount }) {
   const [hovering, setHovering] = useState(false)
+
+  const handleDrop = async (e) => {
+    e.preventDefault()
+    setHovering(false)
+    if (phase === 'parsing' || sampleMode !== 'local') return
+    const file = e.dataTransfer?.files?.[0]
+    await onFileSelected(file)
+  }
 
   return (
     <div
-      onClick={phase !== 'parsing' ? onUpload : undefined}
+      onClick={phase !== 'parsing' && sampleMode === 'local' ? onBrowse : undefined}
       onDragOver={e => { e.preventDefault(); setHovering(true) }}
       onDragLeave={() => setHovering(false)}
-      onDrop={e => { e.preventDefault(); setHovering(false); if (phase !== 'parsing') onUpload() }}
+      onDrop={handleDrop}
       style={{
         border: `2px dashed ${phase === 'done' ? 'var(--success)' : hovering ? 'var(--accent)' : 'var(--border)'}`,
         borderRadius: 'var(--radius)', padding: 40, textAlign: 'center',
-        cursor: phase === 'parsing' ? 'default' : 'pointer',
+        cursor: phase === 'parsing' || sampleMode !== 'local' ? 'default' : 'pointer',
         transition: 'all .2s',
         background: phase === 'done' ? 'rgba(34,197,94,.07)' : hovering ? 'rgba(79,110,247,.07)' : 'var(--surf2)',
       }}
@@ -118,31 +199,32 @@ function DropZone({ phase, sampleMode, onUpload }) {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
           <Spinner />
           <div>
-            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Parsing sample via Web Worker…</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Streaming sample records…</div>
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Inferring schema from sample…</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Uploading file content to the backend…</div>
           </div>
         </div>
       )}
       {phase === 'done' && (
         <>
           <div style={{ fontSize: 42, marginBottom: 8 }}>✅</div>
-          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Sample parsed</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>Schema extracted · {MOCK_SCHEMA.length} fields detected</div>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Sample uploaded</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>Schema extracted · {detectedFieldCount} fields detected</div>
         </>
       )}
     </div>
   )
 }
 
-function SchemaCard() {
+function SchemaCard({ schema }) {
   return (
     <Card style={{ animation: 'fadeIn .3s ease' }}>
       <CardTitle>
-        🔍 Detected Schema
+        <span>🔍</span>
+        <span>Detected Schema</span>
         <span style={{ background: 'rgba(239,68,68,.15)', color: 'var(--danger)', fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 700 }}>INFERRED</span>
       </CardTitle>
-      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>Extracted from sample — {MOCK_SCHEMA.length} fields</div>
-      {MOCK_SCHEMA.map(f => (
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>Extracted from sample — {schema.length} fields</div>
+      {schema.map(f => (
         <div
           key={f.id}
           style={{ padding: '6px 10px 6px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid rgba(255,255,255,.03)' }}
@@ -159,3 +241,27 @@ function SchemaCard() {
     </Card>
   )
 }
+
+function inferFileType(fileName = '') {
+  const lower = String(fileName).toLowerCase()
+  if (lower.endsWith('.json')) return 'application/json'
+  if (lower.endsWith('.csv')) return 'text/csv'
+  return 'text/plain'
+}
+
+function displayUploadedType(upload) {
+  const rawType = upload?.fileType || inferFileType(upload?.fileName)
+  if (!rawType) return '—'
+  if (rawType.includes('json')) return 'JSON'
+  if (rawType.includes('csv')) return 'CSV'
+  return rawType
+}
+
+function formatFileSize(bytes) {
+  const size = Number(bytes)
+  if (!Number.isFinite(size) || size <= 0) return '—'
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
+

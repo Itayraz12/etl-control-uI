@@ -26,6 +26,7 @@ export function parsePersistedWizardState(raw) {
       metadata: parsed.metadata && typeof parsed.metadata === 'object' ? parsed.metadata : undefined,
       source: parsed.source && typeof parsed.source === 'object' ? parsed.source : undefined,
       upload: parsed.upload && typeof parsed.upload === 'object' ? parsed.upload : undefined,
+      targetSchema: Array.isArray(parsed.targetSchema) || (parsed.targetSchema && typeof parsed.targetSchema === 'object') ? parsed.targetSchema : undefined,
       sink: parsed.sink && typeof parsed.sink === 'object' ? parsed.sink : undefined,
       navigationMode: ['menu', 'etl-config', 'etl-management'].includes(parsed.navigationMode) ? parsed.navigationMode : 'menu',
       theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'dark',
@@ -76,6 +77,7 @@ export function buildStateFromPersisted(baseState, persistedState) {
     metadata: persistedState.metadata ? { ...baseState.metadata, ...persistedState.metadata } : baseState.metadata,
     source: persistedState.source ? { ...baseState.source, ...persistedState.source } : baseState.source,
     upload: persistedState.upload ? { ...baseState.upload, ...persistedState.upload } : baseState.upload,
+    targetSchema: persistedState.targetSchema ?? baseState.targetSchema,
     sink: persistedState.sink ? { ...baseState.sink, ...persistedState.sink } : baseState.sink,
   }
 }

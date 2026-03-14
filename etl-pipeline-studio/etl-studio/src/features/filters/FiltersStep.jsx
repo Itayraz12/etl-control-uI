@@ -1,16 +1,14 @@
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
 import { Card, CardTitle, Btn } from '../../shared/components/index.jsx'
-import { MOCK_SCHEMA } from '../../shared/types/index.js'
+import { resolveSourceSchema } from '../../shared/types/index.js'
 
-const FIELD_OPTIONS = MOCK_SCHEMA.map(f => f.id)
-
-function ConditionRow({ rule, onChange, onRemove, logic, operators }) {
+function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions }) {
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center', animation: 'slideIn .2s ease' }}>
       <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, minWidth: 26, textAlign: 'center' }}>{logic}</span>
       <select value={rule.field} onChange={e => onChange({ ...rule, field: e.target.value })} style={{ flex: 1.5 }}>
-        {FIELD_OPTIONS.map(f => <option key={f}>{f}</option>)}
+        {fieldOptions.map(f => <option key={f}>{f}</option>)}
       </select>
       <select value={rule.op} onChange={e => onChange({ ...rule, op: e.target.value })} style={{ flex: 1.2 }}>
         {operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -23,10 +21,10 @@ function ConditionRow({ rule, onChange, onRemove, logic, operators }) {
   )
 }
 
-function GroupBlock({ group, depth, onUpdate, onRemove, operators }) {
+function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions }) {
   const addRule = () => onUpdate({
     ...group,
-    rules: [...group.rules, { id: `r-${Date.now()}`, field: 'id', op: 'eq', value: '' }]
+    rules: [...group.rules, { id: `r-${Date.now()}`, field: fieldOptions[0] || 'id', op: 'eq', value: '' }]
   })
   const addSubgroup = () => onUpdate({
     ...group,
@@ -78,6 +76,7 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators }) {
           onChange={u => updateRule(r.id, u)}
           onRemove={() => removeRule(r.id)}
           operators={operators}
+          fieldOptions={fieldOptions}
         />
       ))}
 
@@ -90,6 +89,7 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators }) {
             onUpdate={u => updateSubgroup(sg.id, u)}
             onRemove={() => removeSubgroup(sg.id)}
             operators={operators}
+            fieldOptions={fieldOptions}
           />
         </div>
       ))}
@@ -108,6 +108,7 @@ export default function   FiltersStep() {
   const { filters: operators } = useConfig()
   const filters = state.filters
   const setFilters = actions.setFilters
+  const fieldOptions = resolveSourceSchema(state.upload).map(f => f.id)
 
 
   const totalRules = filters.reduce((sum, g) => sum + g.rules.length + g.subgroups.reduce((s2, sg) => s2 + sg.rules.length, 0), 0)
@@ -136,6 +137,7 @@ export default function   FiltersStep() {
           onUpdate={u => updateGroup(g.id, u)}
           onRemove={() => removeGroup(g.id)}
           operators={operators}
+          fieldOptions={fieldOptions}
         />
       ))}
 

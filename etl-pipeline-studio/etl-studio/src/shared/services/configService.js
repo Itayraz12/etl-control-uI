@@ -1,3 +1,5 @@
+import { MOCK_SCHEMA, normalizeSourceSchema, TARGET_FIELDS } from '../types/index.js'
+
 // ── Config Service ─────────────────────────────────────────────────────────
 // Loads transformers, filters and entities either from the backend API or
 // from the mock data below (when useMock = true).
@@ -190,6 +192,108 @@ async function fetchJson(url) {
   const res = await fetch(url)
   if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`)
   return res.json()
+}
+
+function extractSchemaArray(payload) {
+  if (Array.isArray(payload)) return payload
+  if (!payload || typeof payload !== 'object') return []
+  return payload.schema ?? payload.fields ?? payload.data ?? payload.items ?? []
+}
+
+function normalizeSchemaByExamplePayload(payload) {
+  const normalizedDirect = normalizeSourceSchema(payload)
+  if (normalizedDirect.length > 0) return normalizedDirect
+  return normalizeSourceSchema(extractSchemaArray(payload))
+}
+
+export async function fetchEntitySchema(entityName, useMock = true) {
+  if (useMock) {
+    await new Promise(r => setTimeout(r, 150))
+    return normalizeSourceSchema(TARGET_FIELDS)
+  }
+
+  const response = await fetch(`${API_BASE}/backend/schema/entity/${encodeURIComponent(entityName ?? '')}`, {
+    headers: {
+      Accept: 'application/json, text/plain',
+    },
+  })
+
+  if (!response.ok) {
+    let message = `Entity schema fetch failed with status: ${response.status}`
+    try {
+      const text = await response.text()
+      if (text) message = text
+    } catch {}
+    throw new Error(message)
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+  let payload = null
+
+  if (contentType.includes('application/json')) {
+    payload = await response.json()
+  } else {
+    const text = await response.text()
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      payload = null
+    }
+  }
+
+  const schema = normalizeSchemaByExamplePayload(payload)
+  if (schema.length === 0) {
+    throw new Error('Entity schema returned no fields')
+  }
+
+  return schema
+}
+
+export async function fetchSchemaByExample({ example, fileName = '', contentType = 'text/plain' }, useMock = true) {
+  if (useMock) {
+    await new Promise(r => setTimeout(r, 150))
+    return normalizeSourceSchema(MOCK_SCHEMA)
+  }
+
+  const response = await fetch(`${API_BASE}/backend/schemaByExample`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': contentType || 'text/plain',
+      Accept: 'application/json, text/plain',
+      ...(fileName ? { 'X-File-Name': fileName } : {}),
+    },
+    body: example ?? '',
+  })
+
+  if (!response.ok) {
+    let message = `Schema inference failed with status: ${response.status}`
+    try {
+      const text = await response.text()
+      if (text) message = text
+    } catch {}
+    throw new Error(message)
+  }
+
+  const responseType = response.headers.get('content-type') || ''
+  let payload = null
+
+  if (responseType.includes('application/json')) {
+    payload = await response.json()
+  } else {
+    const text = await response.text()
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      payload = []
+    }
+  }
+
+  const schema = normalizeSchemaByExamplePayload(payload)
+  if (schema.length === 0) {
+    throw new Error('Schema inference returned no fields')
+  }
+
+  return schema
 }
 
 /**

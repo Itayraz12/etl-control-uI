@@ -47,9 +47,14 @@ const initialState = {
   // Step 3 — Source Upload
   upload: {
     done: false,
+    schema: [],
+    fileName: '',
+    fileType: '',
+    fileSize: 0,
   },
 
   // Step 4 — Field Mapping
+  targetSchema: [],
   mappings: [],
 
   // Step 5 — Filters
@@ -95,6 +100,9 @@ function wizardReducer(state, action) {
         metadata: { ...initialState.metadata, ...(payload.metadata || {}) },
         source: { ...initialState.source, ...(payload.source || {}) },
         upload: { ...initialState.upload, ...(payload.upload || {}) },
+        targetSchema: Array.isArray(payload.targetSchema) || (payload.targetSchema && typeof payload.targetSchema === 'object')
+          ? payload.targetSchema
+          : [],
         mappings: Array.isArray(payload.mappings) ? payload.mappings : [],
         filters: Array.isArray(payload.filters) ? payload.filters : [],
         sink: { ...initialState.sink, ...(payload.sink || {}) },
@@ -104,6 +112,10 @@ function wizardReducer(state, action) {
       return { ...state, metadata: { ...state.metadata, ...action.payload } }
     case 'UPDATE_SOURCE':
       return { ...state, source: { ...state.source, ...action.payload } }
+    case 'UPDATE_UPLOAD':
+      return { ...state, upload: { ...state.upload, ...action.payload } }
+    case 'SET_TARGET_SCHEMA':
+      return { ...state, targetSchema: action.payload }
     case 'SET_UPLOAD_DONE':
       return { ...state, upload: { ...state.upload, done: action.payload } }
     case 'SET_MAPPINGS':
@@ -168,6 +180,8 @@ export function WizardProvider({ children, user = null }) {
     loadState:      (next)    => dispatch({ type: 'LOAD_STATE', payload: next }),
     updateMetadata: (patch)   => dispatch({ type: 'UPDATE_METADATA', payload: patch }),
     updateSource:   (patch)   => dispatch({ type: 'UPDATE_SOURCE',   payload: patch }),
+    updateUpload:   (patch)   => dispatch({ type: 'UPDATE_UPLOAD',   payload: patch }),
+    setTargetSchema:(schema)  => dispatch({ type: 'SET_TARGET_SCHEMA', payload: schema }),
     setUploadDone:  (val)     => dispatch({ type: 'SET_UPLOAD_DONE', payload: val }),
     setMappings:    (maps)    => dispatch({ type: 'SET_MAPPINGS',     payload: maps }),
     setFilters:     (filters) => dispatch({ type: 'SET_FILTERS',      payload: filters }),

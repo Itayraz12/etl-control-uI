@@ -121,6 +121,178 @@ export const MOCK_SCHEMA = [
   { id: 'updatedAt',   path: 'updatedAt',   name: 'updatedAt',   type: 'date',    nullable: true,  sampleValues: ['2024-03-01']                    },
 ]
 
+function normalizeFieldType(rawType, fallback = 'string') {
+  const type = Array.isArray(rawType)
+    ? String(rawType.find(value => value && String(value).trim().toLowerCase() !== 'null') ?? rawType[0] ?? '').trim().toLowerCase()
+    : String(rawType ?? '').trim().toLowerCase()
+  if (!type) return fallback
+  if (FIELD_TYPES.includes(type)) return type
+  if (['integer', 'long', 'double', 'float', 'decimal', 'short'].includes(type)) return 'number'
+  if (['bool'].includes(type)) return 'boolean'
+  if (['datetime', 'timestamp'].includes(type)) return 'date'
+  return fallback
+}
+
+function isJsonSchemaObject(schema) {
+  return Boolean(
+    schema
+    && typeof schema === 'object'
+    && !Array.isArray(schema)
+    && (
+      Object.prototype.hasOwnProperty.call(schema, '$schema')
+      || Object.prototype.hasOwnProperty.call(schema, 'properties')
+      || Object.prototype.hasOwnProperty.call(schema, 'items')
+      || Object.prototype.hasOwnProperty.call(schema, 'required')
+      || Object.prototype.hasOwnProperty.call(schema, 'type')
+    )
+  )
+}
+
+function normalizeJsonSchemaField(path, schema = {}, required = false) {
+  const type = normalizeFieldType(schema.type, schema.properties ? 'object' : schema.items ? 'array' : 'string')
+  const id = path || 'root'
+  const name = id.includes('.') ? id.split('.').at(-1) : id
+  const itemType = schema.items
+    ? normalizeFieldType(schema.items.type, schema.items?.properties ? 'object' : 'string')
+    : undefined
+
+  return {
+    id,
+    path: id,
+    name,
+    type,
+    arrayItemType: type === 'array' ? itemType : undefined,
+    nullable: Array.isArray(schema.type)
+      ? schema.type.some(value => String(value).trim().toLowerCase() === 'null')
+      : Boolean(schema.nullable),
+    required,
+    isArray: type === 'array',
+    description: typeof schema.description === 'string' ? schema.description : undefined,
+    inferredFormat: typeof schema.format === 'string' ? schema.format : undefined,
+  }
+}
+
+function flattenJsonSchemaProperties(properties = {}, requiredFields = [], basePath = '') {
+  const requiredSet = new Set(Array.isArray(requiredFields) ? requiredFields : [])
+
+  return Object.entries(properties).flatMap(([key, value]) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+
+    const path = basePath ? `${basePath}.${key}` : key
+    return flattenJsonSchemaNode(path, value, requiredSet.has(key))
+  })
+}
+
+function flattenJsonSchemaNode(path, schema = {}, required = false) {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return []
+
+  const type = normalizeFieldType(schema.type, schema.properties ? 'object' : schema.items ? 'array' : 'string')
+  const field = normalizeJsonSchemaField(path, schema, required)
+
+  if (type === 'object' && schema.properties && typeof schema.properties === 'object') {
+    return flattenJsonSchemaProperties(schema.properties, schema.required, path)
+  }
+
+  if (type === 'array' && schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
+    const itemType = normalizeFieldType(schema.items.type, schema.items.properties ? 'object' : 'string')
+    if (itemType === 'object' && schema.items.properties && typeof schema.items.properties === 'object') {
+      return [
+        field,
+        ...flattenJsonSchemaProperties(schema.items.properties, schema.items.required, `${path}[]`),
+      ]
+    }
+  }
+
+  return [field]
+}
+
+function normalizeSourceSchemaFromJsonSchema(schema) {
+  if (!isJsonSchemaObject(schema)) return []
+
+  const rootType = normalizeFieldType(schema.type, schema.properties ? 'object' : schema.items ? 'array' : 'string')
+
+  if (rootType === 'object' && schema.properties && typeof schema.properties === 'object') {
+    return flattenJsonSchemaProperties(schema.properties, schema.required)
+  }
+
+  if (rootType === 'array' && schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
+    const itemType = normalizeFieldType(schema.items.type, schema.items.properties ? 'object' : 'string')
+    if (itemType === 'object' && schema.items.properties && typeof schema.items.properties === 'object') {
+      return flattenJsonSchemaProperties(schema.items.properties, schema.items.required)
+    }
+  }
+
+  return flattenJsonSchemaNode('value', schema, false)
+}
+
+export function normalizeSchemaField(field, index = 0) {
+  if (!field) return null
+
+  if (typeof field === 'string') {
+    const name = field.trim()
+    if (!name) return null
+    return {
+      id: name,
+      path: name,
+      name,
+      type: 'string',
+      nullable: true,
+      required: false,
+      isArray: false,
+    }
+  }
+
+  if (typeof field !== 'object' || Array.isArray(field)) return null
+
+  const name = String(field.name ?? field.id ?? field.path ?? field.fieldName ?? `field_${index + 1}`).trim()
+  if (!name) return null
+
+  const path = String(field.path ?? field.fieldPath ?? field.id ?? name).trim() || name
+  const id = String(field.id ?? field.path ?? field.fieldName ?? name).trim() || name
+  const rawType = field.type ?? field.fieldType ?? field.dataType ?? field.valueType ?? (field.isArray ? field.arrayItemType : undefined)
+  const type = normalizeFieldType(rawType)
+  const required = Boolean(field.required ?? field.isRequired ?? field.mandatory)
+  const nullable = field.nullable ?? field.isNullable ?? !required
+  const isArray = Boolean(field.isArray ?? field.array ?? normalizeFieldType(rawType, '') === 'array')
+
+  return {
+    ...field,
+    id,
+    path,
+    name,
+    type,
+    nullable: Boolean(nullable),
+    required,
+    isArray,
+    sampleValues: Array.isArray(field.sampleValues)
+      ? field.sampleValues
+      : Array.isArray(field.examples)
+        ? field.examples
+        : undefined,
+  }
+}
+
+export function normalizeSourceSchema(schema) {
+  if (isJsonSchemaObject(schema)) {
+    return normalizeSourceSchemaFromJsonSchema(schema)
+  }
+
+  if (!Array.isArray(schema)) return []
+  return schema
+    .map((field, index) => normalizeSchemaField(field, index))
+    .filter(Boolean)
+}
+
+export function resolveSourceSchema(uploadState) {
+  const uploadedSchema = normalizeSourceSchema(uploadState?.schema)
+  return uploadedSchema.length > 0 ? uploadedSchema : MOCK_SCHEMA
+}
+
+export function resolveTargetSchema(targetSchema) {
+  const normalizedTargetSchema = normalizeSourceSchema(targetSchema)
+  return normalizedTargetSchema.length > 0 ? normalizedTargetSchema : TARGET_FIELDS
+}
+
 export const TARGET_FIELDS = [
   { id: 'name',      name: 'name',      type: 'string',  required: true  },
   { id: 'unitPrice', name: 'unitPrice_unitPrice_unitPrice', type: 'number',  required: true  },

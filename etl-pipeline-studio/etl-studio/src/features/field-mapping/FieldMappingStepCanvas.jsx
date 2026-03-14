@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
-import { MOCK_SCHEMA, TARGET_FIELDS } from '../../shared/types/index.js'
+import { resolveSourceSchema, resolveTargetSchema } from '../../shared/types/index.js'
 
 // TRANSFORMER_PROPS_SCHEMA is now derived from each transformer's propsSchema field.
 // Helper: resolve a transformer by either its backend _id or its YAML/display name.
@@ -21,6 +21,14 @@ function getPropsSchema(transformers, transformerRef) {
   return t?.propsSchema || []
 }
 
+function getSourceFieldLabel(field) {
+  return String(field?.path ?? field?.id ?? field?.name ?? '').trim()
+}
+
+function getTargetFieldLabel(field) {
+  return String(field?.path ?? field?.id ?? field?.name ?? '').trim()
+}
+
 function getConnectedNodeIds(edges = []) {
   return new Set(
     edges.flatMap(edge => [edge.from, edge.to, ...(Array.isArray(edge.extraInputs) ? edge.extraInputs : [])])
@@ -37,6 +45,8 @@ const CANVAS_NODE_BOUND_HEIGHT = NODE_HEIGHT + 28
 export default function FieldMappingStep() {
   const { state, actions } = useWizard()
   const { transformers } = useConfig()
+  const sourceSchema = resolveSourceSchema(state.upload)
+  const targetSchema = resolveTargetSchema(state.targetSchema)
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
   const hasAutoAlignedOnEntryRef = useRef(false)
@@ -179,11 +189,11 @@ export default function FieldMappingStep() {
     }, [])
 
   // Filter source and target fields based on search
-  const filteredSource = MOCK_SCHEMA.filter(f => 
-    f.name.toLowerCase().includes(sourceSearch.toLowerCase())
+  const filteredSource = sourceSchema.filter(f => 
+    getSourceFieldLabel(f).toLowerCase().includes(sourceSearch.toLowerCase())
   )
-  const filteredTarget = TARGET_FIELDS.filter(f => 
-    f.name.toLowerCase().includes(targetSearch.toLowerCase())
+  const filteredTarget = targetSchema.filter(f => 
+    getTargetFieldLabel(f).toLowerCase().includes(targetSearch.toLowerCase())
   )
 
   const existingSourceFieldIds = new Set(
@@ -192,8 +202,8 @@ export default function FieldMappingStep() {
   const existingTargetFieldIds = new Set(
     nodes.filter(n => n.type === 'target' && n.fieldId).map(n => n.fieldId)
   )
-  const allSourceOnCanvas = existingSourceFieldIds.size === MOCK_SCHEMA.length
-  const allTargetOnCanvas = existingTargetFieldIds.size === TARGET_FIELDS.length
+  const allSourceOnCanvas = existingSourceFieldIds.size === sourceSchema.length
+  const allTargetOnCanvas = existingTargetFieldIds.size === targetSchema.length
 
   const toCanvasPoint = (clientX, clientY) => {
     const canvas = canvasRef.current
@@ -400,7 +410,7 @@ export default function FieldMappingStep() {
 
   const buildCanvasFieldNode = (field, type, x, y) => ({
     id: `${type}-${field.id}-${Date.now()}-${Math.random()}`,
-    name: field.name,
+    name: type === 'source' ? getSourceFieldLabel(field) : getTargetFieldLabel(field),
     emoji: type === 'source' ? '📄' : '🎯',
     type,
     fieldId: field.id,
@@ -456,11 +466,11 @@ export default function FieldMappingStep() {
         ? Math.max(...prev.filter(n => n.type === 'source').map(n => n.y), -yGap) + yGap
         : 30
 
-      const newSourceNodes = MOCK_SCHEMA
+      const newSourceNodes = sourceSchema
         .filter(field => !existingSourceFieldIds.has(field.id))
         .map((field, idx) => ({
           id: `source-${field.id}-${Date.now()}-${Math.random()}`,
-          name: field.name,
+          name: getSourceFieldLabel(field),
           emoji: '📄',
           type: 'source',
           fieldId: field.id,
@@ -504,11 +514,11 @@ export default function FieldMappingStep() {
         ? Math.max(...prev.filter(n => n.type === 'target').map(n => n.y), -yGap) + yGap
         : 80
 
-      const newTargetNodes = TARGET_FIELDS
+      const newTargetNodes = targetSchema
         .filter(field => !existingTargetFieldIds.has(field.id))
         .map((field, idx) => ({
           id: `target-${field.id}-${Date.now()}-${Math.random()}`,
-          name: field.name,
+          name: getTargetFieldLabel(field),
           emoji: '🎯',
           type: 'target',
           fieldId: field.id,
@@ -800,8 +810,8 @@ export default function FieldMappingStep() {
       })
     })
 
-    const candidateSources = MOCK_SCHEMA.filter(field => !connectedSourceFieldIds.has(field.id))
-    const candidateTargets = TARGET_FIELDS.filter(field => !connectedTargetFieldIds.has(field.id))
+    const candidateSources = sourceSchema.filter(field => !connectedSourceFieldIds.has(field.id))
+    const candidateTargets = targetSchema.filter(field => !connectedTargetFieldIds.has(field.id))
 
     if (candidateSources.length === 0 || candidateTargets.length === 0) return
 
@@ -827,7 +837,7 @@ export default function FieldMappingStep() {
       const nodeId = `src-${field.id}-${Date.now()}-${Math.random()}`
       nextNodes.push({
         id: nodeId,
-        name: field.name,
+        name: getSourceFieldLabel(field),
         emoji: '📄',
         type: 'source',
         fieldId: field.id,
@@ -851,7 +861,7 @@ export default function FieldMappingStep() {
       const nodeId = `tgt-${field.id}-${Date.now()}-${Math.random()}`
       nextNodes.push({
         id: nodeId,
-        name: field.name,
+        name: getTargetFieldLabel(field),
         emoji: '🎯',
         type: 'target',
         fieldId: field.id,
@@ -1072,7 +1082,7 @@ export default function FieldMappingStep() {
                 <span>📄</span>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   <span data-testid={`source-list-name-${field.id}`} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.3 }}>
-                    {field.name}
+                    {getSourceFieldLabel(field)}
                   </span>
                   <span style={{ fontSize: '10px', color: 'var(--muted)', contentVisibility: 'auto' }}>{field.type}</span>
                 </div>
@@ -1476,8 +1486,8 @@ export default function FieldMappingStep() {
             <div style={{ position: 'absolute', top: 0, left: 0, width: nodes.length > 0 ? Math.max(1000, Math.max(...nodes.map(n => n.x + NODE_WIDTH)) + 200) : 1000, height: nodes.length > 0 ? Math.max(700, Math.max(...nodes.map(n => n.y + CANVAS_NODE_BOUND_HEIGHT)) + 200) : 700, pointerEvents: 'none' }}>
               {nodes.map((node) => {
                 const isRequired = node.type === 'source' 
-                  ? MOCK_SCHEMA.find(f => f.id === node.fieldId)?.required
-                  : TARGET_FIELDS.find(f => f.id === node.fieldId)?.required
+                  ? sourceSchema.find(f => f.id === node.fieldId)?.required
+                  : targetSchema.find(f => f.id === node.fieldId)?.required
                 const rules = { hasOut: node.type === 'source', hasIn: node.type === 'target' }
 
                 return (
@@ -1859,7 +1869,7 @@ export default function FieldMappingStep() {
                 <span>🎯</span>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   <span data-testid={`target-list-name-${field.id}`} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.3 }}>
-                    {field.name}
+                    {getTargetFieldLabel(field)}
                   </span>
                   <span style={{ fontSize: '10px', color: 'var(--muted)', contentVisibility: 'auto' }}>{field.type}</span>
                 </div>
