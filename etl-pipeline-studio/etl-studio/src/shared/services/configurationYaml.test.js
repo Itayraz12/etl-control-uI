@@ -13,7 +13,7 @@ describe('configuration YAML helpers', () => {
     expect(quoteYamlDoubleQuoted('A \\ B')).toBe('"A \\\\ B"')
   })
 
-  it('hydrates mappings from quoted transformation entries', () => {
+  it('hydrates mappings from quotבישמעed transformation entries', () => {
     const yaml = `metadata:
   entity: Product
   product_source: ERP
