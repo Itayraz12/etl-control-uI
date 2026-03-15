@@ -450,6 +450,52 @@ describe('FieldMappingStep transformer modal regression', () => {
     })
   })
 
+  it('uses an in-app confirmation modal when clearing the canvas', async () => {
+    const user = userEvent.setup()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockImplementation(() => true)
+
+    renderWithPersistedState()
+
+    await waitFor(() => {
+      expect(document.getElementById('nd-src-productName')).toBeInTheDocument()
+      expect(document.getElementById('nd-tgt-name')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Clear Canvas' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('clear-canvas-modal')).toBeInTheDocument()
+      expect(screen.getByText('Clear all nodes and mappings from the canvas?')).toBeInTheDocument()
+    })
+
+    expect(confirmSpy).not.toHaveBeenCalled()
+
+    await user.click(screen.getByTestId('clear-canvas-cancel'))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('clear-canvas-modal')).not.toBeInTheDocument()
+      expect(document.getElementById('nd-src-productName')).toBeInTheDocument()
+      expect(document.getElementById('nd-tgt-name')).toBeInTheDocument()
+    })
+
+    let persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+    expect(persisted.mappings).toHaveLength(1)
+
+    await user.click(screen.getByRole('button', { name: 'Clear Canvas' }))
+    await user.click(screen.getByTestId('clear-canvas-confirm'))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('clear-canvas-modal')).not.toBeInTheDocument()
+      expect(document.getElementById('nd-src-productName')).not.toBeInTheDocument()
+      expect(document.getElementById('nd-tgt-name')).not.toBeInTheDocument()
+    })
+
+    persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+    expect(persisted.mappings).toEqual([])
+
+    confirmSpy.mockRestore()
+  })
+
   it('opens the target field context menu on right click and persists Saknay/expression edits', async () => {
     const user = userEvent.setup()
 
