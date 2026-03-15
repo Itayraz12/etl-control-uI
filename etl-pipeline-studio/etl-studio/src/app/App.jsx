@@ -9,6 +9,19 @@ import WizardFooter from '../features/etl-wizard/WizardFooter.jsx'
 import ETLManagementScreen from '../features/etl-wizard/ETLManagementScreen.jsx'
 import LoginPage from '../features/etl-wizard/LoginPage.jsx';
 
+function AppShell({ children }) {
+  return (
+    <div
+      onContextMenuCapture={(event) => {
+        event.preventDefault()
+      }}
+      style={{ height: '100%' }}
+    >
+      {children}
+    </div>
+  )
+}
+
 function AppContent() {
   const { state, actions } = useWizard()
   const { user } = useUser();
@@ -99,7 +112,9 @@ export default function App() {
 
   return (
     <WizardProvider key={getWizardStorageKeyForUser(user?.userId)} user={user}>
-      <AppContent />
+      <AppShell>
+        <AppContent />
+      </AppShell>
     </WizardProvider>
   )
 }
