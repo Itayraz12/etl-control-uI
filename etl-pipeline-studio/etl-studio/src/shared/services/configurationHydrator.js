@@ -276,12 +276,10 @@ function buildMappings(mappings, transformations) {
         tgtPos: { x: 650, y: 30 + index * 70 },
         srcMetadata: {
           sendToSaknay: true,
-          sendToGP: true,
           expression: asString(mapping?.src_expression),
         },
         tgtMetadata: {
           sendToSaknay: true,
-          sendToGP: true,
           expression: asString(mapping?.tgt_expression),
         },
         transformer: transformation?.transformer || 'none',

@@ -104,7 +104,6 @@ export default function FieldMappingStep() {
             x: mapping.srcPos?.x ?? 100,
             y: mapping.srcPos?.y ?? 100,
             sendToSaknay: mapping.srcMetadata?.sendToSaknay ?? true,
-            sendToGP: mapping.srcMetadata?.sendToGP ?? true,
             expression: mapping.srcMetadata?.expression || '',
           }
           loadedNodes.push(srcNode)
@@ -124,7 +123,6 @@ export default function FieldMappingStep() {
             x: mapping.tgtPos?.x ?? 400,
             y: mapping.tgtPos?.y ?? 100,
             sendToSaknay: mapping.tgtMetadata?.sendToSaknay ?? true,
-            sendToGP: mapping.tgtMetadata?.sendToGP ?? true,
             expression: mapping.tgtMetadata?.expression || '',
           }
           loadedNodes.push(tgtNode)
@@ -147,7 +145,6 @@ export default function FieldMappingStep() {
                 x: ei.pos?.x ?? 100,
                 y: ei.pos?.y ?? 100,
                 sendToSaknay: true,
-                sendToGP: true,
                 expression: '',
               }
               loadedNodes.push(eiNode)
@@ -418,7 +415,6 @@ export default function FieldMappingStep() {
     x: Math.max(0, x),
     y: Math.max(0, y),
     sendToSaknay: true,
-    sendToGP: true,
     expression: '',
   })
 
@@ -478,7 +474,6 @@ export default function FieldMappingStep() {
           x: xPos,
           y: baseY + idx * yGap,
           sendToSaknay: true,
-          sendToGP: true,
           expression: '',
         }))
 
@@ -526,7 +521,6 @@ export default function FieldMappingStep() {
           x: xPos,
           y: baseY + idx * yGap,
           sendToSaknay: true,
-          sendToGP: true,
           expression: '',
         }))
 
@@ -585,12 +579,10 @@ export default function FieldMappingStep() {
         tgtPos: { x: tgtNode?.x || 0, y: tgtNode?.y || 0 },
         srcMetadata: {
           sendToSaknay: srcNode?.sendToSaknay ?? true,
-          sendToGP: srcNode?.sendToGP ?? true,
           expression: srcNode?.expression || '',
         },
         tgtMetadata: {
           sendToSaknay: tgtNode?.sendToSaknay ?? true,
-          sendToGP: tgtNode?.sendToGP ?? true,
           expression: tgtNode?.expression || '',
         },
         transformer: normalizedTransformer,
@@ -845,7 +837,6 @@ export default function FieldMappingStep() {
         x: 40,
         y: sourceBaseY + idx * yGap,
         sendToSaknay: true,
-        sendToGP: true,
         expression: '',
       })
       sourceNodeIds[field.id] = nodeId
@@ -869,7 +860,6 @@ export default function FieldMappingStep() {
         x: 650,
         y: targetBaseY + idx * yGap,
         sendToSaknay: true,
-        sendToGP: true,
         expression: '',
       })
       targetNodeIds[field.id] = nodeId
@@ -1945,16 +1935,6 @@ export default function FieldMappingStep() {
                     type="checkbox"
                     checked={liveNode.sendToSaknay ?? true}
                     onChange={(e) => updateTargetNodeMeta(liveNode.id, { sendToSaknay: e.target.checked })}
-                  />
-                </label>
-
-                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', fontSize: '13px', color: 'var(--text)' }}>
-                  <span>GP</span>
-                  <input
-                    data-testid="ctxmenu-gp-toggle"
-                    type="checkbox"
-                    checked={liveNode.sendToGP ?? true}
-                    onChange={(e) => updateTargetNodeMeta(liveNode.id, { sendToGP: e.target.checked })}
                   />
                 </label>
 

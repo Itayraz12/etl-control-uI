@@ -63,8 +63,8 @@ function renderWithPersistedState(mappingOverrides = {}, uploadOverrides = {}, t
           tgtNodeId: 'tgt-name',
           srcPos: { x: 40, y: 30 },
           tgtPos: { x: 650, y: 30 },
-          srcMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
-          tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+          srcMetadata: { sendToSaknay: true, expression: '' },
+          tgtMetadata: { sendToSaknay: true, expression: '' },
           transformer: 'none',
           transformerInputType: 'any',
           transformerOutputType: 'any',
@@ -310,7 +310,7 @@ describe('FieldMappingStep transformer modal regression', () => {
 
   it('shows an exp badge on target nodes only when the expression is not empty', async () => {
     renderWithPersistedState({
-      tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: 'price * 1.2' },
+      tgtMetadata: { sendToSaknay: true, expression: 'price * 1.2' },
     })
 
     await waitFor(() => {
@@ -337,7 +337,7 @@ describe('FieldMappingStep transformer modal regression', () => {
 
   it('does not show an exp badge when the target expression is empty or whitespace', async () => {
     renderWithPersistedState({
-      tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: '   ' },
+      tgtMetadata: { sendToSaknay: true, expression: '   ' },
     })
 
     await waitFor(() => {
@@ -355,7 +355,6 @@ describe('FieldMappingStep transformer modal regression', () => {
 
     await waitFor(() => {
       expect(screen.queryByTestId('ctxmenu-saknay-toggle')).not.toBeInTheDocument()
-      expect(screen.queryByTestId('ctxmenu-gp-toggle')).not.toBeInTheDocument()
       expect(screen.queryByTestId('ctxmenu-expression-input')).not.toBeInTheDocument()
     })
   })
@@ -382,7 +381,7 @@ describe('FieldMappingStep transformer modal regression', () => {
     })
   })
 
-  it('opens the target field context menu on right click and persists GP/expression edits', async () => {
+  it('opens the target field context menu on right click and persists Saknay/expression edits', async () => {
     const user = userEvent.setup()
 
     renderWithPersistedState()
@@ -391,19 +390,17 @@ describe('FieldMappingStep transformer modal regression', () => {
     fireEvent.contextMenu(targetNode)
 
     const saknayToggle = await screen.findByTestId('ctxmenu-saknay-toggle')
-    const gpToggle = await screen.findByTestId('ctxmenu-gp-toggle')
     const expressionInput = await screen.findByTestId('ctxmenu-expression-input')
 
     expect(saknayToggle).toBeChecked()
-    expect(gpToggle).toBeChecked()
     expect(expressionInput).toHaveValue('')
 
-    await user.click(gpToggle)
+    await user.click(saknayToggle)
     await user.type(expressionInput, 'price * 1.2')
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
-      expect(persisted.mappings?.[0]?.tgtMetadata?.sendToGP).toBe(false)
+      expect(persisted.mappings?.[0]?.tgtMetadata?.sendToSaknay).toBe(false)
       expect(persisted.mappings?.[0]?.tgtMetadata?.expression).toBe('price * 1.2')
     })
   })
@@ -498,8 +495,8 @@ describe('FieldMappingStep transformer modal regression', () => {
         tgtNodeId: 'tgt-name',
         srcPos: { x: 40, y: 10 },
         tgtPos: { x: 650, y: 300 },
-        srcMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
-        tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+        srcMetadata: { sendToSaknay: true, expression: '' },
+        tgtMetadata: { sendToSaknay: true, expression: '' },
         transformer: 'tf-1',
         transformerInputType: 'string',
         transformerOutputType: 'string',
@@ -513,8 +510,8 @@ describe('FieldMappingStep transformer modal regression', () => {
         tgtNodeId: 'tgt-id',
         srcPos: { x: 40, y: 300 },
         tgtPos: { x: 650, y: 10 },
-        srcMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
-        tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+        srcMetadata: { sendToSaknay: true, expression: '' },
+        tgtMetadata: { sendToSaknay: true, expression: '' },
         transformer: 'none',
         transformerInputType: 'any',
         transformerOutputType: 'any',
@@ -544,8 +541,8 @@ describe('FieldMappingStep transformer modal regression', () => {
         tgtNodeId: 'tgt-name',
         srcPos: { x: 40, y: 10 },
         tgtPos: { x: 650, y: 10 },
-        srcMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
-        tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+        srcMetadata: { sendToSaknay: true, expression: '' },
+        tgtMetadata: { sendToSaknay: true, expression: '' },
         transformer: 'tf-1',
         transformerInputType: 'string',
         transformerOutputType: 'string',
@@ -562,8 +559,8 @@ describe('FieldMappingStep transformer modal regression', () => {
         tgtNodeId: 'tgt-id',
         srcPos: { x: 40, y: 320 },
         tgtPos: { x: 650, y: 320 },
-        srcMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
-        tgtMetadata: { sendToSaknay: true, sendToGP: true, expression: '' },
+        srcMetadata: { sendToSaknay: true, expression: '' },
+        tgtMetadata: { sendToSaknay: true, expression: '' },
         transformer: 'none',
         transformerInputType: 'any',
         transformerOutputType: 'any',

@@ -12,7 +12,7 @@ The application combines a login flow, a management screen for existing deployme
 - Mock/live backend switching for configuration data and deployments
 - Searchable transformer modal with runtime-generated property forms
 - Visual field mapping with single-target enforcement and multi-input transformers
-- Target metadata editing for Saknay, GP, and expression values
+- Target metadata editing for Saknay and expression values
 - Deployment edit flow that hydrates wizard state from backend YAML
 
 ## Quick start
@@ -236,7 +236,7 @@ Key behaviors:
 - Transformer properties come from the selected transformer's generated `propsSchema`
 - Multi-input transformers can accept extra source nodes on the same mapping
 - Switching from multi-input to single-input removes extra inputs automatically
-- Right-click on a target node opens metadata editing for `sendToSaknay`, `sendToGP`, and `expression`
+- Right-click on a target node opens metadata editing for `sendToSaknay` and `expression`
 - Target cards surface inline badges/toggles derived from that metadata
 - Alignment helpers keep connected rows visually grouped
 
