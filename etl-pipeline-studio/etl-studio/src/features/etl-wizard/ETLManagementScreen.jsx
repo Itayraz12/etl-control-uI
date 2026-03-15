@@ -29,6 +29,16 @@ const COLUMNS = [
   { key: 'createdAt', label: 'Created' },
 ];
 
+const SORT_INDICATOR_STYLE = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '12px',
+  minWidth: '12px',
+  fontSize: '10px',
+  lineHeight: 1,
+};
+
 export default function ETLManagementScreen() {
   const [deployments, setDeployments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -184,55 +194,63 @@ export default function ETLManagementScreen() {
 
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, padding: '40px', background: 'var(--bg)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      flex: 1,
+      minHeight: 0,
+      padding: '24px 40px',
+      background: 'var(--bg)',
+      overflow: 'auto',
+      boxSizing: 'border-box',
     }}>
-      <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
-        Deployments{teamName ? ` — ${teamName}` : ''}
-      </div>
-      <div style={{ marginBottom: 16, width: '100%', maxWidth: 400 }}>
-        <input
-          type="text"
-          value={filterText}
-          onChange={e => setFilterText(e.target.value)}
-          placeholder="Filter deployments..."
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            borderRadius: 6,
-            border: '1px solid var(--border)',
-            fontSize: 15,
-            background: 'var(--bg)',
-            color: 'var(--text)',
-            outline: 'none',
-            boxSizing: 'border-box',
-          }}
-        />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', maxWidth: 1300, marginBottom: 16 }}>
-        <Btn v="accent" sm onClick={handleCreateNewConfig}>
-          + Create New Deployment Configuration
-        </Btn>
-      </div>
-      {screenError && (
-        <div style={{
-          width: '100%',
-          maxWidth: 1300,
-          marginBottom: 16,
-          padding: '10px 12px',
-          borderRadius: 8,
-          background: 'rgba(239,68,68,0.12)',
-          border: '1px solid rgba(239,68,68,0.35)',
-          color: 'var(--danger)',
-          fontSize: 13,
-        }}>
-          {screenError}
+      <div style={{ width: '100%', maxWidth: 1300, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
+          Deployments{teamName ? ` — ${teamName}` : ''}
         </div>
-      )}
-      {loading ? (
-        <div>Loading deployments...</div>
-      ) : (
-        <div style={{ width: '100%', maxWidth: 1300, background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', minHeight: '200px', height: '60vh', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div style={{ marginBottom: 16, width: '100%', maxWidth: 400 }}>
+          <input
+            type="text"
+            value={filterText}
+            onChange={e => setFilterText(e.target.value)}
+            placeholder="Filter deployments..."
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              borderRadius: 6,
+              border: '1px solid var(--border)',
+              fontSize: 15,
+              background: 'var(--bg)',
+              color: 'var(--text)',
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', marginBottom: 16 }}>
+          <Btn v="accent" sm onClick={handleCreateNewConfig}>
+            + Create New Deployment Configuration
+          </Btn>
+        </div>
+        {screenError && (
+          <div style={{
+            width: '100%',
+            marginBottom: 16,
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: 'rgba(239,68,68,0.12)',
+            border: '1px solid rgba(239,68,68,0.35)',
+            color: 'var(--danger)',
+            fontSize: 13,
+          }}>
+            {screenError}
+          </div>
+        )}
+        {loading ? (
+          <div>Loading deployments...</div>
+        ) : (
+          <div data-testid="etl-management-table-card" style={{ width: '100%', background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', minHeight: '260px', flex: '1 1 auto', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, minWidth: '900px' }}>
               <thead>
                 <tr>
@@ -252,16 +270,21 @@ export default function ETLManagementScreen() {
                         backgroundClip: 'padding-box',
                         transition: 'background .15s',
                       }}
-                      onMouseEnter={e => e.target.style.background = 'rgba(79,110,247,.15)'}
-                      onMouseLeave={e => e.target.style.background = 'var(--surf)'}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(79,110,247,.15)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'var(--surf)'}
                     >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
                         {col.label}
-                        {sortKey === col.key && (
-                          <span style={{ fontSize: '10px' }}>
-                            {sortOrder === 'asc' ? '▲' : '▼'}
-                          </span>
-                        )}
+                        <span
+                          data-testid={`sort-indicator-${col.key}`}
+                          style={{
+                            ...SORT_INDICATOR_STYLE,
+                            visibility: sortKey === col.key ? 'visible' : 'hidden',
+                          }}
+                          aria-hidden="true"
+                        >
+                          {sortOrder === 'asc' ? '▲' : '▼'}
+                        </span>
                       </span>
                     </th>
                   ))}
@@ -335,9 +358,10 @@ export default function ETLManagementScreen() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
