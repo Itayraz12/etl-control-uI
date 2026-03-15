@@ -318,6 +318,48 @@ describe('FieldMappingStep transformer modal regression', () => {
     })
   })
 
+  it('aligns unconnected source and target nodes onto the same row', async () => {
+    const user = userEvent.setup()
+
+    renderWithPersistedMappings([], {
+      schema: {
+        type: 'object',
+        properties: {
+          price: { type: 'number' },
+        },
+      },
+    }, {
+      type: 'object',
+      properties: {
+        unitPrice: { type: 'number' },
+      },
+    })
+
+    const sourceItem = await screen.findByTestId('source-list-item-price')
+    const targetItem = await screen.findByTestId('target-list-item-unitPrice')
+
+    await user.dblClick(sourceItem)
+    await user.dblClick(targetItem)
+
+    await waitFor(() => {
+      expect(document.querySelector('[id^="nd-source-price-"]')).toBeInTheDocument()
+      expect(document.querySelector('[id^="nd-target-unitPrice-"]')).toBeInTheDocument()
+    })
+
+    const sourceNode = document.querySelector('[id^="nd-source-price-"]')
+    const targetNode = document.querySelector('[id^="nd-target-unitPrice-"]')
+
+    expect(sourceNode).toHaveStyle({ top: '30px' })
+    expect(targetNode).not.toHaveStyle({ top: '30px' })
+
+    await user.click(screen.getByRole('button', { name: 'Align' }))
+
+    await waitFor(() => {
+      expect(document.querySelector('[id^="nd-source-price-"]')).toHaveStyle({ left: '40px', top: '30px' })
+      expect(document.querySelector('[id^="nd-target-unitPrice-"]')).toHaveStyle({ left: '650px', top: '30px' })
+    })
+  })
+
   it('toggles the target Saknay badge and persists the updated target metadata', async () => {
     renderWithPersistedState()
 

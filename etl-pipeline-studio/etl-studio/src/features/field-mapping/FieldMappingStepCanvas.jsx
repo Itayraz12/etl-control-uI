@@ -702,19 +702,29 @@ export default function FieldMappingStep() {
       const reservedSourceIds = new Set(rows.map(row => row.sourceId).filter(Boolean))
       const reservedTargetIds = new Set(rows.map(row => row.targetId).filter(Boolean))
 
-      prev
+      const unpairedSources = prev
         .filter(n => n.type === 'source' && !reservedSourceIds.has(n.id))
         .sort((a, b) => a.y - b.y)
-        .forEach(node => {
-          rows.push({ sourceId: node.id, targetId: null })
-        })
-
-      prev
+      const unpairedTargets = prev
         .filter(n => n.type === 'target' && !reservedTargetIds.has(n.id))
         .sort((a, b) => a.y - b.y)
-        .forEach(node => {
-          rows.push({ sourceId: null, targetId: node.id })
+
+      const pairedRowCount = Math.min(unpairedSources.length, unpairedTargets.length)
+
+      for (let index = 0; index < pairedRowCount; index += 1) {
+        rows.push({
+          sourceId: unpairedSources[index].id,
+          targetId: unpairedTargets[index].id,
         })
+      }
+
+      unpairedSources.slice(pairedRowCount).forEach(node => {
+        rows.push({ sourceId: node.id, targetId: null })
+      })
+
+      unpairedTargets.slice(pairedRowCount).forEach(node => {
+        rows.push({ sourceId: null, targetId: node.id })
+      })
 
       rows.forEach((row, index) => {
         const y = START_Y + index * GAP
