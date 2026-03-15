@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useWizard } from "../../shared/store/wizardStore";
 import { useConfig } from "../../shared/store/configContext.jsx";
-import { Card, CardTitle, ValidationItem, Btn } from '../../shared/components/index.jsx'
+import { Card, CardTitle, ValidationItem, Btn, DeployProgressModal } from '../../shared/components/index.jsx'
+import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js'
 import { SOURCE_TYPES, resolveSourceSchema, resolveTargetSchema } from '../../shared/types/index.js'
 import { MOCK_FILTER_OPERATORS, saveDraftConfiguration } from '../../shared/services/configService.js'
 import { formatTransformationYamlItem, quoteYamlDoubleQuoted } from '../../shared/services/configurationYaml.js'
@@ -86,6 +87,31 @@ export default function SummaryStep() {
   const [errorModal, setErrorModal] = useState(null)
   const [savingDraft, setSavingDraft] = useState(false)
   const [draftModal, setDraftModal] = useState(null)
+  const [deployDisabled, setDeployDisabled] = useState(false)
+
+  // Deployment progress modal hook
+  const deployment = useDeploymentProgress({
+    autoAdvance: true,
+    stepDuration: 2000,
+    onDeploymentComplete: () => {
+      setDeployDisabled(false)
+      // Show the success screen after deployment completes
+      setTimeout(() => {
+        setSubmitted(true)
+        deployment.reset()
+      }, 500)
+    },
+    onDeploymentError: (stepIndex, error) => {
+      setDeployDisabled(false)
+      setErrorModal({
+        icon: '❌',
+        title: 'Deployment Failed',
+        message: error,
+      })
+      deployment.reset()
+    },
+  })
+
   const srcMeta = SOURCE_TYPES.find(t => t.id === state.source.sourceType)
   const requiredTargetFieldIds = targetSchema.filter(field => field.required).map(field => field.id)
   const reqMapped = state.mappings.filter(m => requiredTargetFieldIds.includes(m.tgt)).length
@@ -256,8 +282,21 @@ ${state.sink.shadow ? `  shadow: true\n  shadow_topic: ${state.sink.shadowTopic 
       return
     }
     
-    // All validations passed
-    setSubmitted(true)
+    // All validations passed - start deployment
+    setDeployDisabled(true)
+    
+    const deploymentSteps = [
+      { id: 'validate-config', label: 'Validating pipeline configuration' },
+      { id: 'prepare-resources', label: 'Preparing Kafka topics' },
+      { id: 'validate-mappings', label: 'Validating field mappings' },
+      { id: 'prepare-flink', label: 'Preparing Flink job' },
+      { id: 'upload-artifacts', label: 'Uploading pipeline artifacts' },
+      { id: 'register-pipeline', label: 'Registering pipeline' },
+      { id: 'deploy-job', label: 'Deploying Flink job' },
+      { id: 'health-checks', label: 'Running health checks' },
+    ]
+
+    deployment.startDeployment(deploymentSteps)
   }
 
   const handleSaveDraft = async () => {
@@ -479,8 +518,8 @@ ${state.sink.shadow ? `  shadow: true\n  shadow_topic: ${state.sink.shadowTopic 
         gap: 12,
         flexShrink: 0,
       }}>
-        <Btn v="secondary" onClick={handleSaveDraft} disabled={savingDraft}>{savingDraft ? 'Saving…' : '💾 Save Draft'}</Btn>
-        <Btn v="success" onClick={handleCreatePipeline}>🚀 Deploy</Btn>
+        <Btn v="secondary" onClick={handleSaveDraft} disabled={savingDraft || deployDisabled}>{savingDraft ? 'Saving…' : '💾 Save Draft'}</Btn>
+        <Btn v="success" onClick={handleCreatePipeline} disabled={deployDisabled}>{deployDisabled ? '🚀 Deploying...' : '🚀 Deploy'}</Btn>
       </div>
 
       {draftModal && (
@@ -647,6 +686,23 @@ ${state.sink.shadow ? `  shadow: true\n  shadow_topic: ${state.sink.shadowTopic 
           `}</style>
         </>
       )}
+
+      {/* Deployment Progress Modal */}
+      <DeployProgressModal
+        isOpen={deployment.isOpen}
+        steps={deployment.steps}
+        currentStepIndex={deployment.currentStepIndex}
+        isComplete={deployment.isComplete}
+        isError={deployment.isError}
+        errorMessage={deployment.errorMessage}
+        onClose={() => {
+          deployment.reset()
+          setDeployDisabled(false)
+        }}
+        title="Deploying your ETL pipeline..."
+        successTitle="Pipeline deployed successfully!"
+        failureTitle="Deployment failed"
+      />
     </div>
   )
 }
