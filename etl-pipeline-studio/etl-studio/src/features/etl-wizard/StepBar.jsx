@@ -12,7 +12,7 @@ export default function StepBar() {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', gap: 0 }}>
         {STEPS.map((s, i) => {
-          const isDone   = i < currentStep || completedSteps.has(i)
+          const isDone   = completedSteps.has(i)
           const isActive = i === currentStep
           const canClick = i <= currentStep || completedSteps.has(i)
 

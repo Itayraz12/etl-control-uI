@@ -74,6 +74,7 @@ export function buildStateFromPersisted(baseState, persistedState) {
   return {
     ...baseState,
     ...persistedState,
+    navigationMode: baseState.navigationMode, // Always use the base navigationMode, don't restore from persisted
     metadata: persistedState.metadata ? { ...baseState.metadata, ...persistedState.metadata } : baseState.metadata,
     source: persistedState.source ? { ...baseState.source, ...persistedState.source } : baseState.source,
     upload: persistedState.upload ? { ...baseState.upload, ...persistedState.upload } : baseState.upload,

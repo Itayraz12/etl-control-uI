@@ -163,6 +163,10 @@ export default function ETLManagementScreen() {
   function handleCreateNewConfig() {
     actions.setNavigationMode('etl-config');
     actions.setStep(0);
+    actions.loadState({
+      currentStep: 0,
+      completedSteps: new Set(),
+    });
     actions.updateMetadata({
       team: teamName,
       productSource: '',

@@ -28,7 +28,7 @@ export function TypeBadge({ type, style = {} }) {
   const map = { string: 'green', number: 'amber', boolean: 'purple', date: 'blue', object: 'red', array: 'amber' }
   return (
     <span style={{
-      background: 'rgba(148,163,184,.18)', color: '#cbd5f5',
+      background: 'var(--surf2)', color: 'var(--accent)',
       fontSize: 10, padding: '1px 7px', borderRadius: 8,
       fontWeight: 600, fontFamily: 'var(--mono)', ...style,
     }}>

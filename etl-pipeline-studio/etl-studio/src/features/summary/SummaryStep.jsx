@@ -4,7 +4,7 @@ import { useConfig } from "../../shared/store/configContext.jsx";
 import { Card, CardTitle, ValidationItem, Btn } from '../../shared/components/index.jsx'
 import { SOURCE_TYPES, resolveSourceSchema, resolveTargetSchema } from '../../shared/types/index.js'
 import { MOCK_FILTER_OPERATORS, saveDraftConfiguration } from '../../shared/services/configService.js'
-import { formatTransformationYamlItem } from '../../shared/services/configurationYaml.js'
+import { formatTransformationYamlItem, quoteYamlDoubleQuoted } from '../../shared/services/configurationYaml.js'
 import { formatInputFieldsYamlSection } from '../../shared/services/configurationYaml.js'
 import { formatFilterYamlItem } from '../../shared/services/configurationYaml.js'
 
@@ -184,10 +184,10 @@ ${state.mappings.map(m => {
     mapping += `\n    additional_inputs:\n${additionalInputs.map(input => `      - ${input}`).join('\n')}`
   }
   if (m.srcMetadata?.expression) {
-    mapping += `\n    src_expression: "${m.srcMetadata.expression}"`
+    mapping += `\n    src_expression: ${quoteYamlDoubleQuoted(String(m.srcMetadata.expression).trim())}`
   }
   if (m.tgtMetadata?.expression) {
-    mapping += `\n    tgt_expression: "${m.tgtMetadata.expression}"`
+    mapping += `\n    tgt_expression: ${quoteYamlDoubleQuoted(String(m.tgtMetadata.expression).trim())}`
   }
   return mapping
 }).join('\n')}
@@ -383,8 +383,29 @@ ${state.sink.shadow ? `  shadow: true\n  shadow_topic: ${state.sink.shadowTopic 
           </Card>
 
           <div style={{ display: 'flex', gap: 12 }}>
-            <Btn v="secondary">View in Registry</Btn>
-            <Btn v="primary" onClick={() => setSubmitted(false)}>Create Another</Btn>
+            <Btn v="secondary" onClick={() => actions.setNavigationMode('etl-management')}>View in Management</Btn>
+            <Btn v="primary" onClick={() => {
+              actions.setNavigationMode('etl-config');
+              actions.setStep(0);
+              actions.loadState({
+                currentStep: 0,
+                completedSteps: new Set(),
+              });
+              actions.updateMetadata({
+                team: state.metadata.team,
+                productSource: '',
+                productType: '',
+                environment: '',
+                entityName: '',
+                tags: '',
+              });
+              actions.updateSource({});
+              actions.setUploadDone(false);
+              actions.setMappings([]);
+              actions.setFilters([]);
+              actions.updateSink({});
+              setSubmitted(false);
+            }}>Create Another</Btn>
           </div>
         </div>
       </div>

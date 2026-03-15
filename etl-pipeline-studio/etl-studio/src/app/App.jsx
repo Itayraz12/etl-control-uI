@@ -1,17 +1,24 @@
 import { WizardProvider, useWizard } from '../shared/store/wizardStore.jsx'
 import { getWizardStorageKeyForUser } from '../shared/store/wizardPersistence.js'
-import { useUser } from '../shared/store/userContext.jsx';
+import { useUser } from '../shared/store/userContext.jsx'
+import { useEffect } from 'react'
 import TopNav      from '../features/etl-wizard/TopNav.jsx'
 import StepBar     from '../features/etl-wizard/StepBar.jsx'
-import MainMenu    from '../features/etl-wizard/MainMenu.jsx'
 import WizardShell from '../features/etl-wizard/WizardShell.jsx'
 import WizardFooter from '../features/etl-wizard/WizardFooter.jsx'
 import ETLManagementScreen from '../features/etl-wizard/ETLManagementScreen.jsx'
 import LoginPage from '../features/etl-wizard/LoginPage.jsx';
 
 function AppContent() {
-  const { state } = useWizard()
+  const { state, actions } = useWizard()
   const { user } = useUser();
+
+  // Navigate to management page when user logs in
+  useEffect(() => {
+    if (user) {
+      actions.setNavigationMode('etl-management')
+    }
+  }, [user, actions])
 
   // Show login page if user is not set
   if (!user) {
@@ -23,11 +30,12 @@ function AppContent() {
     return (
       <div style={{
         display: 'flex',
+        flexDirection: 'column',
         height: '100vh',
         overflow: 'hidden',
         background: 'var(--bg)',
       }}>
-        <MainMenu />
+        <TopNav />
         <div style={{
           flex: 1,
           display: 'flex',
@@ -54,22 +62,15 @@ function AppContent() {
     return (
       <div style={{
         display: 'flex',
+        flexDirection: 'column',
         height: '100vh',
         overflow: 'hidden',
         background: 'var(--bg)',
       }}>
-        <MainMenu />
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}>
-          <TopNav />
-          <StepBar />
-          <WizardShell />
-          <WizardFooter />
-        </div>
+        <TopNav />
+        <StepBar />
+        <WizardShell />
+        <WizardFooter />
       </div>
     )
   }
@@ -79,15 +80,13 @@ function AppContent() {
     return (
       <div style={{
         display: 'flex',
+        flexDirection: 'column',
         height: '100vh',
         overflow: 'hidden',
         background: 'var(--bg)',
       }}>
-        <MainMenu />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <TopNav />
-          <ETLManagementScreen />
-        </div>
+        <TopNav />
+        <ETLManagementScreen />
       </div>
     )
   }

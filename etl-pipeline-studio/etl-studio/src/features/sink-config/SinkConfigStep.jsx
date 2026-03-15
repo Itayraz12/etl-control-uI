@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
-import { Card, CardTitle, FormRow, FormGroup, SidePanel, CfgPanel, Btn } from '../../shared/components/index.jsx'
+import { Card, CardTitle, FormRow, FormGroup, CfgPanel, Btn } from '../../shared/components/index.jsx'
+import { ENVIRONMENTS } from '../../shared/types/index.js'
 
 const SINK_TYPES = [
   { id: 'kafka', icon: '☕', name: 'Kafka',     sub: 'Streaming sink' },
@@ -23,10 +24,9 @@ function SinkConfigPanel({ type, sink, u, metadata }) {
         <input value={sink.sinkKafkaTopic || ''} onChange={e => u('sinkKafkaTopic', e.target.value)} placeholder={hasCatalogOption ? 'Leave empty for auto-generation' : 'products.output'} />
       </FormGroup>
       <FormGroup label="Bootstrap Environment" required>
-        <select value={sink.sinkKafkaEnv || ''} onChange={e => u('sinkKafkaEnv', e.target.value)} disabled>
-          <option value="production">Production</option>
-          <option value="dev">Dev</option>
-          <option value="staging">Staging</option>
+        <select value={sink.sinkKafkaEnv || metadata?.environment || ''} onChange={e => u('sinkKafkaEnv', e.target.value)}>
+          <option value="">select an environment...</option>
+          {ENVIRONMENTS.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       </FormGroup>
 
@@ -114,8 +114,6 @@ function SinkConfigPanel({ type, sink, u, metadata }) {
           </label>
         </div>
       </div>
-
-      <Btn sm v="ghost" onClick={() => alert('Connection tested!')} style={{ marginTop: 8 }}>🔌 Test Connection</Btn>
     </CfgPanel>
   )
 
@@ -161,7 +159,6 @@ function SinkConfigPanel({ type, sink, u, metadata }) {
       <FormGroup label="Exchange">
         <input value={sink.sinkRmqExchange || ''} onChange={e => u('sinkRmqExchange', e.target.value)} placeholder="etl.exchange" />
       </FormGroup>
-      <Btn sm v="ghost" onClick={() => alert('Connection tested!')} style={{ marginTop: 8 }}>🔌 Test Connection</Btn>
     </CfgPanel>
   )
   return null
@@ -182,7 +179,7 @@ export default function SinkConfigStep() {
   }, [metadata?.environment, actions])
 
   return (
-    <div style={{ display: 'flex', gap: 22, flex: 1, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 30px' }}>
         <Card>
           <CardTitle>🔀 Sink Configuration</CardTitle>
@@ -225,11 +222,6 @@ export default function SinkConfigStep() {
           {sink.sinkType && <SinkConfigPanel type={sink.sinkType} sink={sink} u={u} metadata={metadata} />}
         </Card>
       </div>
-
-      <SidePanel title="Sink Summary" items={[
-        ['Type',  sinkMeta?.name || '—'],
-        ['Entry', sink.sinkKafkaTopic || sink.sinkFilePath || sink.sinkDbTable || sink.sinkRmqQueue || '—'],
-      ]} />
     </div>
   )
 }

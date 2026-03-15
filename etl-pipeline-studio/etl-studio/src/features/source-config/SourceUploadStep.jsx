@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
-import { Card, CardTitle, SidePanel, ValidationItem, Btn, Spinner, TypeBadge } from '../../shared/components/index.jsx'
+import { Card, CardTitle, ValidationItem, Btn, Spinner, TypeBadge } from '../../shared/components/index.jsx'
 import { normalizeSourceSchema, resolveSourceSchema } from '../../shared/types/index.js'
 import { fetchSchemaByExample } from '../../shared/services/configService.js'
 import { useMockMode } from '../../shared/store/mockModeContext.jsx'
@@ -70,7 +70,7 @@ export default function SourceUploadStep() {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 22, flex: 1, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 30px' }}>
         <Card>
           <CardTitle>📥 Source Upload / Preview</CardTitle>
@@ -115,22 +115,6 @@ export default function SourceUploadStep() {
 
         {phase === 'done' && <SchemaCard schema={sourceSchema} />}
       </div>
-
-      <SidePanel title="Sample Info" items={[
-        ['Mode',     sampleMode === 'local' ? 'Upload' : 'From Source'],
-        ['Status',   phase === 'done' ? '✓ Ready' : phase === 'parsing' ? 'Parsing…' : 'Waiting…'],
-        ['Type',     phase === 'done' ? displayUploadedType(state.upload) : '—'],
-        ['Size',     phase === 'done' ? formatFileSize(state.upload.fileSize) : '—'],
-        ['Fields',   phase === 'done' ? String(sourceSchema.length) : '—'],
-        ['Encoding', phase === 'done' ? 'UTF-8' : '—'],
-      ]}>
-        {phase === 'done' && (
-          <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: .5, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Schema Inference</div>
-            <ValidationItem type="ok">Backend schema inference completed</ValidationItem>
-          </div>
-        )}
-      </SidePanel>
     </div>
   )
 }
@@ -227,15 +211,15 @@ function SchemaCard({ schema }) {
       {schema.map(f => (
         <div
           key={f.id}
-          style={{ padding: '6px 10px 6px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid rgba(255,255,255,.03)' }}
+          style={{ padding: '6px 10px 6px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--border)' }}
           onMouseEnter={e => e.currentTarget.style.background = 'rgba(79,110,247,.08)'}
           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
         >
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: f.required ? 'var(--success)' : f.type === 'number' ? 'var(--warning)' : f.type === 'boolean' ? 'var(--accent2)' : 'var(--accent)', flexShrink: 0, display: 'block' }} />
           <span style={{ flex: 1, fontFamily: 'var(--mono)', fontSize: 12 }}>{f.id}</span>
           <TypeBadge type={f.type} />
-          {f.isArray && <span style={{ fontSize: 10, padding: '1px 4px', borderRadius: 6, background: 'rgba(251,146,60,.18)', color: '#fed7aa' }}>[ ]</span>}
-          {f.required && <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 6, background: 'rgba(239,68,68,.18)', color: '#fecaca', marginLeft: 'auto' }}>req</span>}
+          {f.isArray && <span style={{ fontSize: 10, padding: '1px 4px', borderRadius: 6, background: 'rgba(79,110,247,.15)', color: 'var(--accent)' }}>[ ]</span>}
+          {f.required && <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 6, background: 'rgba(34,197,94,.15)', color: 'var(--success)', marginLeft: 'auto' }}>req</span>}
         </div>
       ))}
     </Card>

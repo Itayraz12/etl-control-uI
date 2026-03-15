@@ -158,23 +158,47 @@ export const MOCK_FILTERS = [
 
 /**
  * Mock filter operators used in the FiltersStep rule builder.
+ * Each operator can include additionalProperties with:
+ *   - options: Array of predefined values (renders a dropdown)
+ *   - properties: Array of property definitions for complex filters (renders multiple inputs)
  */
 export const MOCK_FILTER_OPERATORS = [
-  { id: 'eq',         name: 'Equals',           symbol: '='  },
-  { id: 'neq',        name: 'Not Equals',        symbol: '≠'  },
-  { id: 'gt',         name: 'Greater Than',      symbol: '>'  },
-  { id: 'gte',        name: 'Greater or Equal',  symbol: '≥'  },
-  { id: 'lt',         name: 'Less Than',         symbol: '<'  },
-  { id: 'lte',        name: 'Less or Equal',     symbol: '≤'  },
-  { id: 'in',         name: 'In List',           symbol: '∈'  },
-  { id: 'nin',        name: 'Not In List',       symbol: '∉'  },
-  { id: 'contains',   name: 'Contains',          symbol: '⊇'  },
-  { id: 'startswith', name: 'Starts With',       symbol: '⊢'  },
-  { id: 'endswith',   name: 'Ends With',         symbol: '⊣'  },
-  { id: 'regex',      name: 'Regex Match',       symbol: '~'  },
-  { id: 'between',    name: 'Between',           symbol: '↔'  },
-  { id: 'isnull',     name: 'Is Null',           symbol: '∅'  },
-  { id: 'isnotnull',  name: 'Is Not Null',       symbol: '∃'  },
+  { id: 'eq',         name: 'Equals',           symbol: '=',  additionalProperties: {} },
+  { id: 'neq',        name: 'Not Equals',        symbol: '≠',  additionalProperties: {} },
+  { id: 'gt',         name: 'Greater Than',      symbol: '>',  additionalProperties: {} },
+  { id: 'gte',        name: 'Greater or Equal',  symbol: '≥',  additionalProperties: {} },
+  { id: 'lt',         name: 'Less Than',         symbol: '<',  additionalProperties: {} },
+  { id: 'lte',        name: 'Less or Equal',     symbol: '≤',  additionalProperties: {} },
+  { id: 'in',         name: 'In List',           symbol: '∈',  additionalProperties: { options: ['1', '2', '3', '5', '10', 'custom'] } },
+  { id: 'nin',        name: 'Not In List',       symbol: '∉',  additionalProperties: { options: ['1', '2', '3', '5', '10', 'custom'] } },
+  { id: 'contains',   name: 'Contains',          symbol: '⊇',  additionalProperties: {} },
+  { id: 'startswith', name: 'Starts With',       symbol: '⊢',  additionalProperties: {} },
+  { id: 'endswith',   name: 'Ends With',         symbol: '⊣',  additionalProperties: {} },
+  { id: 'regex',      name: 'Regex Match',       symbol: '~',  additionalProperties: {} },
+  { id: 'between',    name: 'Between',           symbol: '↔',  additionalProperties: { 
+    properties: [
+      { key: 'min_value',    label: 'Min Value',    type: 'number', default: '0' },
+      { key: 'max_value',    label: 'Max Value',    type: 'number', default: '100' },
+      { key: 'include_edges', label: 'Include Edges', type: 'boolean', default: 'true' }
+    ] 
+  } },
+  { id: 'isnull',     name: 'Is Null',           symbol: '∅',  additionalProperties: {} },
+  { id: 'isnotnull',  name: 'Is Not Null',       symbol: '∃',  additionalProperties: {} },
+  { id: 'status',     name: 'Status',            symbol: '◉',  additionalProperties: { options: ['active', 'inactive', 'pending', 'archived'] } },
+  { id: 'priority',   name: 'Priority Level',    symbol: '▲',  additionalProperties: { options: ['low', 'medium', 'high', 'critical'] } },
+  { id: 'inrange',    name: 'In Range',          symbol: '⊗',  additionalProperties: { 
+    properties: [
+      { key: 'start',   label: 'Start', type: 'number', default: '1' },
+      { key: 'end',     label: 'End',   type: 'number', default: '10' },
+      { key: 'step',    label: 'Step',  type: 'number', default: '1' }
+    ] 
+  } },
+  { id: 'match',      name: 'Pattern Match',     symbol: '≈',  additionalProperties: { 
+    properties: [
+      { key: 'pattern',   label: 'Pattern',    type: 'text',    default: '' },
+      { key: 'case_sensitive', label: 'Case Sensitive', type: 'boolean', default: 'false' }
+    ] 
+  } },
 ]
 
 /**

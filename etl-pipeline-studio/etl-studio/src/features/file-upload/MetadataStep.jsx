@@ -4,8 +4,8 @@ import { useUser } from '../../shared/store/userContext.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
 import { useMockMode } from '../../shared/store/mockModeContext.jsx'
 import { fetchEntitySchema } from '../../shared/services/configService.js'
-import { normalizeSourceSchema } from '../../shared/types/index.js'
-import { Card, CardTitle, FormRow, FormGroup, SidePanel } from '../../shared/components/index.jsx'
+import { normalizeSourceSchema, ENVIRONMENTS } from '../../shared/types/index.js'
+import { Card, CardTitle, FormRow, FormGroup } from '../../shared/components/index.jsx'
 
 export default function MetadataStep() {
   const { state, actions } = useWizard()
@@ -75,7 +75,7 @@ export default function MetadataStep() {
 
 
   return (
-    <div style={{ display: 'flex', gap: 22, flex: 1, overflow: 'hidden' }}>
+    <div style={{ flex: 1, overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 30px' }}>
         <Card>
           <CardTitle>🏷️ Pipeline Metadata</CardTitle>
@@ -94,7 +94,7 @@ export default function MetadataStep() {
             <FormGroup label="Environment" required>
               <select value={metadata.environment} onChange={e => u('environment', e.target.value)}>
                 <option value="">select an environment...</option>
-                {['dev', 'staging', 'production'].map(o => <option key={o} value={o}>{o}</option>)}
+                {ENVIRONMENTS.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </FormGroup>
           </FormRow>
@@ -112,14 +112,6 @@ export default function MetadataStep() {
           </FormRow>
         </Card>
       </div>
-
-      <SidePanel title="Snapshot" items={[
-        ['Entity',   `${metadata.entityName} ${metadata.schemaVersion || ''}`],
-        ['Source',   metadata.productSource],
-        ['Env',      metadata.environment],
-        ['Team',     metadata.team],
-        ['Type',     metadata.productType],
-      ]} />
     </div>
   )
 }

@@ -1,8 +1,15 @@
 import { Btn, Chip } from '../../shared/components/index.jsx'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
+import { useUser } from '../../shared/store/userContext.jsx'
 
 export default function TopNav() {
   const { state, actions } = useWizard()
+  const { logout } = useUser()
+
+  function handleLogout() {
+    logout('manual')
+  }
+
   return (
     <div style={{
       background: 'var(--surf)', borderBottom: '1px solid var(--border)',
@@ -21,6 +28,7 @@ export default function TopNav() {
         {state.theme === 'dark' ? '🌞 Light' : '🌙 Dark'}
       </Btn>
       <Btn v="ghost" sm>?</Btn>
+      <Btn v="danger" sm onClick={handleLogout}>Logout</Btn>
     </div>
   )
 }

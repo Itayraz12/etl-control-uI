@@ -1,6 +1,7 @@
 // ── Schema Types ──────────────────────────────────────────────────────────
 
 export const FIELD_TYPES = ['string', 'number', 'boolean', 'date', 'object', 'array', 'null']
+export const ENVIRONMENTS = ['dev', 'staging', 'production']
 
 /**
  * @typedef {'string'|'number'|'boolean'|'date'|'object'|'array'|'null'} FieldType

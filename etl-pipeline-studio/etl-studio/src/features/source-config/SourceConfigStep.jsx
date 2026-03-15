@@ -1,10 +1,12 @@
 import { useWizard } from '../../shared/store/wizardStore.jsx'
-import { Card, CardTitle, FormRow, FormGroup, SidePanel, CfgPanel, Btn } from '../../shared/components/index.jsx'
-import { SOURCE_TYPES } from '../../shared/types/index.js'
+import { useState } from 'react'
+import { Card, CardTitle, FormRow, FormGroup, CfgPanel, Btn } from '../../shared/components/index.jsx'
+import { SOURCE_TYPES, ENVIRONMENTS } from '../../shared/types/index.js'
 
-function SourceConfigPanel({ type, state, u }) {
+function SourceConfigPanel({ type, state, u, metadata }) {
+  const [keyFilterOpen, setKeyFilterOpen] = useState(false)
   const TestBtn = () => (
-    <Btn v="ghost" sm onClick={() => alert('Connection test simulated!')} style={{ marginTop: 8 }}>
+    <Btn v="primary" sm onClick={() => alert('Connection test simulated!')}>
       🔌 Test Connection
     </Btn>
   )
@@ -13,10 +15,9 @@ function SourceConfigPanel({ type, state, u }) {
     <CfgPanel title="☕ Kafka Source">
       <FormRow>
         <FormGroup label="Environment" required>
-          <select value={state.kafkaEnv || ''} onChange={e => u('kafkaEnv', e.target.value)} disabled>
-            <option value="production">Production</option>
-            <option value="dev">Dev</option>
-            <option value="staging">Staging</option>
+          <select value={state.kafkaEnv || metadata?.environment || ''} onChange={e => u('kafkaEnv', e.target.value)}>
+            <option value="">select an environment...</option>
+            {ENVIRONMENTS.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
         </FormGroup>
         <FormGroup label="Topic" required>
@@ -27,27 +28,31 @@ function SourceConfigPanel({ type, state, u }) {
       
       {/* Kafka Key Filter */}
       <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, color: 'var(--text)' }}>🔑 Key Filter</div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>Include only records with this key</div>
-        <textarea
-          value={state.kafkaKeys || ''}
-          onChange={e => u('kafkaKeys', e.target.value)}
-          placeholder="Comma-separated keys (optional)&#10;Example: user-001, order-456"
-          style={{
-            width: '100%',
-            minHeight: 60,
-            padding: 8,
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 6,
-            color: 'var(--text)',
-            fontSize: 12,
-            resize: 'vertical',
-          }}
-        />
-        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>
-          {(state.kafkaKeys || '').split(',').filter(k => k.trim()).length} key{(state.kafkaKeys || '').split(',').filter(k => k.trim()).length !== 1 ? 's' : ''} specified
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <Btn v="secondary" sm onClick={() => setKeyFilterOpen(!keyFilterOpen)}>
+            {keyFilterOpen ? '▼' : '▶'} 🔑 Key Filter {(state.kafkaKeys || '').split(',').filter(k => k.trim()).length > 0 && `(${(state.kafkaKeys || '').split(',').filter(k => k.trim()).length})`}
+          </Btn>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>Include only records with this key</span>
         </div>
+        {keyFilterOpen && (
+          <div style={{ marginTop: 8 }}>
+            <input
+              type="text"
+              value={state.kafkaKeys || ''}
+              onChange={e => u('kafkaKeys', e.target.value)}
+              placeholder="Comma-separated keys (optional). Example: user-001, order-456"
+              style={{
+                width: '100%',
+                padding: 8,
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                color: 'var(--text)',
+                fontSize: 12,
+              }}
+            />
+          </div>
+        )}
       </div>
     </CfgPanel>
   )
@@ -145,7 +150,7 @@ export default function SourceConfigStep() {
   const srcMeta = SOURCE_TYPES.find(t => t.id === src.sourceType)
 
   return (
-    <div style={{ display: 'flex', gap: 22, flex: 1, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 30px' }}>
         <Card>
           <CardTitle>🔌 Source Config</CardTitle>
@@ -185,7 +190,7 @@ export default function SourceConfigStep() {
             );
             })}
           </div>
-          {src.sourceType && <SourceConfigPanel type={src.sourceType} state={src} u={u} />}
+          {src.sourceType && <SourceConfigPanel type={src.sourceType} state={src} u={u} metadata={state.metadata} />}
         </Card>
 
         <Card>
@@ -233,12 +238,7 @@ export default function SourceConfigStep() {
         </Card>
       </div>
 
-      <SidePanel title="Source Summary" items={[
-        ['Type',   srcMeta?.name || '—'],
-        ['Mode',   srcMeta?.mode || '—'],
-        ['Entry',  src.kafkaTopic || src.filePath || src.httpUrl || src.s3Bucket || '—'],
-        ['Format', src.format || '—'],
-      ]} />
+
     </div>
   )
 }
