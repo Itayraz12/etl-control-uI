@@ -159,6 +159,33 @@ describe('FieldMappingStep transformer modal regression', () => {
     })
   })
 
+  it('applies a transformer without showing input or output type controls', async () => {
+    const user = userEvent.setup()
+    renderWithPersistedState()
+
+    const plusTrigger = await screen.findByTestId('add-transformer-trigger-0')
+    await user.click(plusTrigger)
+
+    await user.click(await screen.findByText('Concatenate'))
+
+    await waitFor(() => {
+      expect(screen.queryByText('Input Type')).not.toBeInTheDocument()
+      expect(screen.queryByText('Output Type')).not.toBeInTheDocument()
+      expect(screen.getByText('Separator')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '✓ Apply Concatenate' })).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: '✓ Apply Concatenate' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Concatenate')).toBeInTheDocument()
+
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.mappings?.[0]?.transformer).toBe('tf-1')
+      expect(persisted.mappings?.[0]?.transformerProps).toEqual({ separator: '-' })
+    })
+  })
+
   it('renders a loaded transformer when the saved mapping stores the transformer by name', async () => {
     renderWithPersistedState({
       transformer: 'Concatenate',

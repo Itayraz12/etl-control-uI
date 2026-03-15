@@ -79,8 +79,6 @@ export default function FieldMappingStep() {
   const [transformerSearch, setTransformerSearch] = useState('')
   const [selectedTf, setSelectedTf] = useState(null)
   const [tfPropValues, setTfPropValues] = useState({})
-  const [tfInputType, setTfInputType] = useState('any')
-  const [tfOutputType, setTfOutputType] = useState('any')
 
     // Load saved mappings from state on mount
     useEffect(() => {
@@ -956,8 +954,6 @@ export default function FieldMappingStep() {
     setTransformerSearch('')
     setSelectedTf(null)
     setTfPropValues({})
-    setTfInputType('any')
-    setTfOutputType('any')
   }
 
   const openTransformerModal = (edge, mode = 'replace') => {
@@ -973,15 +969,11 @@ export default function FieldMappingStep() {
       }
       setSelectedTf(transformer)
       setTfPropValues({ ...defaults, ...(liveEdge.transformerProps || {}) })
-      setTfInputType(liveEdge.transformerInputType || 'any')
-      setTfOutputType(liveEdge.transformerOutputType || 'any')
       return
     }
 
     setSelectedTf(null)
     setTfPropValues({})
-    setTfInputType('any')
-    setTfOutputType('any')
   }
 
   tfBoxesRef.current = []
@@ -2204,8 +2196,6 @@ export default function FieldMappingStep() {
           getPropsSchema(transformers, t._id).forEach(p => { defaults[p.key] = p.default })
           const keepExisting = currentAssignedTransformer?._id === t._id ? (currentModalEdge.transformerProps || {}) : {}
           setTfPropValues({ ...defaults, ...keepExisting })
-          setTfInputType(currentModalEdge?.transformerInputType || 'any')
-          setTfOutputType(currentModalEdge?.transformerOutputType || 'any')
         }
 
         const handleApply = () => {
@@ -2218,8 +2208,6 @@ export default function FieldMappingStep() {
               transformer: selectedTf._id,
               transformerProps: { ...tfPropValues },
               extraInputs: selectedTf.isMultipleInput ? (e.extraInputs || []) : [],
-              transformerInputType: tfInputType || 'any',
-              transformerOutputType: tfOutputType || 'any',
             }
           }))
 
@@ -2319,36 +2307,7 @@ export default function FieldMappingStep() {
                       <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: 'rgba(79,110,247,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>{selectedTf.icon}</div>
                       <div>
                         <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>{selectedTf.name}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Configure types and properties below</div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', padding: '12px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-                      <div>
-                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Input Type</div>
-                        <select value={tfInputType} onChange={(e) => setTfInputType(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', cursor: 'pointer' }}>
-                          <option value="any">⊕ Any</option>
-                          <option value="string">" String</option>
-                          <option value="number"># Number</option>
-                          <option value="boolean">✓ Boolean</option>
-                          <option value="date">📅 Date</option>
-                          <option value="array">[] Array</option>
-                          <option value="object">{`{}`} Object</option>
-                          <option value="null">∅ Null</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Output Type</div>
-                        <select value={tfOutputType} onChange={(e) => setTfOutputType(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', cursor: 'pointer' }}>
-                          <option value="any">⊕ Any</option>
-                          <option value="string">" String</option>
-                          <option value="number"># Number</option>
-                          <option value="boolean">✓ Boolean</option>
-                          <option value="date">📅 Date</option>
-                          <option value="array">[] Array</option>
-                          <option value="object">{`{}`} Object</option>
-                          <option value="null">∅ Null</option>
-                        </select>
+                        <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Configure the transformer properties below</div>
                       </div>
                     </div>
 
