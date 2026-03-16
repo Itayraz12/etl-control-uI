@@ -125,15 +125,60 @@ export default function SummaryStep() {
   // Helper function to get transformer name and build readable description
   const getTransformerDescription = (transformerId, props = {}) => {
     if (!transformerId || transformerId === 'none') return null
-    const tf = transformers.find(t => t._id === transformerId)
-    if (!tf) return transformerId
-    
-    const propsStr = Object.entries(props)
-      .filter(([k, v]) => v !== '' && v !== undefined && v !== null)
+    const tf = transformers.find(t => t._id === transformerId || t.name === transformerId)
+    const transformerName = tf?.name || String(transformerId)
+
+    const requiredKeys = new Set(
+      Array.isArray(tf?.propsSchema)
+        ? tf.propsSchema.filter(p => p?.required && p?.key).map(p => p.key)
+        : []
+    )
+
+    const schemaDefaults = new Map(
+      Array.isArray(tf?.propsSchema)
+        ? tf.propsSchema.filter(p => p?.key).map(p => [p.key, p.default ?? ''])
+        : []
+    )
+
+    const allKeys = new Set([...requiredKeys, ...Object.keys(props || {})])
+    const propsStr = Array.from(allKeys)
+      .map((key) => {
+        const rawValue = (props && Object.prototype.hasOwnProperty.call(props, key))
+          ? props[key]
+          : schemaDefaults.get(key)
+        const value = rawValue === undefined || rawValue === null ? '' : rawValue
+        return [key, value]
+      })
+      .filter(([key, value]) => requiredKeys.has(key) || (value !== '' && value !== undefined && value !== null))
       .map(([k, v]) => `${k}: ${v}`)
       .join(', ')
     
-    return propsStr ? `${tf.name}(${propsStr})` : tf.name
+    return propsStr ? `${transformerName}[${propsStr}]` : transformerName
+  }
+
+  const getTransformerChainDescriptions = (mapping) => {
+    if (Array.isArray(mapping?.transformerChainDetailed) && mapping.transformerChainDetailed.length > 0) {
+      return mapping.transformerChainDetailed
+        .map(item => getTransformerDescription(item?.id || item?.transformer || item?._id, item?.props || item?.transformerProps || {}))
+        .filter(Boolean)
+    }
+
+    if (Array.isArray(mapping?.transformerChain) && mapping.transformerChain.length > 0) {
+      return mapping.transformerChain
+        .map((item, index) => {
+          if (typeof item === 'string') {
+            return getTransformerDescription(item, index === 0 ? (mapping?.transformerProps || {}) : {})
+          }
+          return getTransformerDescription(
+            item?.id || item?.transformer || item?._id,
+            item?.props || item?.transformerProps || (index === 0 ? (mapping?.transformerProps || {}) : {})
+          )
+        })
+        .filter(Boolean)
+    }
+
+    const single = getTransformerDescription(mapping?.transformer, mapping?.transformerProps || {})
+    return single ? [single] : []
   }
 
   // Generate YAML with improved transformer descriptions
@@ -169,17 +214,41 @@ export default function SummaryStep() {
       return field?.type || 'unknown'
     }
 
+    const getHopInputsDescription = (sourceFields, hopIndex) => {
+      if (!Array.isArray(sourceFields) || sourceFields.length === 0) return ''
+
+      // First transformer shows direct source tuple(s).
+      if (hopIndex === 0) {
+        return sourceFields
+          .map(src => `(${getFieldType(src, false)}, ${src})`)
+          .join(', ')
+      }
+
+      // Chained transformers reference prior output with unique tokens per source field:
+      // $<sourceFieldName><hopIndex>, e.g. $stockQty1, $stockQty2
+      return sourceFields
+        .map((src) => {
+          const safeSourceName = String(src || 'input').replace(/[^a-zA-Z0-9_]/g, '_')
+          const refToken = `$${safeSourceName}${hopIndex}`
+          return `(${getFieldType(src, false)}, ${refToken})`
+        })
+        .join(', ')
+    }
+
     // Get transformations with field details
     const transformations = state.mappings
       .filter(m => m.transformer && m.transformer !== 'none')
       .map(m => {
-        const tfDesc = getTransformerDescription(m.transformer, m.transformerProps)
+        const transformerChain = getTransformerChainDescriptions(m)
         const sourceFields = getMappingSources(m)
-        const sourcesDesc = sourceFields
-          .map(src => `(${getFieldType(src, false)}, ${src})`)
-          .join(', ')
+        const chainWithInputs = transformerChain
+          .map((desc, hopIndex) => {
+            const hopInputs = getHopInputsDescription(sourceFields, hopIndex)
+            return `${desc}${hopInputs ? hopInputs : ''}`
+          })
+          .join(' --> ')
         const tgtType = getFieldType(m.tgt, true)
-        const expression = `${tfDesc}${sourcesDesc ? `${sourcesDesc}` : ''} -> (${tgtType}, ${m.tgt})`
+        const expression = `${chainWithInputs} -> (${tgtType}, ${m.tgt})`
         return formatTransformationYamlItem(expression)
       })
 

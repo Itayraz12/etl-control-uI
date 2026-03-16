@@ -74,12 +74,12 @@ vi.mock('../../shared/services/configurationHydrator.js', () => ({
   hydrateWizardStateFromYaml: vi.fn(() => ({})),
 }))
 
-describe('ETLManagementScreen sort header stability', () => {
+describe('ETLManagementScreen table layout stability', () => {
   beforeEach(() => {
     Object.values(mockActions).forEach(fn => fn.mockReset())
   })
 
-  it('keeps a fixed-width sort indicator slot when sorting different columns', async () => {
+  it('keeps stable sort indicator spacing and flexible table sizing', async () => {
     const user = userEvent.setup()
     render(<ETLManagementScreen />)
 

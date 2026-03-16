@@ -25,8 +25,12 @@ The main application is a React + Vite UI for creating and managing ETL configur
   7. Summary
 - Visual source-to-target field mapping canvas with SVG connections
 - Transformer add / replace / edit flow with properties derived at runtime from backend `additionalProperties`
+- Multiple transformers can be chained on a single source-to-target connection
+- Chained transformers show per-hop input lineage and support unique YAML hop tokens (for example `$stockQty1`)
 - Support for multi-input transformers via extra source connections
-- Target metadata editing for Saknay, GP, and expression values
+- Required transformer properties are validated on-canvas (invalid transformers are highlighted in red)
+- Removing transformer/connection/source/target from canvas triggers auto-align
+- Target metadata editing for Saknay and expression values
 - Mock mode for local UI work without backend services
 - Deployment list screen with load/edit/deploy/stop actions
 

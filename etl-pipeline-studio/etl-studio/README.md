@@ -11,7 +11,8 @@ The application combines a login flow, a management screen for existing deployme
 - Idle logout with configurable grace-based draft reset
 - Mock/live backend switching for configuration data and deployments
 - Searchable transformer modal with runtime-generated property forms
-- Visual field mapping with single-target enforcement and multi-input transformers
+- Visual field mapping with single-target enforcement, multi-input transformers, and chained transformers per connection
+- Required transformer-property validation that highlights invalid transformer nodes in red
 - Target metadata editing for Saknay and expression values
 - Deployment edit flow that hydrates wizard state from backend YAML
 
@@ -162,6 +163,7 @@ State responsibilities:
 | `0` | entities | `loadingEntities` |
 | `3` | filter operators | `loadingFilters` |
 | `4` | transformers | `loadingTransformers` |
+| `6` | transformers (summary name resolution) | `loadingTransformers` |
 
 While those requests are in flight, the shell shows a centered loading spinner instead of mounting the target step.
 
@@ -208,7 +210,9 @@ When mock mode is enabled, these calls are replaced with in-memory sample data a
 Notes:
 
 - `_required` marks required keys and is not rendered as its own field
-- Primitive values are mapped to text, number, or boolean-style controls
+- Each key is the **property name**; its value is the **property description / hint** shown as a placeholder in the input — it is not a pre-filled default value
+- The user must supply the actual value when configuring the transformer
+- Primitive values determine the control type: string → text input, number → number input, boolean → true/false select
 - Both `additionalProperties` and legacy `additionalProperites` are accepted
 
 ### Entity contract
@@ -232,13 +236,26 @@ Key behaviors:
 - Source and target fields can be added to the canvas without duplicates
 - Connections are source-to-target only
 - A target field allows only one incoming connection
+- A single connection can hold a transformer chain (multiple transformers in sequence)
+- Chain layout keeps up to 2 transformers per row and wraps to a new row when the chain grows
 - Right-click on a connection or transformer opens add / replace / edit / remove actions
+- Transformers can be inserted before or after an existing transformer in the same connection
 - Transformer properties come from the selected transformer's generated `propsSchema`
+- Each chained transformer card shows its effective input caption (source for first hop, previous transformer output for later hops)
 - Multi-input transformers can accept extra source nodes on the same mapping
+- Extra sources can be connected to a specific multi-input transformer inside a chain
 - Switching from multi-input to single-input removes extra inputs automatically
+- Removing a transformer, connection, source field, or target field triggers auto-align
+- Transformer nodes turn red when required properties are empty and revert after all required properties are filled
 - Right-click on a target node opens metadata editing for `sendToSaknay` and `expression`
 - Target cards surface inline badges/toggles derived from that metadata
 - Alignment helpers keep connected rows visually grouped
+
+YAML preview/save formatting for mappings mirrors the canvas behavior:
+
+- Transformer chains are separated with `-->`
+- Transformer properties are rendered with square brackets, for example `ConvertMulti[logic: a:b:c]`
+- Chained transformer inputs are explicit per hop (first hop uses source tuples, later hops use `$<sourceField><hopIndex>` tokens), for example: `ToTimestamp[format: a](number, stockQty) --> ToTimestamp[format: b](number, $stockQty1) -> (string, lastName)`
 
 ## Mock mode
 
@@ -296,6 +313,7 @@ Relevant files:
 | Symptom | Check |
 |---|---|
 | Transformer properties do not appear | Verify the backend returns `additionalProperties` (or legacy `additionalProperites`) |
+| Summary shows transformer `_id` values after refresh | Verify step `6` prefetches `/api/config/transformers` and wait for `loadingTransformers` to complete |
 | Metadata step has no entities | Check `/api/backbone/entities` or enable mock mode |
 | Deployments screen is empty in live mode | Verify `/api/backend/deployments?teamName=...` returns an array |
 | Refresh returns to login | Check whether `etl-studio-active-user` exists in local storage |

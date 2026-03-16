@@ -21,6 +21,31 @@ function getPropsSchema(transformers, transformerRef) {
   return t?.propsSchema || []
 }
 
+/**
+ * Returns true when any required property of the transformer is missing or blank.
+ * Used to highlight transformer nodes in red on the canvas.
+ */
+function hasMissingRequiredProps(transformers, transformerRef, savedProps = {}) {
+  const schema = getPropsSchema(transformers, transformerRef)
+  return schema.some(p => p.required && (!savedProps[p.key] && savedProps[p.key] !== 0 && savedProps[p.key] !== false))
+}
+
+function parseTransformerChainEntry(entry) {
+  if (!entry) return null
+  if (typeof entry === 'string') return { ref: entry, props: {} }
+  if (typeof entry !== 'object') return null
+
+  const ref = entry.id || entry._id || entry.transformerId || entry.transformer || entry.name
+  const props = (entry.props && typeof entry.props === 'object')
+    ? entry.props
+    : (entry.transformerProps && typeof entry.transformerProps === 'object')
+      ? entry.transformerProps
+      : {}
+
+  if (!ref) return null
+  return { ref, props }
+}
+
 function getSourceFieldLabel(field) {
   return String(field?.path ?? field?.id ?? field?.name ?? '').trim()
 }
@@ -130,6 +155,7 @@ export default function FieldMappingStep() {
 
         // Create edge
         const extraInputNodeIds = []
+        const extraInputTargets = {}
         if (Array.isArray(mapping.extraInputs)) {
           mapping.extraInputs.forEach(ei => {
             const eiKey = ei.nodeId || `src-${ei.field}`
@@ -149,26 +175,53 @@ export default function FieldMappingStep() {
               loadedNodes.push(eiNode)
               nodeIdMap[eiKey] = eiNode.id
             }
-            extraInputNodeIds.push(nodeIdMap[eiKey])
+            const nodeId = nodeIdMap[eiKey]
+            extraInputNodeIds.push(nodeId)
+            extraInputTargets[nodeId] = Number.isInteger(ei?.transformerIndex)
+              ? ei.transformerIndex
+              : 0
           })
         }
 
-        const normalizedTransformer = normalizeTransformerRef(
+        // Prefer transformerChainDetailed (contains props) over transformerChain (IDs only).
+        // Fall back to transformerChain for backwards compatibility with older saved drafts.
+        const rawChainSource =
+          (Array.isArray(mapping.transformerChainDetailed) && mapping.transformerChainDetailed.length > 0)
+            ? mapping.transformerChainDetailed
+            : (Array.isArray(mapping.transformerChain) ? mapping.transformerChain : [])
+
+        const chainEntriesFromMapping = rawChainSource
+              .map(parseTransformerChainEntry)
+              .filter(Boolean)
+              .map(entry => ({
+                id: normalizeTransformerRef(transformers, entry.ref),
+                props: { ...(entry.props || {}) },
+              }))
+
+        const legacyTransformerId = normalizeTransformerRef(
           transformers,
-          mapping.transformer || mapping.transformerChain?.[0] || 'none'
+          mapping.transformer || chainEntriesFromMapping[0]?.id || 'none'
         )
+
+        const chainEntries = chainEntriesFromMapping.length > 0
+          ? chainEntriesFromMapping
+          : (legacyTransformerId && legacyTransformerId !== 'none'
+            ? [{ id: legacyTransformerId, props: mapping.transformerProps || {} }]
+            : [])
 
         loadedEdges.push({
           from: nodeIdMap[srcKey],
           to: nodeIdMap[tgtKey],
           fromType: 'source',
           toType: 'target',
-          transformer: normalizedTransformer,
-          additionalTransformers: (mapping.transformerChain?.slice(1) || []).map(t => normalizeTransformerRef(transformers, t)),
+          transformer: chainEntries[0]?.id || 'none',
+          transformerProps: chainEntries[0]?.props || {},
+          additionalTransformers: chainEntries.slice(1).map(t => t.id),
+          additionalTransformerProps: chainEntries.slice(1).map(t => ({ ...(t.props || {}) })),
           transformerInputType: mapping.transformerInputType,
           transformerOutputType: mapping.transformerOutputType,
-          transformerProps: mapping.transformerProps || {},
           extraInputs: extraInputNodeIds,
+          extraInputTargets,
         })
       })
 
@@ -191,6 +244,51 @@ export default function FieldMappingStep() {
   const filteredTarget = targetSchema.filter(f => 
     getTargetFieldLabel(f).toLowerCase().includes(targetSearch.toLowerCase())
   )
+
+  const getEdgeTransformerChain = (edge) => {
+    const first = edge?.transformer && edge.transformer !== 'none'
+      ? [{ id: edge.transformer, props: edge.transformerProps || {} }]
+      : []
+    const rest = (edge?.additionalTransformers || []).map((id, idx) => ({
+      id,
+      props: edge?.additionalTransformerProps?.[idx] || {},
+    }))
+    return [...first, ...rest].filter(item => item.id && item.id !== 'none')
+  }
+
+  const getEdgeExtraInputTransformerIndex = (edge, nodeId) => {
+    const raw = edge?.extraInputTargets?.[nodeId]
+    const idx = Number.isInteger(raw) ? raw : Number(raw)
+    return Number.isFinite(idx) && idx >= 0 ? Math.floor(idx) : 0
+  }
+
+  const sanitizeExtraInputsForChain = (edge, chain = getEdgeTransformerChain(edge)) => {
+    const firstMultiIndex = chain.findIndex(item => findTransformer(transformers, item.id)?.isMultipleInput)
+    if (firstMultiIndex < 0) {
+      return { extraInputs: [], extraInputTargets: {} }
+    }
+
+    const nextInputs = []
+    const nextTargets = {}
+    ;(edge.extraInputs || []).forEach(nodeId => {
+      if (!nodeId || nodeId === edge.from || nextInputs.includes(nodeId)) return
+      const preferredIndex = getEdgeExtraInputTransformerIndex(edge, nodeId)
+      const preferredTransformer = chain[preferredIndex] ? findTransformer(transformers, chain[preferredIndex].id) : null
+      const targetIndex = preferredTransformer?.isMultipleInput ? preferredIndex : firstMultiIndex
+      nextInputs.push(nodeId)
+      nextTargets[nodeId] = targetIndex
+    })
+
+    return { extraInputs: nextInputs, extraInputTargets: nextTargets }
+  }
+
+  const applyTransformerChainToEdge = (edge, chain) => ({
+    ...edge,
+    transformer: chain[0]?.id || 'none',
+    transformerProps: chain[0]?.props || {},
+    additionalTransformers: chain.slice(1).map(item => item.id),
+    additionalTransformerProps: chain.slice(1).map(item => ({ ...(item.props || {}) })),
+  })
 
   const existingSourceFieldIds = new Set(
     nodes.filter(n => n.type === 'source' && n.fieldId).map(n => n.fieldId)
@@ -221,27 +319,39 @@ export default function FieldMappingStep() {
     // Target can only have ONE incoming connection
     if (edgesRef.current.some(e => e.to === toId)) return false
 
-    applyEdges(prev => [...prev, { from: fromId, to: toId, fromType, toType, transformer: 'none', extraInputs: [] }])
+    applyEdges(prev => [...prev, { from: fromId, to: toId, fromType, toType, transformer: 'none', extraInputs: [], extraInputTargets: {} }])
+    alignNodes()
     return true
     }
 
     const removeEdge = (edge) => {
     applyEdges(prev => prev.filter(e => !(e.from === edge.from && e.to === edge.to)))
     setTransformerMenu(null)
+    alignNodes()
     }
 
     const setEdgeTransformer = (edge, transformerId) => {
+    let didAddTransformer = false
     applyEdges(prev => prev.map(e =>
       e.from === edge.from && e.to === edge.to
-        ? { 
-            ...e, 
-            transformer: transformerId,
-            transformerInputType: e.transformerInputType || 'any',
-            transformerOutputType: e.transformerOutputType || 'any',
-            transformerProps: e.transformerProps || {},
-          }
+        ? (() => {
+            didAddTransformer = didAddTransformer || !e.transformer || e.transformer === 'none'
+            const nextEdge = {
+              ...e,
+              transformer: transformerId,
+              transformerInputType: e.transformerInputType || 'any',
+              transformerOutputType: e.transformerOutputType || 'any',
+              transformerProps: e.transformerProps || {},
+            }
+            const sanitized = sanitizeExtraInputsForChain(nextEdge)
+            return { ...nextEdge, ...sanitized }
+          })()
         : e
     ))
+
+    if (didAddTransformer) {
+      alignNodes()
+    }
 
     setTransformerMenu(null)
     }
@@ -344,12 +454,21 @@ export default function FieldMappingStep() {
             applyEdges(prev => {
               const targetEdge = prev[hit.edgeIdx]
               if (!targetEdge) return prev
-              const tf = findTransformer(transformers, targetEdge.transformer)
+              const hitChain = getEdgeTransformerChain(targetEdge)
+              const tf = findTransformer(transformers, hitChain[hit.chainIndex]?.id)
               if (!tf?.isMultipleInput) return prev
               if (targetEdge.from === nodeId) return prev
-              if (targetEdge.extraInputs?.includes(nodeId)) return prev
               return prev.map((e, i) => i === hit.edgeIdx
-                ? { ...e, extraInputs: [...(e.extraInputs || []), nodeId] }
+                ? {
+                    ...e,
+                    extraInputs: (e.extraInputs || []).includes(nodeId)
+                      ? (e.extraInputs || [])
+                      : [...(e.extraInputs || []), nodeId],
+                    extraInputTargets: {
+                      ...(e.extraInputTargets || {}),
+                      [nodeId]: hit.chainIndex,
+                    },
+                  }
                 : e
               )
             })
@@ -397,11 +516,18 @@ export default function FieldMappingStep() {
     const nextEdges = edgesRef.current
       .filter(e => e.from !== nodeId && e.to !== nodeId)
       .map(e => e.extraInputs?.includes(nodeId)
-        ? { ...e, extraInputs: e.extraInputs.filter(id => id !== nodeId) }
+        ? {
+            ...e,
+            extraInputs: e.extraInputs.filter(id => id !== nodeId),
+            extraInputTargets: Object.fromEntries(
+              Object.entries(e.extraInputTargets || {}).filter(([id]) => id !== nodeId)
+            ),
+          }
         : e
       )
 
     applyCanvas(nextNodes, nextEdges)
+    alignNodes()
     }
 
   const buildCanvasFieldNode = (field, type, x, y) => ({
@@ -567,7 +693,7 @@ export default function FieldMappingStep() {
     return edgesInput.map(edge => {
       const srcNode = nodesInput.find(n => n.id === edge.from)
       const tgtNode = nodesInput.find(n => n.id === edge.to)
-      const normalizedTransformer = normalizeTransformerRef(transformers, edge.transformer)
+      const chain = getEdgeTransformerChain(edge)
 
       return {
         src: srcNode?.fieldId || srcNode?.name || '',
@@ -584,15 +710,21 @@ export default function FieldMappingStep() {
           sendToSaknay: tgtNode?.sendToSaknay ?? true,
           expression: tgtNode?.expression || '',
         },
-        transformer: normalizedTransformer,
+        transformer: chain[0]?.id || 'none',
         transformerInputType: edge.transformerInputType || 'any',
         transformerOutputType: edge.transformerOutputType || 'any',
-        transformerProps: edge.transformerProps || {},
-        transformerChain: [normalizedTransformer, ...(edge.additionalTransformers || []).map(t => normalizeTransformerRef(transformers, t))].filter(t => t && t !== 'none'),
+        transformerProps: chain[0]?.props || {},
+        transformerChain: chain.map(item => item.id),
+        transformerChainDetailed: chain.map(item => ({ id: item.id, props: { ...(item.props || {}) } })),
         // Multi-input: extra source node IDs and their field names
         extraInputs: (edge.extraInputs || []).map(id => {
           const n = nodesInput.find(nd => nd.id === id)
-          return { nodeId: id, field: n?.fieldId || n?.name || '', pos: { x: n?.x || 0, y: n?.y || 0 } }
+          return {
+            nodeId: id,
+            field: n?.fieldId || n?.name || '',
+            pos: { x: n?.x || 0, y: n?.y || 0 },
+            transformerIndex: getEdgeExtraInputTransformerIndex(edge, id),
+          }
         }),
       }
     })
@@ -675,6 +807,7 @@ export default function FieldMappingStep() {
     const alignNodes = () => {
     const LEFT_X = 40
     const RIGHT_X = 650
+        const RIGHT_X_WIDE = 860
     const START_Y = 30
     const GAP = NODE_ROW_GAP
 
@@ -695,10 +828,28 @@ export default function FieldMappingStep() {
       })
 
       orderedEdges.forEach(edge => {
-        rows.push({ sourceId: edge.from, targetId: edge.to })
+        const chainLength = getEdgeTransformerChain(edge).length
+        const wrap = getTransformerChainWrapMetrics(LEFT_X + NODE_WIDTH, RIGHT_X, chainLength)
+        const targetX = chainLength >= 2 ? RIGHT_X_WIDE : RIGHT_X
 
-        const transformer = findTransformer(transformers, edge.transformer)
-        if (transformer?.isMultipleInput) {
+        if (chainLength > 2 && wrap.rowCount > 1) {
+          rows.push({ sourceId: edge.from, targetId: null, targetX })
+          for (let idx = 0; idx < wrap.rowCount - 2; idx += 1) {
+            rows.push({ sourceId: null, targetId: null })
+          }
+          rows.push({ sourceId: null, targetId: edge.to, targetX })
+        } else {
+          rows.push({ sourceId: edge.from, targetId: edge.to, targetX })
+        }
+
+        const chain = getEdgeTransformerChain(edge)
+        const hasMultiInputTargets = (edge.extraInputs || []).some(extraId => {
+          const targetIndex = getEdgeExtraInputTransformerIndex(edge, extraId)
+          const tf = findTransformer(transformers, chain[targetIndex]?.id)
+          return !!tf?.isMultipleInput
+        })
+
+        if (hasMultiInputTargets) {
           ;[...(edge.extraInputs || [])]
             .sort((a, b) => getNodeY(a) - getNodeY(b))
             .forEach(extraId => {
@@ -749,7 +900,7 @@ export default function FieldMappingStep() {
         if (row.targetId && !placedTargets.has(row.targetId)) {
           const tgt = nextById.get(row.targetId)
           if (tgt) {
-            tgt.x = RIGHT_X
+            tgt.x = row.targetX ?? RIGHT_X
             tgt.y = y
             placedTargets.add(row.targetId)
           }
@@ -921,6 +1072,7 @@ export default function FieldMappingStep() {
             toType: 'target',
             transformer: 'none',
             extraInputs: [],
+            extraInputTargets: {},
           })
         }
       })
@@ -941,6 +1093,7 @@ export default function FieldMappingStep() {
           toType: 'target',
           transformer: 'none',
           extraInputs: [],
+            extraInputTargets: {},
         })
       })
     })
@@ -967,6 +1120,71 @@ export default function FieldMappingStep() {
     }
   }
 
+  const getTransformerChainWrapMetrics = (x1, x2, chainLength, tfWidth = 140) => {
+    const maxPerRow = 2
+    const rowCount = Math.ceil(chainLength / maxPerRow)
+    return { maxPerRow, rowCount }
+  }
+
+  const getTransformerChainGeometry = (x1, y1, x2, y2, chainLength, tfWidth = 140, tfHeight = 55) => {
+    if (chainLength <= 0) return []
+    const dx = x2 - x1
+    const dy = y2 - y1
+
+    // Keep legacy placement when there is enough room on one line.
+    const { maxPerRow, rowCount } = getTransformerChainWrapMetrics(x1, x2, chainLength, tfWidth)
+
+    if (rowCount <= 1) {
+      return Array.from({ length: chainLength }).map((_, index) => {
+        const t = (index + 1) / (chainLength + 1)
+        const midX = x1 + dx * t
+        const midY = y1 + dy * t
+        return {
+          midX,
+          midY,
+          tfWidth,
+          tfHeight,
+          leftX: midX - tfWidth / 2,
+          rightX: midX + tfWidth / 2,
+        }
+      })
+    }
+
+    const left = Math.min(x1, x2)
+    const right = Math.max(x1, x2)
+    const rowGap = NODE_ROW_GAP
+    const firstRowY = Math.min(y1, y2)
+
+    const rowSizes = []
+    let remaining = chainLength
+    for (let row = 0; row < rowCount; row += 1) {
+      const size = Math.min(maxPerRow, remaining)
+      rowSizes.push(size)
+      remaining -= size
+    }
+
+    let seqIndex = 0
+    const result = Array.from({ length: chainLength })
+    rowSizes.forEach((size, row) => {
+      const y = firstRowY + row * rowGap
+      const step = size > 1 ? (right - left) / 3 : 0
+      for (let k = 0; k < size; k += 1) {
+        const midX = size > 1 ? left + step * (k + 1) : (left + right) / 2
+        result[seqIndex] = {
+          midX,
+          midY: y,
+          tfWidth,
+          tfHeight,
+          leftX: midX - tfWidth / 2,
+          rightX: midX + tfWidth / 2,
+        }
+        seqIndex += 1
+      }
+    })
+
+    return result
+  }
+
   const resetTransformerModal = () => {
     setAddTransformerModal(null)
     setTransformerSearch('')
@@ -974,19 +1192,23 @@ export default function FieldMappingStep() {
     setTfPropValues({})
   }
 
-  const openTransformerModal = (edge, mode = 'replace') => {
+  const openTransformerModal = (edge, mode = 'replace', chainIndex = 0) => {
     const liveEdge = edges.find(e => e.from === edge?.from && e.to === edge?.to) || edge
-    setAddTransformerModal({ edge: liveEdge, mode })
+    const chain = getEdgeTransformerChain(liveEdge)
+    const boundedIndex = Math.max(0, Math.min(chainIndex, chain.length))
+    const selectedChainEntry = chain[boundedIndex] || null
+
+    setAddTransformerModal({ edge: liveEdge, mode, chainIndex: boundedIndex })
     setTransformerSearch('')
 
-    if (liveEdge?.transformer && liveEdge.transformer !== 'none') {
-      const transformer = findTransformer(transformers, liveEdge.transformer)
+    if (selectedChainEntry && (mode === 'edit' || mode === 'replace')) {
+      const transformer = findTransformer(transformers, selectedChainEntry.id)
       const defaults = {}
       if (transformer) {
         getPropsSchema(transformers, transformer._id).forEach(p => { defaults[p.key] = p.default })
       }
       setSelectedTf(transformer)
-      setTfPropValues({ ...defaults, ...(liveEdge.transformerProps || {}) })
+      setTfPropValues({ ...defaults, ...(selectedChainEntry.props || {}) })
       return
     }
 
@@ -1258,31 +1480,55 @@ export default function FieldMappingStep() {
                 const y1 = fromNode.y + NODE_HALF_HEIGHT
                 const x2 = toNode.x
                 const y2 = toNode.y + NODE_HALF_HEIGHT
-                const transformer = findTransformer(transformers, edge.transformer)
-                const tf = getTransformerGeometry(x1, y1, x2, y2)
+                const chain = getEdgeTransformerChain(edge)
+                const chainGeometry = getTransformerChainGeometry(x1, y1, x2, y2, chain.length)
+                const firstTransformer = findTransformer(transformers, chain[0]?.id)
+                const tf = chainGeometry[0] || getTransformerGeometry(x1, y1, x2, y2)
                 const directPath = bezier(x1, y1, x2, y2)
-                const inboundPath = bezier(x1, y1, tf.leftX, tf.midY)
-                const outboundPath = bezier(tf.rightX, tf.midY, x2, y2)
+                const segmentPaths = []
 
-                // Register bounding box for multi-input drop detection
-                if (transformer && transformer._id) {
+                if (chain.length > 0) {
+                  const points = [{ x: x1, y: y1 }]
+                  chainGeometry.forEach(geo => {
+                    points.push({ x: geo.leftX, y: geo.midY })
+                    points.push({ x: geo.rightX, y: geo.midY })
+                  })
+                  points.push({ x: x2, y: y2 })
+
+                  for (let pIndex = 0; pIndex < points.length - 1; pIndex += 1) {
+                    const from = points[pIndex]
+                    const to = points[pIndex + 1]
+                    segmentPaths.push({
+                      key: `seg-${pIndex}`,
+                      d: bezier(from.x, from.y, to.x, to.y),
+                      isLast: pIndex === points.length - 2,
+                    })
+                  }
+                }
+
+                // Register all transformer bounding boxes for multi-input drop detection.
+                chainGeometry.forEach((geo, chainIndex) => {
+                  if (!geo) return
                   tfBoxesRef.current.push({
                     edgeIdx: idx,
-                    x: tf.leftX,
-                    y: tf.midY - tf.tfHeight / 2,
-                    w: tf.tfWidth,
-                    h: tf.tfHeight,
+                    chainIndex,
+                    x: geo.leftX,
+                    y: geo.midY - geo.tfHeight / 2,
+                    w: geo.tfWidth,
+                    h: geo.tfHeight,
                   })
-                }
+                })
 
                 return (
                   <g key={idx} style={{ cursor: 'pointer' }}>
-                    {transformer && transformer._id ? (
+                    {chain.length > 0 ? (
                       <>
-                        <path d={inboundPath} stroke="#4f6ef7" strokeWidth="7" fill="none" opacity="0.12" />
-                        <path d={inboundPath} stroke="#4f6ef7" strokeWidth="2.5" fill="none" style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
-                        <path d={outboundPath} stroke="#4f6ef7" strokeWidth="7" fill="none" opacity="0.12" />
-                        <path d={outboundPath} stroke="#4f6ef7" strokeWidth="2.5" fill="none" markerEnd="url(#arr)" style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
+                        {segmentPaths.map(segment => (
+                          <g key={segment.key}>
+                            <path d={segment.d} stroke="#4f6ef7" strokeWidth="7" fill="none" opacity="0.12" />
+                            <path d={segment.d} stroke="#4f6ef7" strokeWidth="2.5" fill="none" markerEnd={segment.isLast ? 'url(#arr)' : undefined} style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
+                          </g>
+                        ))}
                       </>
                     ) : (
                       <>
@@ -1291,52 +1537,73 @@ export default function FieldMappingStep() {
                       </>
                     )}
                     
-                    {/* Transformer Node - using foreignObject for field-style component */}
-                     {transformer && transformer._id && (
+                    {/* Transformer nodes (chained) */}
+                    {chain.map((chainItem, chainIndex) => {
+                      const transformer = findTransformer(transformers, chainItem.id)
+                      const chainTf = chainGeometry[chainIndex]
+                      if (!transformer || !chainTf) return null
+
+                      const previousTransformer = chainIndex > 0
+                        ? findTransformer(transformers, chain[chainIndex - 1]?.id)
+                        : null
+                      const extraInputCount = (edge.extraInputs || []).filter(id => getEdgeExtraInputTransformerIndex(edge, id) === chainIndex).length
+                      const inputCaption = chainIndex === 0
+                        ? `${fromNode.name}${extraInputCount > 0 ? ` +${extraInputCount}` : ''}`
+                        : `${previousTransformer?.name || 'Previous'} output`
+
+                      const isInvalid = hasMissingRequiredProps(transformers, chainItem.id, chainItem.props || {})
+                      const borderColor = isInvalid ? 'var(--danger)' : 'var(--accent)'
+                      const stripeColor = isInvalid ? 'var(--danger)' : 'var(--accent)'
+                      const iconBg = isInvalid ? 'rgba(239,68,68,0.1)' : 'rgba(79,110,247,0.1)'
+
+                      return (
                        <foreignObject
-                         x={tf.leftX}
-                         y={tf.midY - tf.tfHeight / 2}
-                         width={tf.tfWidth}
-                         height={tf.tfHeight}
+                         key={`tf-${idx}-${chainIndex}`}
+                         x={chainTf.leftX}
+                         y={chainTf.midY - chainTf.tfHeight / 2}
+                         width={chainTf.tfWidth}
+                         height={chainTf.tfHeight}
                          data-edge-idx={idx}
                          style={{ pointerEvents: 'auto' }}
                        >
                          <div
+                           data-testid={`transformer-node-${idx}-${chainIndex}`}
+                           data-invalid={isInvalid ? 'true' : 'false'}
                            onClick={(e) => {
                              e.stopPropagation()
                              e.preventDefault()
                              setCurrentEdge(edge)
-                             openTransformerModal(edge, 'replace')
+                             openTransformerModal(edge, 'edit', chainIndex)
                            }}
                            onContextMenu={(e) => {
                              e.preventDefault()
                              e.stopPropagation()
                              setCurrentEdge(edge)
-                             setPlusCtxMenu({ x: e.clientX, y: e.clientY, edge, mode: 'replace' })
+                             setPlusCtxMenu({ x: e.clientX, y: e.clientY, edge, kind: 'transformer', chainIndex })
                            }}
                            className={transformer?.isMultipleInput ? 'tf-multi-input-node' : ''}
                            style={{
                             width: '100%',
                             height: '100%',
                             background: 'var(--surf2)',
-                            border: '1.5px solid var(--accent)',
+                            border: `1.5px solid ${borderColor}`,
                             borderRadius: '8px',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px',
                             padding: '6px',
                             cursor: 'pointer',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                            boxShadow: isInvalid ? '0 2px 8px rgba(239,68,68,0.18)' : '0 2px 8px rgba(0,0,0,0.08)',
                             userSelect: 'none',
                             transition: 'all 0.15s',
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = 'var(--accent)'
-                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(79,110,247,0.2)'
+                            e.currentTarget.style.borderColor = borderColor
+                            e.currentTarget.style.boxShadow = isInvalid ? '0 4px 12px rgba(239,68,68,0.28)' : '0 4px 12px rgba(79,110,247,0.2)'
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = 'var(--accent)'
-                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'
+                            e.currentTarget.style.borderColor = borderColor
+                            e.currentTarget.style.boxShadow = isInvalid ? '0 2px 8px rgba(239,68,68,0.18)' : '0 2px 8px rgba(0,0,0,0.08)'
                           }}
                         >
                           {/* Left stripe */}
@@ -1347,7 +1614,7 @@ export default function FieldMappingStep() {
                             bottom: '4px',
                             width: '3px',
                             borderRadius: '2px',
-                            background: 'var(--accent)',
+                            background: stripeColor,
                           }} />
 
                           {/* Icon */}
@@ -1355,7 +1622,7 @@ export default function FieldMappingStep() {
                             width: '22px',
                             height: '22px',
                             borderRadius: '4px',
-                            background: 'rgba(79,110,247,0.1)',
+                            background: iconBg,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -1392,19 +1659,32 @@ export default function FieldMappingStep() {
                             }}>
                               Transformer
                             </div>
+                            <div style={{
+                              fontSize: '8px',
+                              color: 'var(--muted)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              lineHeight: '1.2',
+                            }}>
+                              Input: {inputCaption}
+                            </div>
                             {/* Extra inputs badge */}
-                            {(edge.extraInputs?.length > 0) && (
+                            {(() => {
+                              if (extraInputCount <= 0) return null
+                              return (
                               <div style={{
                                 fontSize: '8px', fontWeight: 700,
                                 color: 'var(--success)',
                                 display: 'flex', alignItems: 'center', gap: '2px',
                               }}>
                                 <span>⇉</span>
-                                <span>{edge.extraInputs.length + 1} inputs</span>
+                                <span>{extraInputCount + 1} inputs</span>
                               </div>
-                            )}
+                              )
+                            })()}
                             {/* Drop hint for multi-input transformers with no extra inputs yet */}
-                            {transformer?.isMultipleInput && !edge.extraInputs?.length && (
+                            {transformer?.isMultipleInput && !(edge.extraInputs || []).some(id => getEdgeExtraInputTransformerIndex(edge, id) === chainIndex) && (
                               <div style={{
                                 fontSize: '8px', fontWeight: 600,
                                 color: 'rgba(79,110,247,0.6)',
@@ -1416,22 +1696,69 @@ export default function FieldMappingStep() {
                           </div>
                         </div>
                       </foreignObject>
-                    )}
+                      )
+                    })}
+
+                    {/* Insertion points for transformer chaining */}
+                    {chain.length > 0 && Array.from({ length: chain.length + 1 }).map((_, slotIndex) => {
+                      const before = slotIndex === 0
+                        ? { x: x1, y: y1 }
+                        : { x: chainGeometry[slotIndex - 1].rightX, y: chainGeometry[slotIndex - 1].midY }
+                      const after = slotIndex === chain.length
+                        ? { x: x2, y: y2 }
+                        : { x: chainGeometry[slotIndex].leftX, y: chainGeometry[slotIndex].midY }
+                      const plusX = (before.x + after.x) / 2
+                      const plusY = (before.y + after.y) / 2
+
+                      return (
+                        <g
+                          key={`add-tf-slot-${idx}-${slotIndex}`}
+                          data-testid={`add-transformer-slot-${idx}-${slotIndex}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setCurrentEdge(edge)
+                            openTransformerModal(edge, 'insert', slotIndex)
+                          }}
+                          onContextMenu={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setCurrentEdge(edge)
+                            setPlusCtxMenu({ x: e.clientX, y: e.clientY, edge, kind: 'slot', slotIndex })
+                          }}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <circle cx={plusX} cy={plusY} r="13" fill="transparent" />
+                          <circle cx={plusX} cy={plusY} r="8" fill="var(--surf)" stroke="#4f6ef7" strokeWidth="1.8" />
+                          <text
+                            x={plusX}
+                            y={plusY}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fill="#4f6ef7"
+                            fontSize="11"
+                            fontWeight="700"
+                            style={{ userSelect: 'none', pointerEvents: 'none' }}
+                          >
+                            +
+                          </text>
+                        </g>
+                      )
+                    })}
 
                     {/* Click area for empty transformer (to add one) */}
-                    {(!transformer || transformer.id === 'none') && (
+                    {chain.length === 0 && (
                       <g
                         data-testid={`add-transformer-trigger-${idx}`}
                         onClick={(e) => {
                           e.stopPropagation()
                           setCurrentEdge(edge)
-                          openTransformerModal(edge, 'replace')
+                          openTransformerModal(edge, 'insert', 0)
                         }}
                         onContextMenu={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
                           setCurrentEdge(edge)
-                          setPlusCtxMenu({ x: e.clientX, y: e.clientY, edge, mode: 'replace' })
+                          setPlusCtxMenu({ x: e.clientX, y: e.clientY, edge, kind: 'slot', slotIndex: 0 })
                         }}
                         style={{ cursor: 'pointer' }}
                       >
@@ -1452,12 +1779,15 @@ export default function FieldMappingStep() {
                       </g>
                     )}
                     {/* Extra input lines — additional source nodes feeding the transformer */}
-                    {transformer && edge.extraInputs?.map((extraSrcId) => {
+                    {chain.length > 0 && edge.extraInputs?.map((extraSrcId) => {
                       const extraSrc = nodes.find(n => n.id === extraSrcId)
                       if (!extraSrc) return null
+                      const targetIndex = getEdgeExtraInputTransformerIndex(edge, extraSrcId)
+                      const targetTf = chainGeometry[targetIndex] || chainGeometry[0]
+                      if (!targetTf) return null
                       const ex1 = extraSrc.x + NODE_WIDTH
                       const ey1 = extraSrc.y + NODE_HALF_HEIGHT
-                      const ed = bezier(ex1, ey1, tf.leftX, tf.midY)
+                      const ed = bezier(ex1, ey1, targetTf.leftX, targetTf.midY)
                       return (
                         <g key={extraSrcId}>
                           {/* Glow — matches primary line */}
@@ -1504,7 +1834,7 @@ export default function FieldMappingStep() {
                       width: `${NODE_WIDTH}px`,
                       height: `${NODE_HEIGHT}px`,
                       background: 'var(--surf2)',
-                      border: isRequired ? '2px solid var(--danger)' : '1.5px solid var(--border)',
+                      border: '1.5px solid var(--border)',
                       borderRadius: '8px',
                       display: 'flex',
                       alignItems: 'center',
@@ -1979,7 +2309,11 @@ export default function FieldMappingStep() {
       {/* Plus circle right-click context menu */}
       {plusCtxMenu && (() => {
         const liveEdge = edges.find(e => e.from === plusCtxMenu.edge?.from && e.to === plusCtxMenu.edge?.to) || plusCtxMenu.edge
-        const hasTransformer = !!(liveEdge?.transformer && liveEdge.transformer !== 'none')
+        const chain = getEdgeTransformerChain(liveEdge)
+        const menuKind = plusCtxMenu.kind || 'slot'
+        const transformerIndex = Number.isInteger(plusCtxMenu.chainIndex) ? plusCtxMenu.chainIndex : 0
+        const slotIndex = Number.isInteger(plusCtxMenu.slotIndex) ? plusCtxMenu.slotIndex : 0
+        const hasTransformer = chain.length > 0
 
         return (
           <div
@@ -2003,51 +2337,82 @@ export default function FieldMappingStep() {
               Connection
             </div>
 
-            <div
-              style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
-              onClick={() => {
-                setPlusCtxMenu(null)
-                openTransformerModal(liveEdge, hasTransformer ? 'replace' : 'add')
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(79,110,247,0.10)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-            >
-              <span style={{ fontSize: '16px' }}>⚙</span>
-              <span>{hasTransformer ? 'Replace Transformer' : 'Add Transformer'}</span>
-            </div>
-
-            {hasTransformer && (
+            {menuKind === 'slot' && (
               <div
-                style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s', borderTop: '1px solid var(--border)' }}
+                style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
                 onClick={() => {
                   setPlusCtxMenu(null)
-                  openTransformerModal(liveEdge, 'edit')
+                  openTransformerModal(liveEdge, 'insert', slotIndex)
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(79,110,247,0.10)' }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
               >
-                <span style={{ fontSize: '16px' }}>✏️</span>
-                <span>Edit Transformer</span>
+                <span style={{ fontSize: '16px' }}>⚙</span>
+                <span>Add Transformer</span>
               </div>
             )}
 
-            {hasTransformer && (
-              <div
-                style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
-                onClick={() => {
-                  applyEdges(prev => prev.map(e =>
-                    (e.from === liveEdge.from && e.to === liveEdge.to)
-                      ? { ...e, transformer: 'none', extraInputs: [], transformerProps: {} }
-                      : e
-                  ))
-                  setPlusCtxMenu(null)
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-              >
-                <span style={{ fontSize: '16px' }}>✕</span>
-                <span>Remove Transformer</span>
-              </div>
+            {menuKind === 'transformer' && (
+              <>
+                <div
+                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
+                  onClick={() => {
+                    setPlusCtxMenu(null)
+                    openTransformerModal(liveEdge, 'insert', transformerIndex)
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(79,110,247,0.10)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  <span style={{ fontSize: '16px' }}>↤</span>
+                  <span>Add Transformer Before</span>
+                </div>
+                <div
+                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
+                  onClick={() => {
+                    setPlusCtxMenu(null)
+                    openTransformerModal(liveEdge, 'insert', transformerIndex + 1)
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(79,110,247,0.10)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  <span style={{ fontSize: '16px' }}>↦</span>
+                  <span>Add Transformer After</span>
+                </div>
+                <div
+                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s', borderTop: '1px solid var(--border)' }}
+                  onClick={() => {
+                    setPlusCtxMenu(null)
+                    openTransformerModal(liveEdge, 'edit', transformerIndex)
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(79,110,247,0.10)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  <span style={{ fontSize: '16px' }}>✏️</span>
+                  <span>Edit Transformer</span>
+                </div>
+                <div
+                  style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
+                  onClick={() => {
+                    applyEdges(prev => prev.map(e => {
+                      if (e.from !== liveEdge.from || e.to !== liveEdge.to) return e
+                      const nextChain = getEdgeTransformerChain(e).filter((_, i) => i !== transformerIndex)
+                      const nextEdge = applyTransformerChainToEdge(e, nextChain)
+                      const sanitized = sanitizeExtraInputsForChain(nextEdge, nextChain)
+                      return {
+                        ...nextEdge,
+                        ...sanitized,
+                      }
+                    }))
+                    setPlusCtxMenu(null)
+                    alignNodes()
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  <span style={{ fontSize: '16px' }}>✕</span>
+                  <span>Remove Transformer</span>
+                </div>
+              </>
             )}
 
             <div style={{ borderTop: '1px solid var(--border)' }}>
@@ -2065,7 +2430,13 @@ export default function FieldMappingStep() {
                         onClick={() => {
                           applyEdges(prev => prev.map(e =>
                             (e.from === liveEdge.from && e.to === liveEdge.to)
-                              ? { ...e, extraInputs: (e.extraInputs || []).filter(id => id !== extraId) }
+                              ? {
+                                  ...e,
+                                  extraInputs: (e.extraInputs || []).filter(id => id !== extraId),
+                                  extraInputTargets: Object.fromEntries(
+                                    Object.entries(e.extraInputTargets || {}).filter(([id]) => id !== extraId)
+                                  ),
+                                }
                               : e
                           ))
                           setPlusCtxMenu(null)
@@ -2199,8 +2570,11 @@ export default function FieldMappingStep() {
       {/* Add / Edit Transformer Modal */}
       {addTransformerModal && (() => {
         const currentModalEdge = edges.find(e => e.from === addTransformerModal.edge?.from && e.to === addTransformerModal.edge?.to) || addTransformerModal.edge
-        const hadAssignedTransformer = !!(currentModalEdge?.transformer && currentModalEdge.transformer !== 'none')
-        const currentAssignedTransformer = findTransformer(transformers, currentModalEdge?.transformer)
+        const chain = getEdgeTransformerChain(currentModalEdge)
+        const currentChainIndex = Math.max(0, Math.min(addTransformerModal.chainIndex || 0, chain.length))
+        const existingChainEntry = chain[currentChainIndex] || null
+        const hadAssignedTransformer = !!existingChainEntry
+        const currentAssignedTransformer = findTransformer(transformers, existingChainEntry?.id)
         const filtered = transformers.filter(t =>
           t.name.toLowerCase().includes(transformerSearch.toLowerCase()) ||
           t._id.toLowerCase().includes(transformerSearch.toLowerCase())
@@ -2212,22 +2586,42 @@ export default function FieldMappingStep() {
           setSelectedTf(t)
           const defaults = {}
           getPropsSchema(transformers, t._id).forEach(p => { defaults[p.key] = p.default })
-          const keepExisting = currentAssignedTransformer?._id === t._id ? (currentModalEdge.transformerProps || {}) : {}
+          const keepExisting = currentAssignedTransformer?._id === t._id ? (existingChainEntry?.props || {}) : {}
           setTfPropValues({ ...defaults, ...keepExisting })
         }
 
         const handleApply = () => {
           if (!selectedTf) return
 
+          let shouldAutoAlign = false
+
           applyEdges(prev => prev.map(e => {
             if (e.from !== currentModalEdge.from || e.to !== currentModalEdge.to) return e
+            const edgeChain = getEdgeTransformerChain(e)
+            const nextChain = [...edgeChain]
+            const payload = { id: selectedTf._id, props: { ...tfPropValues } }
+
+            if (addTransformerModal.mode === 'insert') {
+              shouldAutoAlign = true
+              nextChain.splice(currentChainIndex, 0, payload)
+            } else if (existingChainEntry) {
+              nextChain[currentChainIndex] = payload
+            } else {
+              shouldAutoAlign = true
+              nextChain[0] = payload
+            }
+
+            const nextEdge = applyTransformerChainToEdge(e, nextChain)
+            const sanitized = sanitizeExtraInputsForChain(nextEdge, nextChain)
             return {
-              ...e,
-              transformer: selectedTf._id,
-              transformerProps: { ...tfPropValues },
-              extraInputs: selectedTf.isMultipleInput ? (e.extraInputs || []) : [],
+              ...nextEdge,
+              ...sanitized,
             }
           }))
+
+          if (shouldAutoAlign) {
+            alignNodes()
+          }
 
           resetTransformerModal()
         }
@@ -2261,7 +2655,7 @@ export default function FieldMappingStep() {
               <div style={{ background: 'var(--accent)', padding: '16px 18px', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
                 <span style={{ fontSize: '20px' }}>⚙</span>
                 <span style={{ fontSize: '15px', fontWeight: 700, color: '#fff', flex: 1 }}>
-                  {selectedTf ? `${selectedTf.name} — Properties` : (hadAssignedTransformer ? 'Replace Transformer' : 'Add Transformer')}
+                  {selectedTf ? `${selectedTf.name} — Properties` : (addTransformerModal.mode === 'insert' ? 'Add Transformer' : hadAssignedTransformer ? 'Edit Transformer' : 'Add Transformer')}
                 </span>
                 {selectedTf && (
                   <button
@@ -2353,7 +2747,7 @@ export default function FieldMappingStep() {
                                     {prop.options.map(o => <option key={o} value={o}>{o}</option>)}
                                   </select>
                                 ) : (
-                                  <input type={prop.type === 'number' ? 'number' : 'text'} value={tfPropValues[prop.key] ?? prop.default} onChange={(e) => setTfPropValues(v => ({ ...v, [prop.key]: e.target.value }))} placeholder={String(prop.default)} style={{ width: '100%', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '5px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', boxSizing: 'border-box' }} />
+                                  <input type={prop.type === 'number' ? 'number' : 'text'} value={tfPropValues[prop.key] ?? ''} onChange={(e) => setTfPropValues(v => ({ ...v, [prop.key]: e.target.value }))} placeholder={prop.description || ''} style={{ width: '100%', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '5px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', boxSizing: 'border-box' }} />
                                 )}
                               </td>
                               <td style={{ padding: '8px 8px', color: 'var(--muted)', fontSize: '11px', verticalAlign: 'middle', lineHeight: '1.4' }}>{prop.description}</td>
@@ -2377,10 +2771,22 @@ export default function FieldMappingStep() {
                     <button
                       onClick={() => {
                         applyEdges(prev => prev.map(e =>
-                          (e.from === currentModalEdge.from && e.to === currentModalEdge.to)
-                            ? { ...e, transformer: 'none', extraInputs: [], transformerProps: {}, transformerInputType: undefined, transformerOutputType: undefined }
-                            : e
+                          (e.from !== currentModalEdge.from || e.to !== currentModalEdge.to)
+                            ? e
+                            : (() => {
+                              const edgeChain = getEdgeTransformerChain(e)
+                              const nextChain = edgeChain.filter((_, i) => i !== currentChainIndex)
+                              const nextEdge = applyTransformerChainToEdge(e, nextChain)
+                              const sanitized = sanitizeExtraInputsForChain(nextEdge, nextChain)
+                              return {
+                                ...nextEdge,
+                                transformerInputType: undefined,
+                                transformerOutputType: undefined,
+                                ...sanitized,
+                              }
+                            })()
                         ))
+                        alignNodes()
                         resetTransformerModal()
                       }}
                       style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
@@ -2395,7 +2801,7 @@ export default function FieldMappingStep() {
                   </button>
                   {selectedTf && (
                     <button onClick={handleApply} style={{ padding: '7px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>
-                      ✓ {hadAssignedTransformer ? 'Save' : 'Apply'} {selectedTf.name}
+                      ✓ {(addTransformerModal.mode === 'insert' || !hadAssignedTransformer) ? 'Apply' : 'Save'} {selectedTf.name}
                     </button>
                   )}
                 </div>
@@ -2473,214 +2879,7 @@ export default function FieldMappingStep() {
         </>
       )}
 
-      {/* Add / Edit Transformer Modal */}
-      {addTransformerModal && (() => {
-        const currentModalEdge = edges.find(e => e.from === addTransformerModal.edge?.from && e.to === addTransformerModal.edge?.to) || addTransformerModal.edge
-        const hadAssignedTransformer = !!(currentModalEdge?.transformer && currentModalEdge.transformer !== 'none')
-        const currentAssignedTransformer = findTransformer(transformers, currentModalEdge?.transformer)
-        const filtered = transformers.filter(t =>
-          t.name.toLowerCase().includes(transformerSearch.toLowerCase()) ||
-          t._id.toLowerCase().includes(transformerSearch.toLowerCase())
-        )
-        const schema = selectedTf ? getPropsSchema(transformers, selectedTf._id) : []
-        const hasProps = schema.length > 0
-
-        const handleSelectTf = (t) => {
-          setSelectedTf(t)
-          const defaults = {}
-          getPropsSchema(transformers, t._id).forEach(p => { defaults[p.key] = p.default })
-          const keepExisting = currentAssignedTransformer?._id === t._id ? (currentModalEdge.transformerProps || {}) : {}
-          setTfPropValues({ ...defaults, ...keepExisting })
-        }
-
-        const handleApply = () => {
-          if (!selectedTf) return
-
-          applyEdges(prev => prev.map(e => {
-            if (e.from !== currentModalEdge.from || e.to !== currentModalEdge.to) return e
-            return {
-              ...e,
-              transformer: selectedTf._id,
-              transformerProps: { ...tfPropValues },
-              extraInputs: selectedTf.isMultipleInput ? (e.extraInputs || []) : [],
-            }
-          }))
-
-          resetTransformerModal()
-        }
-
-        return (
-          <>
-            <div
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1099 }}
-              onClick={resetTransformerModal}
-            />
-            <div
-              style={{
-                position: 'fixed',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                background: 'var(--surf)',
-                border: '1px solid var(--border)',
-                borderRadius: '12px',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-                zIndex: 1100,
-                width: selectedTf && hasProps ? '680px' : '380px',
-                maxHeight: '600px',
-                display: 'flex',
-                flexDirection: 'column',
-                animation: 'scaleIn 0.22s ease',
-                transition: 'width 0.22s ease',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ background: 'var(--accent)', padding: '16px 18px', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                <span style={{ fontSize: '20px' }}>⚙</span>
-                <span style={{ fontSize: '15px', fontWeight: 700, color: '#fff', flex: 1 }}>
-                  {selectedTf ? `${selectedTf.name} — Properties` : (hadAssignedTransformer ? 'Replace Transformer' : 'Add Transformer')}
-                </span>
-                {selectedTf && (
-                  <button
-                    onClick={() => { setSelectedTf(null); setTfPropValues({}) }}
-                    style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', marginRight: '4px' }}
-                  >← Back</button>
-                )}
-                <button
-                  onClick={resetTransformerModal}
-                  style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', width: '26px', height: '26px', cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >×</button>
-              </div>
-
-              <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-                <div style={{ width: selectedTf && hasProps ? '260px' : '100%', display: 'flex', flexDirection: 'column', borderRight: selectedTf && hasProps ? '1px solid var(--border)' : 'none', flexShrink: 0 }}>
-                  <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-                    <input
-                      autoFocus
-                      type="text"
-                      placeholder="Search transformers..."
-                      value={transformerSearch}
-                      onChange={(e) => setTransformerSearch(e.target.value)}
-                      style={{ width: '100%', padding: '9px 12px', border: '1.5px solid var(--accent)', borderRadius: '7px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
-                    {filtered.length === 0 && (
-                      <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>No transformers found</div>
-                    )}
-                    {filtered.map((t) => {
-                      const isSelected = selectedTf?._id === t._id
-                      const propCount = getPropsSchema(transformers, t._id).length
-                      return (
-                        <div
-                          key={t._id}
-                          onClick={() => handleSelectTf(t)}
-                          style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.15s', marginBottom: '2px', background: isSelected ? 'rgba(79,110,247,0.18)' : 'transparent', border: isSelected ? '1.5px solid rgba(79,110,247,0.5)' : '1.5px solid transparent' }}
-                          onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(79,110,247,0.09)' }}
-                          onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
-                        >
-                          <div style={{ width: '30px', height: '30px', borderRadius: '7px', background: isSelected ? 'rgba(79,110,247,0.25)' : 'rgba(79,110,247,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', flexShrink: 0 }}>{t.icon}</div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              {t.name}
-                              {t.isMultipleInput && <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)', color: 'var(--success)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>multi</span>}
-                            </div>
-                            <div style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                              {propCount > 0 ? `${propCount} propert${propCount === 1 ? 'y' : 'ies'}` : 'no properties'}
-                            </div>
-                          </div>
-                          {isSelected && <span style={{ color: '#4f6ef7', fontSize: '14px' }}>›</span>}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {selectedTf && (
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(79,110,247,0.06)' }}>
-                      <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: 'rgba(79,110,247,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>{selectedTf.icon}</div>
-                      <div>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>{selectedTf.name}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Configure the transformer properties below</div>
-                      </div>
-                    </div>
-
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                        <thead>
-                          <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                            <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.07em', width: '36%' }}>Property</th>
-                            <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.07em', width: '40%' }}>Value</th>
-                            <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Description</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {schema.map((prop, pi) => (
-                            <tr key={prop.key} style={{ borderBottom: '1px solid rgba(71,85,105,0.4)', background: pi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
-                              <td style={{ padding: '8px 8px', fontWeight: 600, color: 'var(--text)', verticalAlign: 'middle' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                  {prop.label}
-                                  {prop.required && <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--danger)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>req</span>}
-                                </div>
-                              </td>
-                              <td style={{ padding: '6px 8px', verticalAlign: 'middle' }}>
-                                {prop.type === 'select' ? (
-                                  <select value={tfPropValues[prop.key] ?? prop.default} onChange={(e) => setTfPropValues(v => ({ ...v, [prop.key]: e.target.value }))} style={{ width: '100%', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '5px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', cursor: 'pointer' }}>
-                                    {prop.options.map(o => <option key={o} value={o}>{o}</option>)}
-                                  </select>
-                                ) : (
-                                  <input type={prop.type === 'number' ? 'number' : 'text'} value={tfPropValues[prop.key] ?? prop.default} onChange={(e) => setTfPropValues(v => ({ ...v, [prop.key]: e.target.value }))} placeholder={String(prop.default)} style={{ width: '100%', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '5px', background: 'var(--surf2)', color: 'var(--text)', fontSize: '12px', boxSizing: 'border-box' }} />
-                                )}
-                              </td>
-                              <td style={{ padding: '8px 8px', color: 'var(--muted)', fontSize: '11px', verticalAlign: 'middle', lineHeight: '1.4' }}>{prop.description}</td>
-                            </tr>
-                          ))}
-                          {!hasProps && (
-                            <tr>
-                              <td colSpan={3} style={{ padding: '14px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px', fontStyle: 'italic' }}>No additional configurable properties</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg)', borderRadius: '0 0 12px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                <div>
-                  {hadAssignedTransformer && (
-                    <button
-                      onClick={() => {
-                        applyEdges(prev => prev.map(e =>
-                          (e.from === currentModalEdge.from && e.to === currentModalEdge.to)
-                            ? { ...e, transformer: 'none', extraInputs: [], transformerProps: {}, transformerInputType: undefined, transformerOutputType: undefined }
-                            : e
-                        ))
-                        resetTransformerModal()
-                      }}
-                      style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
-                    >
-                      ✕ Remove Transformer
-                    </button>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={resetTransformerModal} style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>
-                    Cancel
-                  </button>
-                  {selectedTf && (
-                    <button onClick={handleApply} style={{ padding: '7px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>
-                      ✓ {hadAssignedTransformer ? 'Save' : 'Apply'} {selectedTf.name}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </>
-        )
-      })()}
+      {/* Duplicate transformer modal removed; single chain-aware modal is rendered above. */}
 
       {/* Transformers list modal */}
       {transformerModal && (

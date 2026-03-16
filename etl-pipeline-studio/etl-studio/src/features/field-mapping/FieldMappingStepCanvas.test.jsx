@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import FieldMappingStep from './FieldMappingStepCanvas.jsx'
@@ -22,6 +22,22 @@ vi.mock('../../shared/store/configContext.jsx', () => ({
         icon: 'Aa',
         isMultipleInput: false,
         propsSchema: [],
+      },
+      {
+        _id: 'tf-3',
+        name: 'MergeFields',
+        icon: '⇉',
+        isMultipleInput: true,
+        propsSchema: [],
+      },
+      {
+        _id: 'tf-4',
+        name: 'ConvertMulti',
+        icon: '⚙',
+        isMultipleInput: false,
+        propsSchema: [
+          { key: 'logic', label: 'Logic', type: 'text', default: '', required: true, description: 'e.g. a:b:c' },
+        ],
       },
     ],
   }),
@@ -183,6 +199,93 @@ describe('FieldMappingStep transformer modal regression', () => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
       expect(persisted.mappings?.[0]?.transformer).toBe('tf-1')
       expect(persisted.mappings?.[0]?.transformerProps).toEqual({ separator: '-' })
+    })
+  })
+
+  it('supports chaining multiple transformers on a single connection', async () => {
+    const user = userEvent.setup()
+
+    renderWithPersistedState({
+      transformer: 'tf-1',
+      transformerProps: { separator: '-' },
+      extraInputs: [],
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Concatenate')).toBeInTheDocument()
+    })
+
+    fireEvent.contextMenu(screen.getByText('Concatenate'))
+    await user.click(await screen.findByText('Add Transformer After'))
+
+    await user.click(await screen.findByText('Uppercase'))
+    await user.click(screen.getByRole('button', { name: '✓ Apply Uppercase' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Concatenate')).toBeInTheDocument()
+      expect(screen.getByText('Uppercase')).toBeInTheDocument()
+    })
+
+    const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+    expect(persisted.mappings?.[0]?.transformer).toBe('tf-1')
+    expect(persisted.mappings?.[0]?.transformerChain).toEqual(['tf-1', 'tf-2'])
+    expect(persisted.mappings?.[0]?.transformerChainDetailed).toEqual([
+      { id: 'tf-1', props: { separator: '-' } },
+      { id: 'tf-2', props: {} },
+    ])
+  })
+
+  it('allows connecting an extra source to the third transformer when that transformer is multi-input', async () => {
+    renderWithPersistedMappings([
+      {
+        src: 'productName',
+        tgt: 'name',
+        srcNodeId: 'src-productName',
+        tgtNodeId: 'tgt-name',
+        srcPos: { x: 40, y: 30 },
+        tgtPos: { x: 650, y: 30 },
+        srcMetadata: { sendToSaknay: true, expression: '' },
+        tgtMetadata: { sendToSaknay: true, expression: '' },
+        transformer: 'tf-2',
+        transformerProps: {},
+        transformerChain: [
+          { id: 'tf-2', props: {} },
+          { id: 'tf-2', props: {} },
+          { id: 'tf-3', props: {} },
+          { id: 'tf-2', props: {} },
+        ],
+        extraInputs: [],
+      },
+      {
+        src: 'price',
+        tgt: 'id',
+        srcNodeId: 'src-price',
+        tgtNodeId: 'tgt-id',
+        srcPos: { x: 40, y: 220 },
+        tgtPos: { x: 650, y: 220 },
+        srcMetadata: { sendToSaknay: true, expression: '' },
+        tgtMetadata: { sendToSaknay: true, expression: '' },
+        transformer: 'none',
+        transformerProps: {},
+        extraInputs: [],
+      },
+    ])
+
+    await waitFor(() => {
+      expect(screen.getByText('MergeFields')).toBeInTheDocument()
+      expect(screen.getByTestId('source-port-src-price')).toBeInTheDocument()
+    })
+
+    const sourcePort = screen.getByTestId('source-port-src-price')
+    fireEvent.mouseDown(sourcePort, { button: 0, clientX: 300, clientY: 230 })
+    fireEvent.mouseUp(document, { clientX: 430, clientY: 151 })
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      const firstMapping = persisted.mappings?.[0]
+      expect(firstMapping?.extraInputs?.some(input => input?.nodeId === 'src-price')).toBe(true)
+      const extra = firstMapping?.extraInputs?.find(input => input?.nodeId === 'src-price')
+      expect(extra?.transformerIndex).toBe(2)
     })
   })
 
@@ -698,3 +801,54 @@ describe('FieldMappingStep transformer modal regression', () => {
     })
   })
 })
+
+describe('FieldMappingStep required-prop validation', () => {
+  it('marks transformer node as invalid when a required prop is empty and valid once filled', async () => {
+    const user = userEvent.setup()
+
+    // Render with a mapping that already has a transformer assigned but no props filled in
+    renderWithPersistedMappings([
+      {
+        src: 'productName',
+        tgt: 'name',
+        srcNodeId: 'src-productName',
+        tgtNodeId: 'tgt-name',
+        srcPos: { x: 40, y: 30 },
+        tgtPos: { x: 650, y: 30 },
+        srcMetadata: { sendToSaknay: false, expression: '' },
+        tgtMetadata: { sendToSaknay: false, expression: '' },
+        transformer: 'tf-4',
+        transformerInputType: 'any',
+        transformerOutputType: 'any',
+        // required prop "logic" is intentionally left empty
+        transformerProps: { logic: '' },
+        transformerChainDetailed: [{ id: 'tf-4', props: { logic: '' } }],
+        extraInputs: [],
+      },
+    ])
+
+    // Node should be marked invalid because "logic" is required and empty
+    const node = await screen.findByTestId('transformer-node-0-0')
+    expect(node).toHaveAttribute('data-invalid', 'true')
+
+    // Click the node to open the edit modal
+    await user.click(node)
+
+    // Find the Logic row and type a value
+    const logicLabel = await screen.findByText('Logic')
+    const logicRow = logicLabel.closest('tr')
+    const logicInput = within(logicRow).getByRole('textbox')
+    await user.clear(logicInput)
+    await user.type(logicInput, 'a:b:c')
+
+    // Apply the transformer
+    const applyBtn = screen.getByRole('button', { name: /save convertmulti/i })
+    await user.click(applyBtn)
+
+    // Node should now be valid
+    await waitFor(() => {
+      expect(screen.getByTestId('transformer-node-0-0')).toHaveAttribute('data-invalid', 'false')
+    })
+  })
+})
+

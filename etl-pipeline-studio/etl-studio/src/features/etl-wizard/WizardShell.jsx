@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useMockMode } from '../../shared/store/mockModeContext.jsx'
-import { useConfig, STEP_METADATA, STEP_FILTERS, STEP_FIELD_MAPPING } from '../../shared/store/configContext.jsx'
+import { useConfig, STEP_METADATA, STEP_FILTERS, STEP_FIELD_MAPPING, STEP_SUMMARY } from '../../shared/store/configContext.jsx'
 import MetadataStep    from '../file-upload/MetadataStep.jsx'
 import SourceConfigStep from '../source-config/SourceConfigStep.jsx'
 import SourceUploadStep from '../source-config/SourceUploadStep.jsx'
@@ -25,6 +25,7 @@ const LOADING_FLAG = {
   [STEP_METADATA]:      'loadingEntities',
   [STEP_FILTERS]:       'loadingFilters',
   [STEP_FIELD_MAPPING]: 'loadingTransformers',
+  [STEP_SUMMARY]:       'loadingTransformers',
 }
 
 export default function WizardShell() {

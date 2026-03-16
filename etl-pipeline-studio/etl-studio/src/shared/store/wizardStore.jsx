@@ -27,7 +27,7 @@ const initialState = {
   // Step 2 — Source Config
   source: {
     sourceType:           'kafka',
-    kafkaEnv:             '',
+    kafkaEnv:             'production',
     kafkaTopic:           'source_products_raw',
     kafkaKeys:            '',
     kafkaKeyMode:         'include',
@@ -64,7 +64,7 @@ const initialState = {
   sink: {
     sinkType:        'kafka',
     sinkKafkaTopic:  'etl_products_v3',
-    sinkKafkaEnv:    '',
+    sinkKafkaEnv:    'production',
     shadow:          false,
     shadowTopic:     '',
     saknay:          false,
@@ -88,7 +88,7 @@ function wizardReducer(state, action) {
         ...initialState,
         ...payload,
         theme: state.theme,
-        navigationMode: payload.navigationMode ?? state.navigationMode,
+        navigationMode: payload.navigationMode ?? initialState.navigationMode,
         currentStep: Number.isInteger(payload.currentStep) ? payload.currentStep : 0,
         completedSteps: new Set(
           payload.completedSteps instanceof Set

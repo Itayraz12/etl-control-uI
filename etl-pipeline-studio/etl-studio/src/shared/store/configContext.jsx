@@ -5,6 +5,7 @@ import { fetchTransformers, fetchFilters, fetchEntities } from '../services/conf
 export const STEP_METADATA      = 0   // needs entities
 export const STEP_FILTERS       = 3   // needs filter operators
 export const STEP_FIELD_MAPPING = 4   // needs transformers
+export const STEP_SUMMARY       = 6   // needs transformers for readable names in YAML preview
 
 const ConfigContext = createContext({
   entities:     [],
@@ -56,7 +57,7 @@ export function ConfigProvider({ children }) {
         })
     }
 
-    if (step === STEP_FIELD_MAPPING && !fetchingTransformers.current) {
+    if ((step === STEP_FIELD_MAPPING || step === STEP_SUMMARY) && !fetchingTransformers.current) {
       fetchingTransformers.current = true
       setLoadingTransformers(true)
       fetchTransformers(useMock)

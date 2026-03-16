@@ -42,10 +42,11 @@ const API_BASE = 'http://localhost:8080/api'
  * Builds a propsSchema array from a transformer's additionalProperites map.
  *
  * Backend shape: Map<String, Object> where:
- *   - each regular key's value is a plain primitive (string / number / boolean)
- *     used as the default for that property
+ *   - each regular key's value is a plain string/number/boolean that describes
+ *     what the property expects (shown as a placeholder/hint in the UI).
+ *     The user must supply the actual value — there is no pre-filled default.
  *   - "_required" is a special key whose value is a String[] of mandatory key names;
- *     it is consumed here to mark fields required and is NEVER rendered as a row
+ *     it is consumed here to mark fields required and is NEVER rendered as a row.
  *
  * NOTE: the API field is "additionalProperties" (correct spelling).
  *       The legacy typo "additionalProperites" is handled by the caller.
@@ -62,19 +63,23 @@ function buildPropsSchema(additionalProperties = {}) {
       const label    = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
       const required = requiredKeys.has(key)
 
-      // If the backend wraps the value in an object (e.g. { default: "x" } or { value: "x" }),
-      // unwrap it — otherwise use the raw value directly as the default.
+      // Unwrap object wrappers if present; otherwise use raw value directly.
       const val = (raw !== null && typeof raw === 'object' && !Array.isArray(raw))
         ? (raw.default ?? raw.value ?? '')
         : raw
 
+      // The value is a description / hint for the property — not a pre-filled default.
+      // Show it as a placeholder so the input starts empty.
+      const description = String(val ?? '')
+
       if (typeof val === 'number') {
-        return { key, label, type: 'number', default: String(val), required, description: '' }
+        return { key, label, type: 'number', default: '', required, description }
       }
       if (typeof val === 'boolean') {
-        return { key, label, type: 'select', options: ['true', 'false'], default: String(val), required, description: '' }
+        // For select controls the first option acts as the initial selection.
+        return { key, label, type: 'select', options: ['true', 'false'], default: 'true', required, description }
       }
-      return { key, label, type: 'text', default: String(val ?? ''), required, description: '' }
+      return { key, label, type: 'text', default: '', required, description }
     })
 
   console.log('[buildPropsSchema] output:', JSON.stringify(result))

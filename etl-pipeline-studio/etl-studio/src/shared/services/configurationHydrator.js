@@ -81,6 +81,29 @@ function parseTransformerProps(content = '') {
   return props
 }
 
+function parseTransformerHead(left = '') {
+  const tupleStartIndex = left.indexOf('(')
+  const head = tupleStartIndex === -1 ? left.trim() : left.slice(0, tupleStartIndex).trim()
+  const lastChainHop = head.includes('-->')
+    ? head.split('-->').map(part => part.trim()).filter(Boolean).at(-1) || ''
+    : head
+
+  const openBracket = lastChainHop.indexOf('[')
+  const closeBracket = lastChainHop.lastIndexOf(']')
+
+  if (openBracket !== -1 && closeBracket > openBracket) {
+    return {
+      transformer: lastChainHop.slice(0, openBracket).trim(),
+      transformerProps: parseTransformerProps(lastChainHop.slice(openBracket + 1, closeBracket).trim()),
+    }
+  }
+
+  return {
+    transformer: lastChainHop.trim(),
+    transformerProps: {},
+  }
+}
+
 function normalizeTransformationEntry(entry) {
   if (typeof entry === 'string') return entry
   if (entry && typeof entry === 'object') {
@@ -104,11 +127,11 @@ function parseTransformationLine(line) {
   const output = parseTypeFieldTuple(outputTuple || '')
   if (!output) return null
 
+  const { transformer, transformerProps: headTransformerProps } = parseTransformerHead(left)
   const firstParenIndex = left.indexOf('(')
-  const transformer = firstParenIndex === -1 ? left : left.slice(0, firstParenIndex).trim()
   const groups = extractParentheticalGroups(firstParenIndex === -1 ? '' : left.slice(firstParenIndex))
 
-  let transformerProps = {}
+  let transformerProps = { ...headTransformerProps }
   const inputs = []
 
   groups.forEach((group, index) => {
@@ -118,7 +141,7 @@ function parseTransformationLine(line) {
       return
     }
 
-    if (index === 0) {
+    if (index === 0 && Object.keys(transformerProps).length === 0) {
       transformerProps = parseTransformerProps(group)
     }
   })

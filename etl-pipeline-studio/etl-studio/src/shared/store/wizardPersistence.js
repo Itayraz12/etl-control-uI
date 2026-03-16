@@ -12,27 +12,6 @@ export function getWizardStorageKeyForUser(userId) {
   return normalizedUserId ? `${LEGACY_WIZARD_STORAGE_KEY}:${normalizedUserId}` : LEGACY_WIZARD_STORAGE_KEY
 }
 
-function sanitizeMappingMetadata(metadata) {
-  if (!metadata || typeof metadata !== 'object') return metadata
-
-  const { sendToGP, ...rest } = metadata
-  return rest
-}
-
-function sanitizeMappings(mappings) {
-  if (!Array.isArray(mappings)) return []
-
-  return mappings.map(mapping => {
-    if (!mapping || typeof mapping !== 'object') return mapping
-
-    return {
-      ...mapping,
-      srcMetadata: sanitizeMappingMetadata(mapping.srcMetadata),
-      tgtMetadata: sanitizeMappingMetadata(mapping.tgtMetadata),
-    }
-  })
-}
-
 export function parsePersistedWizardState(raw) {
   if (!raw) return null
 
@@ -42,7 +21,7 @@ export function parsePersistedWizardState(raw) {
       ...parsed,
       currentStep: Number.isInteger(parsed.currentStep) ? parsed.currentStep : 0,
       completedSteps: new Set(Array.isArray(parsed.completedSteps) ? parsed.completedSteps : []),
-      mappings: sanitizeMappings(parsed.mappings),
+      mappings: Array.isArray(parsed.mappings) ? parsed.mappings : [],
       filters: Array.isArray(parsed.filters) ? parsed.filters : [],
       metadata: parsed.metadata && typeof parsed.metadata === 'object' ? parsed.metadata : undefined,
       source: parsed.source && typeof parsed.source === 'object' ? parsed.source : undefined,
@@ -60,7 +39,6 @@ export function parsePersistedWizardState(raw) {
 export function serializeWizardState(state) {
   return JSON.stringify({
     ...state,
-    mappings: sanitizeMappings(state.mappings),
     completedSteps: Array.from(state.completedSteps || []),
   })
 }
@@ -96,7 +74,6 @@ export function buildStateFromPersisted(baseState, persistedState) {
   return {
     ...baseState,
     ...persistedState,
-    navigationMode: baseState.navigationMode, // Always use the base navigationMode, don't restore from persisted
     metadata: persistedState.metadata ? { ...baseState.metadata, ...persistedState.metadata } : baseState.metadata,
     source: persistedState.source ? { ...baseState.source, ...persistedState.source } : baseState.source,
     upload: persistedState.upload ? { ...baseState.upload, ...persistedState.upload } : baseState.upload,
