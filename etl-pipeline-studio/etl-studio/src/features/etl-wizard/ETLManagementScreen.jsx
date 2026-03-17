@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CircleStop, RefreshCw, Rocket, SquarePen } from 'lucide-react';
 import { Btn, Chip } from '../../shared/components/index.jsx';
 import * as deploymentsService from '../../shared/services/deploymentsService.js';
 import { fetchDraftConfiguration } from '../../shared/services/configService.js';
@@ -13,9 +14,42 @@ const STATUS_COLORS = {
   stopped: 'red',
 };
 
-function formatDate(ts) {
+// Add CSS for icon buttons and pulse animation
+const ICON_BUTTON_STYLE = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '32px',
+  height: '32px',
+  padding: 0,
+  border: '1px solid var(--border)',
+  borderRadius: '6px',
+  background: 'var(--bg)',
+  color: 'var(--text)',
+  cursor: 'pointer',
+  fontSize: '16px',
+  fontWeight: 'bold',
+  transition: 'all 0.15s',
+  userSelect: 'none',
+  position: 'relative',
+};
+
+const PULSE_ANIMATION = `
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+`;
+
+function formatDateShort(ts) {
   const d = new Date(ts);
-  return d.toLocaleString();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const mins = String(d.getMinutes()).padStart(2, '0');
+  return `${day} ${month} ${year}, ${hours}:${mins}`;
 }
 
 const COLUMNS = [
@@ -26,7 +60,6 @@ const COLUMNS = [
   { key: 'savedVersion', label: 'Saved Version' },
   { key: 'deployedVersion', label: 'Deployed Version' },
   { key: 'lastStatusChange', label: 'Last Status Change' },
-  { key: 'createdAt', label: 'Created' },
 ];
 
 const SORT_INDICATOR_STYLE = {
@@ -95,6 +128,12 @@ export default function ETLManagementScreen() {
   const sortedDeployments = [...filteredDeployments].sort((a, b) => {
     let aVal = a[sortKey];
     let bVal = b[sortKey];
+
+    // Special sorting for status: 'running' always comes first
+    if (sortKey === 'deploymentStatus') {
+      if (aVal === 'running' && bVal !== 'running') return -1;
+      if (aVal !== 'running' && bVal === 'running') return 1;
+    }
 
     // Handle null values
     if (aVal == null && bVal == null) return 0;
@@ -171,25 +210,31 @@ export default function ETLManagementScreen() {
 
   // Handler for creating new configuration
   function handleCreateNewConfig() {
-    actions.setNavigationMode('etl-config');
-    actions.setStep(0);
     actions.loadState({
+      navigationMode: 'etl-config',
       currentStep: 0,
       completedSteps: new Set(),
+      metadata: {
+        team: teamName,
+        productSource: '',
+        productType: '',
+        environment: '',
+        entityName: '',
+        tags: '',
+      },
+      source: {},
+      upload: {
+        done: false,
+        schema: [],
+        fileName: '',
+        fileType: '',
+        fileSize: 0,
+      },
+      targetSchema: [],
+      mappings: [],
+      filters: [],
+      sink: {},
     });
-    actions.updateMetadata({
-      team: teamName,
-      productSource: '',
-      productType: '',
-      environment: '',
-      entityName: '',
-      tags: '',
-    });
-    actions.updateSource({});
-    actions.setUploadDone(false);
-    actions.setMappings([]);
-    actions.setFilters([]);
-    actions.updateSink({});
   }
 
   return (
@@ -204,32 +249,68 @@ export default function ETLManagementScreen() {
       overflow: 'auto',
       boxSizing: 'border-box',
     }}>
+      <style>{PULSE_ANIMATION}</style>
       <div style={{ width: '100%', maxWidth: 1300, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
-          Deployments{teamName ? ` — ${teamName}` : ''}
+        {/* Page Title and Subtitle */}
+        <div style={{ marginBottom: 4 }}>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text)' }}>
+            Deployments
+          </div>
         </div>
-        <div style={{ marginBottom: 16, width: '100%', maxWidth: 400 }}>
+        <div style={{ 
+          fontSize: '13px', 
+          color: 'var(--muted)', 
+          marginBottom: 16,
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'center',
+          flexWrap: 'wrap'
+        }}>
+          <span>{teamName || 'default'}</span>
+          <span>·</span>
+          <span>{deployments.length} {deployments.length === 1 ? 'pipeline' : 'pipelines'}</span>
+          <span>·</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#22c55e', animation: 'pulse 2s ease-in-out infinite' }}></span>
+            <span style={{ color: '#22c55e' }}>{deployments.filter(d => d.deploymentStatus === 'running').length} running</span>
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#ef4444' }}></span>
+            <span style={{ color: '#ef4444' }}>{deployments.filter(d => d.deploymentStatus === 'stopped').length} stopped</span>
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#f59e0b' }}></span>
+            <span style={{ color: '#f59e0b' }}>{deployments.filter(d => d.deploymentStatus === 'draft').length} draft</span>
+          </span>
+        </div>
+
+        {/* Toolbar: Search + Create Button on Same Row */}
+        <div style={{ 
+          display: 'flex', 
+          gap: 12, 
+          width: '100%', 
+          marginBottom: 16, 
+          alignItems: 'center'
+        }}>
           <input
             type="text"
             value={filterText}
             onChange={e => setFilterText(e.target.value)}
-            placeholder="Filter deployments..."
+            placeholder="🔍 Filter deployments..."
             style={{
-              width: '100%',
+              flex: 1,
               padding: '8px 12px',
               borderRadius: 6,
               border: '1px solid var(--border)',
-              fontSize: 15,
+              fontSize: 14,
               background: 'var(--bg)',
               color: 'var(--text)',
               outline: 'none',
               boxSizing: 'border-box',
             }}
           />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', marginBottom: 16 }}>
-          <Btn v="accent" sm onClick={handleCreateNewConfig}>
-            + Create New Deployment Configuration
+          <Btn v="accent" onClick={handleCreateNewConfig} style={{ whiteSpace: 'nowrap' }}>
+            + New Configuration
           </Btn>
         </div>
         {screenError && (
@@ -248,6 +329,25 @@ export default function ETLManagementScreen() {
         )}
         {loading ? (
           <div>Loading deployments...</div>
+        ) : sortedDeployments.length === 0 && filterText ? (
+          /* Empty State */
+          <div style={{
+            width: '100%',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 16,
+            color: 'var(--muted)',
+            minHeight: 260,
+          }}>
+            <div style={{ fontSize: 32 }}>🔍</div>
+            <div style={{ fontSize: 14 }}>No deployments match "{filterText}"</div>
+            <Btn v="secondary" sm onClick={() => setFilterText('')}>
+              Clear filter
+            </Btn>
+          </div>
         ) : (
           <div data-testid="etl-management-table-card" style={{ width: '100%', background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', minHeight: '260px', flex: '1 1 auto', display: 'flex', flexDirection: 'column' }}>
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -295,14 +395,41 @@ export default function ETLManagementScreen() {
                 {sortedDeployments.map(dep => {
                   const hasVersionMismatch = dep.deployedVersion && dep.savedVersion && dep.deployedVersion !== dep.savedVersion;
                   const canUpgrade = hasVersionMismatch && dep.deploymentStatus === 'running';
+                  const isRunning = dep.deploymentStatus === 'running';
 
                   return (
-                    <tr key={dep.id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <tr 
+                      key={dep.id} 
+                      style={{ 
+                        borderTop: '1px solid var(--border)',
+                        borderLeft: hasVersionMismatch ? '4px solid var(--warning)' : '4px solid transparent',
+                        height: 44,
+                      }}
+                    >
                       <td style={{ padding: 8 }}>{dep.productType}</td>
                       <td style={{ padding: 8 }}>{dep.productSource}</td>
-                      <td style={{ padding: 8 }}>{dep.environment || '—'}</td>
+                      <td style={{ padding: 8 }}>{dep.environment || 'production'}</td>
                       <td style={{ padding: 8 }}>
-                        <Chip c={STATUS_COLORS[dep.deploymentStatus] || 'muted'}>{dep.deploymentStatus}</Chip>
+                        <Chip 
+                          c={STATUS_COLORS[dep.deploymentStatus] || 'muted'}
+                          style={{ 
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            minWidth: 80,
+                            position: 'relative',
+                          }}
+                        >
+                          <span style={{ 
+                            display: 'inline-block', 
+                            width: 8, 
+                            height: 8, 
+                            borderRadius: '50%', 
+                            background: 'currentColor',
+                            animation: isRunning ? 'pulse 2s ease-in-out infinite' : 'none',
+                          }}></span>
+                          {dep.deploymentStatus}
+                        </Chip>
                       </td>
                       <td style={{ padding: 8, fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)' }}>{dep.savedVersion}</td>
                       <td style={{
@@ -313,45 +440,99 @@ export default function ETLManagementScreen() {
                         fontWeight: hasVersionMismatch ? 600 : 400,
                       }}>
                         {dep.deployedVersion || '—'}
-                        {hasVersionMismatch && <span style={{ marginLeft: 6, fontSize: 10 }}>⚠</span>}
                       </td>
-                      <td style={{ padding: 8 }}>{formatDate(dep.lastStatusChange)}</td>
-                      <td style={{ padding: 8 }}>{formatDate(dep.createdAt)}</td>
-                      <td style={{ padding: 8, textAlign: 'center', display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
-                        <Btn
-                          v="success"
-                          sm
+                      <td style={{ padding: 8 }}>{formatDateShort(dep.lastStatusChange)}</td>
+                      <td style={{ padding: 8, textAlign: 'center', display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
+                        {/* Deploy/Play Button */}
+                        <button
                           onClick={() => handleDeploy(dep.id)}
-                          disabled={actionLoading[dep.id] === 'deploy' || dep.deploymentStatus === 'running'}
-                          title={dep.deploymentStatus === 'running' ? 'Disable: Pipeline is already running' : ''}
+                          disabled={dep.deploymentStatus === 'running'}
+                          title={dep.deploymentStatus === 'running' ? 'Already running' : 'Deploy pipeline'}
+                          style={{
+                            ...ICON_BUTTON_STYLE,
+                            borderColor: '#22c55e',
+                            color: '#22c55e',
+                            opacity: dep.deploymentStatus === 'running' ? 0.4 : 1,
+                            cursor: dep.deploymentStatus === 'running' ? 'not-allowed' : 'pointer',
+                          }}
+                          onMouseEnter={e => {
+                            if (dep.deploymentStatus !== 'running') {
+                              e.currentTarget.style.background = 'rgba(34,197,94,0.15)';
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = 'var(--bg)';
+                          }}
                         >
-                          Deploy
-                        </Btn>
-                        <Btn
-                          v="danger"
-                          sm
+                          <Rocket size={16} strokeWidth={2.1} />
+                        </button>
+
+                        {/* Stop Button */}
+                        <button
                           onClick={() => handleStop(dep.id)}
-                          disabled={actionLoading[dep.id] === 'stop' || dep.deploymentStatus === 'stopped' || dep.deploymentStatus === 'draft'}
-                          title={dep.deploymentStatus === 'stopped' ? 'Disable: Pipeline is already stopped' : dep.deploymentStatus === 'draft' ? 'Disable: Pipeline is in draft status' : ''}
+                          disabled={dep.deploymentStatus === 'stopped' || dep.deploymentStatus === 'draft'}
+                          title={dep.deploymentStatus === 'stopped' ? 'Already stopped' : dep.deploymentStatus === 'draft' ? 'Cannot stop draft' : 'Stop pipeline'}
+                          style={{
+                            ...ICON_BUTTON_STYLE,
+                            borderColor: '#ef4444',
+                            color: '#ef4444',
+                            opacity: (dep.deploymentStatus === 'stopped' || dep.deploymentStatus === 'draft') ? 0.4 : 1,
+                            cursor: (dep.deploymentStatus === 'stopped' || dep.deploymentStatus === 'draft') ? 'not-allowed' : 'pointer',
+                          }}
+                          onMouseEnter={e => {
+                            if (dep.deploymentStatus !== 'stopped' && dep.deploymentStatus !== 'draft') {
+                              e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = 'var(--bg)';
+                          }}
                         >
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            <span role="img" aria-label="delete">🗑️</span> Delete
-                          </span>
-                        </Btn>
-                        <Btn
-                          v="accent2"
-                          sm
+                          <CircleStop size={16} strokeWidth={2.1} />
+                        </button>
+
+                        {/* Upgrade Button */}
+                        <button
                           onClick={() => handleUpgrade(dep.id)}
-                          disabled={!canUpgrade || actionLoading[dep.id] === 'upgrade'}
-                          title={!canUpgrade && hasVersionMismatch ? 'Enable: Pipeline must be running' : !canUpgrade ? 'Enable: Versions must differ' : ''}
+                          disabled={!canUpgrade}
+                          title={!canUpgrade && hasVersionMismatch ? 'Pipeline must be running' : !canUpgrade ? 'No update available' : 'Upgrade to latest version'}
+                          style={{
+                            ...ICON_BUTTON_STYLE,
+                            borderColor: '#22c55e',
+                            color: '#22c55e',
+                            opacity: !canUpgrade ? 0.4 : 1,
+                            cursor: !canUpgrade ? 'not-allowed' : 'pointer',
+                          }}
+                          onMouseEnter={e => {
+                            if (canUpgrade) {
+                              e.currentTarget.style.background = 'rgba(34,197,94,0.15)';
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = 'var(--bg)';
+                          }}
                         >
-                          ⬆ Upgrade
-                        </Btn>
-                        <Btn v="secondary" sm onClick={() => handleEdit(dep)} disabled={actionLoading[dep.id] === 'edit'}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            <span role="img" aria-label="edit">✏️</span> Edit
-                          </span>
-                        </Btn>
+                          <RefreshCw size={15} strokeWidth={2.1} />
+                        </button>
+
+                        {/* Edit Button */}
+                        <button
+                          onClick={() => handleEdit(dep)}
+                          title="Edit configuration"
+                          style={ICON_BUTTON_STYLE}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.background = 'rgba(79,110,247,0.15)';
+                            e.currentTarget.style.borderColor = 'var(--accent)';
+                            e.currentTarget.style.color = 'var(--accent)';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = 'var(--bg)';
+                            e.currentTarget.style.borderColor = 'var(--border)';
+                            e.currentTarget.style.color = 'var(--text)';
+                          }}
+                        >
+                          <SquarePen size={15} strokeWidth={2.1} />
+                        </button>
                       </td>
                     </tr>
                   );

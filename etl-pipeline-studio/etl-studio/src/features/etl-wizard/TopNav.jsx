@@ -46,7 +46,6 @@ export default function TopNav() {
       >
         {state.theme === 'dark' ? '🌞 Light' : '🌙 Dark'}
       </Btn>
-      <Btn v="ghost" sm>?</Btn>
       <Btn v="danger" sm onClick={handleLogout}>Logout</Btn>
     </div>
   )

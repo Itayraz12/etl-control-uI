@@ -28,10 +28,10 @@ function AppContent() {
 
   // Navigate to management page when user logs in
   useEffect(() => {
-    if (user) {
+    if (user && state.navigationMode === 'menu') {
       actions.setNavigationMode('etl-management')
     }
-  }, [user, actions])
+  }, [user, state.navigationMode, actions])
 
   // Show login page if user is not set
   if (!user) {
