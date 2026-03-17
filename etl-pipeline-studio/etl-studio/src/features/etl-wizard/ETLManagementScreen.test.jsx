@@ -63,7 +63,7 @@ vi.mock('../../shared/store/userContext.jsx', () => ({
 vi.mock('../../shared/services/deploymentsService.js', () => ({
   fetchDeployments: vi.fn(() => Promise.resolve(mockDeployments)),
   deployService: vi.fn(() => Promise.resolve()),
-  stopDeployment: vi.fn(() => Promise.resolve()),
+  deleteDeployment: vi.fn(() => Promise.resolve({ success: true })),
 }))
 
 vi.mock('../../shared/services/configService.js', () => ({

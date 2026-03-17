@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CircleStop, RefreshCw, Rocket, SquarePen } from 'lucide-react';
+import { RefreshCw, Rocket, SquarePen, Trash2 } from 'lucide-react';
 import { Btn, Chip } from '../../shared/components/index.jsx';
 import * as deploymentsService from '../../shared/services/deploymentsService.js';
 import { fetchDraftConfiguration } from '../../shared/services/configService.js';
@@ -53,8 +53,8 @@ function formatDateShort(ts) {
 }
 
 const COLUMNS = [
-  { key: 'productType', label: 'Product Type' },
   { key: 'productSource', label: 'Product Source' },
+  { key: 'productType', label: 'Product Type' },
   { key: 'environment', label: 'Environment' },
   { key: 'deploymentStatus', label: 'Status' },
   { key: 'savedVersion', label: 'Saved Version' },
@@ -158,12 +158,16 @@ export default function ETLManagementScreen() {
     // Optionally refresh deployments
   };
 
-  const handleStop = async (id) => {
-    setActionLoading(a => ({ ...a, [id]: 'stop' }));
-    console.log('[ETLManagementScreen] handleStop, useMock:', useMock);
-    await deploymentsService.stopDeployment(id, useMock);
+  const handleDelete = async (id) => {
+    setActionLoading(a => ({ ...a, [id]: 'delete' }));
+    console.log('[ETLManagementScreen] handleDelete, useMock:', useMock);
+    const result = await deploymentsService.deleteDeployment(id, useMock);
+
+    if (result?.success !== false) {
+      setDeployments(current => current.filter(dep => dep.id !== id));
+    }
+
     setActionLoading(a => ({ ...a, [id]: null }));
-    // Optionally refresh deployments
   };
 
   const handleUpgrade = async (id) => {
@@ -406,8 +410,8 @@ export default function ETLManagementScreen() {
                         height: 44,
                       }}
                     >
-                      <td style={{ padding: 8 }}>{dep.productType}</td>
                       <td style={{ padding: 8 }}>{dep.productSource}</td>
+                      <td style={{ padding: 8 }}>{dep.productType}</td>
                       <td style={{ padding: 8 }}>{dep.environment || 'production'}</td>
                       <td style={{ padding: 8 }}>
                         <Chip 
@@ -467,20 +471,20 @@ export default function ETLManagementScreen() {
                           <Rocket size={16} strokeWidth={2.1} />
                         </button>
 
-                        {/* Stop Button */}
+                        {/* Delete Button */}
                         <button
-                          onClick={() => handleStop(dep.id)}
-                          disabled={dep.deploymentStatus === 'stopped' || dep.deploymentStatus === 'draft'}
-                          title={dep.deploymentStatus === 'stopped' ? 'Already stopped' : dep.deploymentStatus === 'draft' ? 'Cannot stop draft' : 'Stop pipeline'}
+                          onClick={() => handleDelete(dep.id)}
+                          disabled={dep.deploymentStatus === 'running'}
+                          title={dep.deploymentStatus === 'running' ? 'Cannot delete a running pipeline' : 'Delete pipeline'}
                           style={{
                             ...ICON_BUTTON_STYLE,
                             borderColor: '#ef4444',
                             color: '#ef4444',
-                            opacity: (dep.deploymentStatus === 'stopped' || dep.deploymentStatus === 'draft') ? 0.4 : 1,
-                            cursor: (dep.deploymentStatus === 'stopped' || dep.deploymentStatus === 'draft') ? 'not-allowed' : 'pointer',
+                            opacity: dep.deploymentStatus === 'running' ? 0.4 : 1,
+                            cursor: dep.deploymentStatus === 'running' ? 'not-allowed' : 'pointer',
                           }}
                           onMouseEnter={e => {
-                            if (dep.deploymentStatus !== 'stopped' && dep.deploymentStatus !== 'draft') {
+                            if (dep.deploymentStatus !== 'running') {
                               e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
                             }
                           }}
@@ -488,7 +492,7 @@ export default function ETLManagementScreen() {
                             e.currentTarget.style.background = 'var(--bg)';
                           }}
                         >
-                          <CircleStop size={16} strokeWidth={2.1} />
+                          <Trash2 size={16} strokeWidth={2.1} />
                         </button>
 
                         {/* Upgrade Button */}

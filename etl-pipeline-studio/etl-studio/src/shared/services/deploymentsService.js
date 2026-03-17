@@ -249,6 +249,37 @@ export async function stopDeployment(id, useMock = false) {
   }
 }
 
+export async function deleteDeployment(id, useMock = false) {
+  if (useMock) {
+    await new Promise(r => setTimeout(r, 200));
+    return { success: true, id };
+  } else {
+    try {
+      const url = `${API_BASE}/backend/deployments/${id}`;
+      console.log('🔵 Deleting deployment:', id);
+      console.log('   URL:', url);
+
+      const response = await fetch(url, { method: 'DELETE' });
+      console.log('🟢 Delete response received:', response);
+      console.log('   Status:', response.status);
+      console.log('   OK:', response.ok);
+
+      if (!response.ok) {
+        throw new Error(`Delete failed with status: ${response.status}`);
+      }
+
+      const result = await response.json().catch(() => ({ success: true, id }));
+      console.log('📊 Delete result:', result);
+      console.log('✅ Delete successful!');
+      return result;
+    } catch (error) {
+      console.error('❌ Delete failed:', error);
+      console.error('   Error message:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+}
+
 export async function fetchDeploymentConfig(id, useMock = false) {
   if (useMock) {
     // Simulate network delay
