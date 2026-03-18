@@ -81,6 +81,7 @@ export default function SummaryStep() {
   const { transformers } = useConfig()
   const sourceSchema = resolveSourceSchema(state.upload)
   const targetSchema = resolveTargetSchema(state.targetSchema)
+  const hasSaknayTargets = state.mappings.some(mapping => Boolean(mapping?.tgt) && (mapping?.tgtMetadata?.sendToSaknay ?? true))
   const [submitted, setSubmitted] = useState(false)
   const [copying, setCopying] = useState(false)
   const [copiedDash, setCopiedDash] = useState(false)
@@ -300,7 +301,7 @@ ${state.filters.map(group => formatFilterYamlItem(formatFilterGroup(group))).joi
 sink:
   type: ${state.sink.sinkType}
   topic: ${state.sink.sinkKafkaTopic || 'N/A'}
-${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${state.sink.shadow ? `  shadow: true\n  shadow_topic: ${state.sink.shadowTopic || 'auto'}\n` : ''}${state.sink.saknay ? `  saknay: true\n  saknay_topic: ${state.sink.saknayTopic || 'auto'}\n` : ''}${state.sink.asg ? `  asg: true\n` : ''}`
+${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${state.sink.shadow ? `  shadow: true\n  shadow_topic: ${state.sink.shadowTopic || 'auto'}\n` : ''}${hasSaknayTargets ? `  saknay: true\n  saknay_topic: ${state.sink.saknayTopic || 'auto'}\n` : ''}${state.sink.asg ? `  asg: true\n` : ''}`
   }
 
   const yaml = generateYaml()

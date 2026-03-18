@@ -11,7 +11,7 @@ vi.mock('../../shared/services/kafkaService.js', () => ({
   testKafkaConnection: (...args) => testKafkaConnection(...args),
 }))
 
-function renderStep(initialSink = {}) {
+function renderStep(initialSink = {}, initialMappings = []) {
   localStorage.setItem(
     WIZARD_STORAGE_KEY,
     JSON.stringify({
@@ -37,7 +37,7 @@ function renderStep(initialSink = {}) {
       },
       upload: { done: true, schema: [], fileName: '', fileType: '', fileSize: 0 },
       targetSchema: [],
-      mappings: [],
+      mappings: initialMappings,
       filters: [],
       sink: {
         sinkType: 'kafka',
@@ -124,6 +124,56 @@ describe('SinkConfigStep Kafka additional properties', () => {
     expect(keyInput).toBeInTheDocument()
     expect(valueInput).toBeInTheDocument()
     expect(screen.getByText('Add APSS properties as key / value pairs.')).toBeInTheDocument()
+  })
+
+  it('shows a Saknay section without a checkbox when a mapped target sends to Saknay', () => {
+    renderStep(
+      { saknayTopic: 'saknay.products' },
+      [
+        {
+          src: 'source_products_raw',
+          tgt: 'name',
+          tgtMetadata: { sendToSaknay: true },
+        },
+      ]
+    )
+
+    expect(screen.getByText('🦆 SAKNAY')).toBeInTheDocument()
+    expect(screen.getByText('Enabled automatically from Field Mapping target settings.')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('saknay.products')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /saknay/i })).not.toBeInTheDocument()
+  })
+
+  it('uses derived Saknay targets for the auto-generated topic placeholder', () => {
+    renderStep(
+      { sinkKafkaTopic: '', shadow: false },
+      [
+        {
+          src: 'source_products_raw',
+          tgt: 'name',
+          tgtMetadata: { sendToSaknay: true },
+        },
+      ]
+    )
+
+    const outputTopicInput = screen.getByText('Output Topic').closest('label')?.parentElement?.querySelector('input')
+    expect(outputTopicInput).toHaveAttribute('placeholder', 'Leave empty for auto-generation')
+  })
+
+  it('hides the Saknay section when no mapped target sends to Saknay', () => {
+    renderStep(
+      { saknayTopic: 'legacy-topic' },
+      [
+        {
+          src: 'source_products_raw',
+          tgt: 'name',
+          tgtMetadata: { sendToSaknay: false },
+        },
+      ]
+    )
+
+    expect(screen.queryByText('🦆 SAKNAY')).not.toBeInTheDocument()
+    expect(screen.queryByDisplayValue('legacy-topic')).not.toBeInTheDocument()
   })
 
   it('calls the Kafka test endpoint and shows a success icon for the sink config', async () => {

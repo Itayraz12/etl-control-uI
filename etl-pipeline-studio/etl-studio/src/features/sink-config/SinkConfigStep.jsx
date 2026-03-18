@@ -50,8 +50,16 @@ function KafkaConnectionStatus({ status, message }) {
   return null
 }
 
-function SinkConfigPanel({ type, sink, u, metadata }) {
-  const hasCatalogOption = sink?.shadow || sink?.saknay
+function hasSaknayTargetMappings(mappings = []) {
+  if (!Array.isArray(mappings)) return false
+
+  return mappings.some(mapping => (
+    Boolean(mapping?.tgt) && (mapping?.tgtMetadata?.sendToSaknay ?? true)
+  ))
+}
+
+function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets }) {
+  const hasCatalogOption = sink?.shadow || hasSaknayTargets
   const kafkaAdditionalProperties = normalizeKafkaAdditionalProperties(sink?.sinkKafkaAdditionalProperties)
   const isApssPropertiesEnabled = sink?.sinkKafkaAdditionalPropertiesEnabled ?? kafkaAdditionalProperties.length > 0
   const [kafkaTestState, setKafkaTestState] = useState({ status: 'idle', message: '' })
@@ -208,6 +216,21 @@ function SinkConfigPanel({ type, sink, u, metadata }) {
         )}
       </div>
 
+      {hasSaknayTargets && (
+        <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>🦆 SAKNAY</span>
+            <span title="Enabled automatically because at least one target field is marked to send to Saknay in Field Mapping." style={{ cursor: 'help', color: 'var(--muted)', fontSize: 12, fontWeight: 700 }}>ℹ️</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>
+            Enabled automatically from Field Mapping target settings.
+          </div>
+          <FormGroup label="Saknay Topic" hint="Optional - system will auto-generate if empty">
+            <input value={sink.saknayTopic || ''} onChange={e => u('saknayTopic', e.target.value)} placeholder="Leave empty for auto-generation" />
+          </FormGroup>
+        </div>
+      )}
+
       {/* Data Catalog Options */}
       <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>🏷️ Data Catalog Options</div>
@@ -230,39 +253,6 @@ function SinkConfigPanel({ type, sink, u, metadata }) {
                 type="text"
                 value={sink.shadowTopic || ''}
                 onChange={e => u('shadowTopic', e.target.value)}
-                placeholder="Topic name (optional)"
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  marginLeft: '26px',
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  color: 'var(--text)',
-                  fontSize: '12px',
-                  boxSizing: 'border-box',
-                }}
-              />
-            )}
-          </div>
-          <div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px', marginBottom: '8px' }}>
-              <input
-                type="checkbox"
-                checked={sink.saknay || false}
-                onChange={e => u('saknay', e.target.checked)}
-                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-              />
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                🦆 SAKNAY
-                <span title="Routes data to Saknay platform for advanced analytics and recommendations" style={{ cursor: 'help', color: 'var(--muted)', fontSize: 12, fontWeight: 700 }}>ℹ️</span>
-              </span>
-            </label>
-            {sink.saknay && (
-              <input
-                type="text"
-                value={sink.saknayTopic || ''}
-                onChange={e => u('saknayTopic', e.target.value)}
                 placeholder="Topic name (optional)"
                 style={{
                   width: '100%',
@@ -346,6 +336,7 @@ export default function SinkConfigStep() {
   const { state, actions } = useWizard()
   const sink = state.sink
   const metadata = state.metadata
+  const hasSaknayTargets = hasSaknayTargetMappings(state.mappings)
   const u = (k, v) => actions.updateSink({ [k]: v })
 
   // Sync Kafka environment with metadata environment
@@ -396,7 +387,7 @@ export default function SinkConfigStep() {
             );
             })}
           </div>
-          {sink.sinkType && <SinkConfigPanel type={sink.sinkType} sink={sink} u={u} metadata={metadata} />}
+          {sink.sinkType && <SinkConfigPanel type={sink.sinkType} sink={sink} u={u} metadata={metadata} hasSaknayTargets={hasSaknayTargets} />}
         </Card>
       </div>
     </div>
