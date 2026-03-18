@@ -51,10 +51,16 @@ export default function StepBar() {
 
               {i < STEPS.length - 1 && (
                 <div style={{
-                  width: 20, height: 2,
-                  background: isDone ? 'var(--success)' : 'var(--border)',
+                  width: 20,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: isDone ? 'var(--success)' : 'var(--border)',
+                  fontSize: 14,
+                  fontWeight: 700,
                   flexShrink: 0,
-                }} />
+                  userSelect: 'none',
+                }}>{'>'}</div>
               )}
             </div>
           )
