@@ -607,19 +607,25 @@ describe('FieldMappingStep transformer modal regression', () => {
     const targetNode = await waitFor(() => document.getElementById('nd-tgt-name'))
     fireEvent.contextMenu(targetNode)
 
+    const modal = await screen.findByTestId('ctxmenu-modal')
     const saknayToggle = await screen.findByTestId('ctxmenu-saknay-toggle')
     const expressionInput = await screen.findByTestId('ctxmenu-expression-input')
 
+    expect(modal).toHaveStyle({ width: '120px' })
     expect(saknayToggle).toBeChecked()
     expect(expressionInput).toHaveValue('')
 
     await user.click(saknayToggle)
-    await user.type(expressionInput, 'price * 1.2')
+    fireEvent.change(expressionInput, { target: { value: 'price * 1.2'.repeat(3) } })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ctxmenu-modal')).toHaveStyle({ width: '320px' })
+    })
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
       expect(persisted.mappings?.[0]?.tgtMetadata?.sendToSaknay).toBe(false)
-      expect(persisted.mappings?.[0]?.tgtMetadata?.expression).toBe('price * 1.2')
+      expect(persisted.mappings?.[0]?.tgtMetadata?.expression).toBe('price * 1.2'.repeat(3))
     })
   })
 

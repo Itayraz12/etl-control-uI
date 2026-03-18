@@ -477,7 +477,9 @@ export default function FieldMappingStep() {
         }
 
         // ── Drop on a target port (normal connection) ─────────────────────
-        const el = document.elementFromPoint(me.clientX, me.clientY)
+        const el = typeof document.elementFromPoint === 'function'
+          ? document.elementFromPoint(me.clientX, me.clientY)
+          : null
         const targetPortEl = el?.closest('[data-nid]')
         if (targetPortEl) {
           const targetNodeId = targetPortEl.dataset.nid
@@ -2219,6 +2221,11 @@ export default function FieldMappingStep() {
       {ctxMenu && (() => {
         const liveNode = nodes.find(n => n.id === (currentCtxId || ctxMenu.nodeId)) || ctxMenu.node
         if (!liveNode || liveNode.type !== 'target') return null
+        const expressionValue = String(liveNode.expression || '')
+        const trimmedExpression = expressionValue.trim()
+        const targetCtxMenuWidth = trimmedExpression
+          ? Math.min(320, Math.max(120, 120 + trimmedExpression.length * 8))
+          : 120
 
         return (
           <>
@@ -2235,11 +2242,12 @@ export default function FieldMappingStep() {
               }}
             />
             <div
+              data-testid="ctxmenu-modal"
               style={{
                 position: 'fixed',
-                left: Math.min(ctxMenu.x, window.innerWidth - 360),
+                left: Math.min(ctxMenu.x, Math.max(0, window.innerWidth - targetCtxMenuWidth - 16)),
                 top: Math.min(ctxMenu.y, window.innerHeight - 320),
-                width: '320px',
+                width: `${targetCtxMenuWidth}px`,
                 background: 'var(--surf)',
                 border: '1px solid var(--border)',
                 borderRadius: '12px',
@@ -2247,6 +2255,7 @@ export default function FieldMappingStep() {
                 zIndex: 1001,
                 overflow: 'hidden',
                 animation: 'ctxIn 0.16s ease',
+                transition: 'width 0.15s ease',
               }}
               onClick={(e) => e.stopPropagation()}
               onContextMenu={(e) => {
