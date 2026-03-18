@@ -1815,11 +1815,20 @@ export default function FieldMappingStep() {
             </svg>
 
             {/* Nodes */}
+            {(() => {
+              const connectedTargetFieldIds = new Set(
+                edges
+                  .map(edge => nodes.find(n => n.id === edge.to)?.fieldId)
+                  .filter(Boolean)
+              )
+
+              return (
             <div style={{ position: 'absolute', top: 0, left: 0, width: nodes.length > 0 ? Math.max(1000, Math.max(...nodes.map(n => n.x + NODE_WIDTH)) + 200) : 1000, height: nodes.length > 0 ? Math.max(700, Math.max(...nodes.map(n => n.y + CANVAS_NODE_BOUND_HEIGHT)) + 200) : 700, pointerEvents: 'none' }}>
               {nodes.map((node) => {
                 const isRequired = node.type === 'source' 
                   ? sourceSchema.find(f => f.id === node.fieldId)?.required
                   : targetSchema.find(f => f.id === node.fieldId)?.required
+                const isMissingRequiredTarget = node.type === 'target' && isRequired && !connectedTargetFieldIds.has(node.fieldId)
                 const rules = { hasOut: node.type === 'source', hasIn: node.type === 'target' }
 
                 return (
@@ -1835,8 +1844,8 @@ export default function FieldMappingStep() {
                       top: node.y + 'px',
                       width: `${NODE_WIDTH}px`,
                       height: `${NODE_HEIGHT}px`,
-                      background: 'var(--surf2)',
-                      border: '1.5px solid var(--border)',
+                      background: isMissingRequiredTarget ? 'rgba(239,68,68,0.08)' : 'var(--surf2)',
+                      border: `1.5px solid ${isMissingRequiredTarget ? 'rgba(239,68,68,0.6)' : 'var(--border)'}`,
                       borderRadius: '8px',
                       display: 'flex',
                       alignItems: 'center',
@@ -1864,7 +1873,7 @@ export default function FieldMappingStep() {
                       bottom: 6,
                       width: '3px',
                       borderRadius: '2px',
-                      background: node.type === 'source' ? 'var(--accent)' : 'var(--success)',
+                      background: isMissingRequiredTarget ? 'var(--danger)' : node.type === 'source' ? 'var(--accent)' : 'var(--success)',
                     }} />
 
                     {/* Input port */}
@@ -1942,6 +1951,20 @@ export default function FieldMappingStep() {
                           }}>
                             {node.type === 'source' ? 'SOURCE' : 'TARGET'}
                           </div>
+
+                          {isMissingRequiredTarget && (
+                            <span style={{
+                              fontSize: '9px',
+                              fontWeight: 700,
+                              color: 'var(--danger)',
+                              background: 'rgba(239,68,68,0.12)',
+                              border: '1px solid rgba(239,68,68,0.28)',
+                              borderRadius: '999px',
+                              padding: '2px 6px',
+                            }}>
+                              Required mapping missing
+                            </span>
+                          )}
 
                           {node.type === 'target' && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flexShrink: 0, marginLeft: 'auto', maxWidth: '100%' }}>
@@ -2083,6 +2106,8 @@ export default function FieldMappingStep() {
                 )
               })}
             </div>
+              )
+            })()}
 
 
 
