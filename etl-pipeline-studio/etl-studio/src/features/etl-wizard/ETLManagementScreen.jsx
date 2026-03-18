@@ -406,7 +406,6 @@ export default function ETLManagementScreen() {
                       key={dep.id} 
                       style={{ 
                         borderTop: '1px solid var(--border)',
-                        borderLeft: hasVersionMismatch ? '4px solid var(--warning)' : '4px solid transparent',
                         height: 44,
                       }}
                     >

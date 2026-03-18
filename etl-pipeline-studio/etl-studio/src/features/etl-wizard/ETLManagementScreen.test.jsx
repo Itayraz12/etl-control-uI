@@ -38,6 +38,17 @@ const mockDeployments = [
     lastStatusChange: '2026-03-13T10:00:00.000Z',
     createdAt: '2026-03-12T09:00:00.000Z',
   },
+  {
+    id: 'dep-3',
+    productType: 'Pricing',
+    productSource: 'PIM',
+    environment: 'production',
+    deploymentStatus: 'running',
+    savedVersion: '3.1.0',
+    deployedVersion: '3.0.0',
+    lastStatusChange: '2026-03-16T10:00:00.000Z',
+    createdAt: '2026-03-15T09:00:00.000Z',
+  },
 ]
 
 vi.mock('../../shared/store/wizardStore.jsx', () => ({
@@ -86,6 +97,7 @@ describe('ETLManagementScreen table layout stability', () => {
     await waitFor(() => {
       expect(screen.getByText('Inventory')).toBeInTheDocument()
       expect(screen.getByText('Catalog')).toBeInTheDocument()
+      expect(screen.getByText('Pricing')).toBeInTheDocument()
     })
 
     const tableCard = screen.getByTestId('etl-management-table-card')
@@ -104,6 +116,16 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(productTypeIndicator).toHaveStyle({ width: '12px', minWidth: '12px', visibility: 'hidden' })
       expect(productSourceIndicator).toHaveStyle({ width: '12px', minWidth: '12px', visibility: 'visible' })
     })
+  })
+
+  it('does not render a left warning border for version mismatch rows', async () => {
+    render(<ETLManagementScreen />)
+
+    const pricingCell = await screen.findByText('Pricing')
+    const pricingRow = pricingCell.closest('tr')
+
+    expect(pricingRow).toBeTruthy()
+    expect(pricingRow.style.borderLeft).toBe('')
   })
 })
 
