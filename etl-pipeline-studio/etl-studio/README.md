@@ -72,7 +72,7 @@ VITE_SCOPE_RESET_GRACE_MINUTES=15
 
 `App.jsx` switches between four primary UI states:
 
-1. `LoginPage` — sign in and choose mock/live mode
+1. `LoginPage` — log in and choose mock/live mode
 2. `menu` — landing screen after login
 3. `etl-config` — the 7-step configuration wizard
 4. `etl-management` — deployment list and actions
