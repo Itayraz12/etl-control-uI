@@ -160,6 +160,54 @@ function renderWithPersistedMappings(mappings, uploadOverrides = {}, targetSchem
   )
 }
 
+describe('FieldMappingStep zoom controls', () => {
+  it('updates the canvas zoom and allows resetting back to 100%', async () => {
+    const user = userEvent.setup()
+
+    renderWithPersistedState()
+
+    const stage = await screen.findByTestId('field-mapping-stage')
+    expect(stage).toHaveStyle({ transform: 'scale(1)' })
+
+    await user.click(screen.getByRole('button', { name: 'Zoom in' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('field-mapping-zoom-reset')).toHaveTextContent('125%')
+      expect(stage).toHaveStyle({ transform: 'scale(1.25)' })
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Reset zoom' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('field-mapping-zoom-reset')).toHaveTextContent('100%')
+      expect(stage).toHaveStyle({ transform: 'scale(1)' })
+    })
+  })
+
+  it('moves nodes using unscaled canvas coordinates while zoomed in', async () => {
+    const user = userEvent.setup()
+
+    renderWithPersistedState()
+
+    await user.click(screen.getByRole('button', { name: 'Zoom in' }))
+
+    await waitFor(() => {
+      expect(document.getElementById('nd-src-productName')).toBeInTheDocument()
+    })
+
+    const sourceNode = document.getElementById('nd-src-productName')
+    expect(sourceNode).toHaveStyle({ left: '40px', top: '30px' })
+
+    fireEvent.mouseDown(sourceNode, { button: 0, clientX: 100, clientY: 100 })
+    fireEvent.mouseMove(document, { clientX: 225, clientY: 100 })
+    fireEvent.mouseUp(document)
+
+    await waitFor(() => {
+      expect(document.getElementById('nd-src-productName')).toHaveStyle({ left: '140px', top: '30px' })
+    })
+  })
+})
+
 describe('FieldMappingStep transformer modal regression', () => {
   it('opens the transformer modal when clicking the add-transformer plus on a connection', async () => {
     const user = userEvent.setup()

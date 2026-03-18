@@ -66,6 +66,14 @@ const NODE_HALF_WIDTH = NODE_WIDTH / 2
 const NODE_HALF_HEIGHT = NODE_HEIGHT / 2
 const NODE_ROW_GAP = 84
 const CANVAS_NODE_BOUND_HEIGHT = NODE_HEIGHT + 28
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 2
+const ZOOM_STEP = 0.25
+
+function clampZoom(nextZoom) {
+  const roundedZoom = Math.round(nextZoom * 100) / 100
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, roundedZoom))
+}
 
 export default function FieldMappingStep() {
   const { state, actions } = useWizard()
@@ -105,6 +113,7 @@ export default function FieldMappingStep() {
   const [transformerSearch, setTransformerSearch] = useState('')
   const [selectedTf, setSelectedTf] = useState(null)
   const [tfPropValues, setTfPropValues] = useState({})
+  const [zoom, setZoom] = useState(1)
 
     // Load saved mappings from state on mount
     useEffect(() => {
@@ -302,10 +311,11 @@ export default function FieldMappingStep() {
   const toCanvasPoint = (clientX, clientY) => {
     const canvas = canvasRef.current
     const rect = canvas?.getBoundingClientRect()
+    const scale = zoom || 1
 
     return {
-      x: clientX - (rect?.left ?? 0) + (canvas?.scrollLeft ?? 0),
-      y: clientY - (rect?.top ?? 0) + (canvas?.scrollTop ?? 0),
+      x: (clientX - (rect?.left ?? 0) + (canvas?.scrollLeft ?? 0)) / scale,
+      y: (clientY - (rect?.top ?? 0) + (canvas?.scrollTop ?? 0)) / scale,
     }
   }
 
@@ -374,8 +384,8 @@ export default function FieldMappingStep() {
     })
 
     const onMove = (me) => {
-      const dx = me.clientX - e.clientX
-      const dy = me.clientY - e.clientY
+      const dx = (me.clientX - e.clientX) / (zoom || 1)
+      const dy = (me.clientY - e.clientY) / (zoom || 1)
       applyNodes(prev => prev.map(n =>
         n.id === nodeId
           ? { ...n, x: Math.max(0, node.x + dx), y: Math.max(0, node.y + dy) }
@@ -1220,6 +1230,14 @@ export default function FieldMappingStep() {
 
   tfBoxesRef.current = []
 
+  const stageWidth = nodes.length > 0 ? Math.max(1000, Math.max(...nodes.map(n => n.x + NODE_WIDTH)) + 200) : 1000
+  const stageHeight = nodes.length > 0 ? Math.max(700, Math.max(...nodes.map(n => n.y + CANVAS_NODE_BOUND_HEIGHT)) + 200) : 700
+  const zoomPercentage = Math.round(zoom * 100)
+
+  const handleZoomIn = () => setZoom(currentZoom => clampZoom(currentZoom + ZOOM_STEP))
+  const handleZoomOut = () => setZoom(currentZoom => clampZoom(currentZoom - ZOOM_STEP))
+  const handleZoomReset = () => setZoom(1)
+
   return (
     <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', flex: 1, background: 'var(--bg)', height: '100%' }}>
       <div style={{ display: 'flex', flex: 1, gap: '0', overflow: 'hidden' }}>
@@ -1340,7 +1358,69 @@ export default function FieldMappingStep() {
                 Drag fields from panels, then connect them
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--surf2)' }}>
+                <button
+                  type="button"
+                  aria-label="Zoom out"
+                  onClick={handleZoomOut}
+                  disabled={zoom <= MIN_ZOOM}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    border: '1px solid var(--border)',
+                    background: 'transparent',
+                    color: 'var(--text)',
+                    borderRadius: '6px',
+                    cursor: zoom <= MIN_ZOOM ? 'not-allowed' : 'pointer',
+                    fontSize: '16px',
+                    fontWeight: 700,
+                    opacity: zoom <= MIN_ZOOM ? 0.45 : 1,
+                  }}
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  aria-label="Reset zoom"
+                  data-testid="field-mapping-zoom-reset"
+                  onClick={handleZoomReset}
+                  style={{
+                    minWidth: '62px',
+                    height: '28px',
+                    border: '1px solid var(--border)',
+                    background: 'transparent',
+                    color: 'var(--text)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    padding: '0 8px',
+                  }}
+                >
+                  {zoomPercentage}%
+                </button>
+                <button
+                  type="button"
+                  aria-label="Zoom in"
+                  onClick={handleZoomIn}
+                  disabled={zoom >= MAX_ZOOM}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    border: '1px solid var(--border)',
+                    background: 'transparent',
+                    color: 'var(--text)',
+                    borderRadius: '6px',
+                    cursor: zoom >= MAX_ZOOM ? 'not-allowed' : 'pointer',
+                    fontSize: '16px',
+                    fontWeight: 700,
+                    opacity: zoom >= MAX_ZOOM ? 0.45 : 1,
+                  }}
+                >
+                  +
+                </button>
+              </div>
               <button
                 onClick={alignNodes}
                 style={{
@@ -1454,6 +1534,17 @@ export default function FieldMappingStep() {
               overflow: 'auto',
             }}
           >
+            <div style={{ position: 'relative', width: `${stageWidth * zoom}px`, height: `${stageHeight * zoom}px` }}>
+              <div
+                data-testid="field-mapping-stage"
+                style={{
+                  position: 'relative',
+                  width: `${stageWidth}px`,
+                  height: `${stageHeight}px`,
+                  transform: `scale(${zoom})`,
+                  transformOrigin: 'top left',
+                }}
+              >
             {/* SVG Edges */}
             <svg
               id="edges-svg"
@@ -1462,8 +1553,8 @@ export default function FieldMappingStep() {
                 position: 'absolute',
                 top: 0,
                 left: 0,
-                width: nodes.length > 0 ? Math.max(1000, Math.max(...nodes.map(n => n.x + NODE_WIDTH)) + 200) : 1000,
-                height: nodes.length > 0 ? Math.max(700, Math.max(...nodes.map(n => n.y + CANVAS_NODE_BOUND_HEIGHT)) + 200) : 700,
+                width: stageWidth,
+                height: stageHeight,
                 pointerEvents: 'auto',
                 zIndex: 5,
               }}
@@ -1823,7 +1914,7 @@ export default function FieldMappingStep() {
               )
 
               return (
-            <div style={{ position: 'absolute', top: 0, left: 0, width: nodes.length > 0 ? Math.max(1000, Math.max(...nodes.map(n => n.x + NODE_WIDTH)) + 200) : 1000, height: nodes.length > 0 ? Math.max(700, Math.max(...nodes.map(n => n.y + CANVAS_NODE_BOUND_HEIGHT)) + 200) : 700, pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, width: stageWidth, height: stageHeight, pointerEvents: 'none' }}>
               {nodes.map((node) => {
                 const isRequired = node.type === 'source' 
                   ? sourceSchema.find(f => f.id === node.fieldId)?.required
@@ -2108,6 +2199,8 @@ export default function FieldMappingStep() {
             </div>
               )
             })()}
+              </div>
+            </div>
 
 
 
