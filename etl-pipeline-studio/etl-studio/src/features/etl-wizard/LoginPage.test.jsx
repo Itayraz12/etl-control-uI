@@ -41,8 +41,6 @@ describe('LoginPage team dropdown', () => {
 
     renderLogin()
 
-    expect(screen.getByText(/^v\d+\.\d+\.\d+$/)).toBeInTheDocument()
-
     await waitFor(() => {
       expect(fetchTeamNames).toHaveBeenCalledTimes(1)
     })

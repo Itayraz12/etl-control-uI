@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { Card, CardTitle, FormRow, FormGroup, CfgPanel, Btn } from '../../shared/components/index.jsx'
 import { ENVIRONMENTS } from '../../shared/types/index.js'
+import { testKafkaConnection } from '../../shared/services/kafkaService.js'
 
 const SINK_TYPES = [
   { id: 'kafka', icon: '☕', name: 'Kafka',     sub: 'Streaming sink' },
@@ -33,10 +34,36 @@ function normalizeKafkaAdditionalProperties(entries = []) {
     .filter(Boolean)
 }
 
+function KafkaConnectionStatus({ status, message }) {
+  if (status === 'loading') {
+    return <span aria-label="Kafka connection test in progress" title={message || 'Testing Kafka connection...'} style={{ fontSize: 18 }}>⏳</span>
+  }
+
+  if (status === 'success') {
+    return <span aria-label="Kafka connection test succeeded" title={message || 'Kafka connection succeeded.'} style={{ fontSize: 18 }}>✅</span>
+  }
+
+  if (status === 'error') {
+    return <span aria-label="Kafka connection test failed" title={message || 'Kafka connection test failed.'} style={{ fontSize: 18 }}>❌</span>
+  }
+
+  return null
+}
+
 function SinkConfigPanel({ type, sink, u, metadata }) {
   const hasCatalogOption = sink?.shadow || sink?.saknay
   const kafkaAdditionalProperties = normalizeKafkaAdditionalProperties(sink?.sinkKafkaAdditionalProperties)
   const isApssPropertiesEnabled = sink?.sinkKafkaAdditionalPropertiesEnabled ?? kafkaAdditionalProperties.length > 0
+  const [kafkaTestState, setKafkaTestState] = useState({ status: 'idle', message: '' })
+
+  useEffect(() => {
+    if (type !== 'kafka') {
+      setKafkaTestState({ status: 'idle', message: '' })
+      return
+    }
+
+    setKafkaTestState({ status: 'idle', message: '' })
+  }, [type, sink?.sinkKafkaTopic, sink?.sinkKafkaEnv, metadata?.environment])
 
   const updateKafkaAdditionalProperties = (nextEntries) => {
     u('sinkKafkaAdditionalProperties', normalizeKafkaAdditionalProperties(nextEntries))
@@ -62,6 +89,31 @@ function SinkConfigPanel({ type, sink, u, metadata }) {
   const handleRemoveKafkaAdditionalProperty = (id) => {
     updateKafkaAdditionalProperties(kafkaAdditionalProperties.filter(entry => entry.id !== id))
   }
+
+  const handleKafkaConnectionTest = async () => {
+    const topic = String(sink?.sinkKafkaTopic || '').trim()
+    const environment = String(sink?.sinkKafkaEnv || metadata?.environment || '').trim()
+
+    if (!topic || !environment) {
+      setKafkaTestState({
+        status: 'error',
+        message: 'Topic and environment are required to test the Kafka connection.',
+      })
+      return
+    }
+
+    setKafkaTestState({ status: 'loading', message: 'Testing Kafka connection...' })
+
+    try {
+      const result = await testKafkaConnection({ topic, environment })
+      setKafkaTestState({ status: 'success', message: result.message })
+    } catch (error) {
+      setKafkaTestState({
+        status: 'error',
+        message: error?.message || 'Kafka connection test failed.',
+      })
+    }
+  }
   
   if (type === 'kafka') return (
     <CfgPanel title="☕ Kafka Sink">
@@ -80,6 +132,23 @@ function SinkConfigPanel({ type, sink, u, metadata }) {
         </select>
       </FormGroup>
 
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <Btn v="primary" sm onClick={handleKafkaConnectionTest} disabled={kafkaTestState.status === 'loading'}>
+          {kafkaTestState.status === 'loading' ? '⏳ Testing…' : '🔌 Test Connection'}
+        </Btn>
+        <KafkaConnectionStatus status={kafkaTestState.status} message={kafkaTestState.message} />
+        {kafkaTestState.status !== 'idle' && kafkaTestState.message && (
+          <span
+            style={{
+              fontSize: 12,
+              color: kafkaTestState.status === 'error' ? 'var(--danger)' : 'var(--muted)',
+            }}
+          >
+            {kafkaTestState.message}
+          </span>
+        )}
+      </div>
+
       <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)' }}>
           <input
@@ -88,7 +157,7 @@ function SinkConfigPanel({ type, sink, u, metadata }) {
             onChange={e => u('sinkKafkaAdditionalPropertiesEnabled', e.target.checked)}
             style={{ width: '16px', height: '16px', cursor: 'pointer' }}
           />
-          <span>Add APSS properites (optional)</span>
+          <span>Add APSS properties (optional)</span>
         </label>
 
         {isApssPropertiesEnabled && (
@@ -278,7 +347,6 @@ export default function SinkConfigStep() {
   const sink = state.sink
   const metadata = state.metadata
   const u = (k, v) => actions.updateSink({ [k]: v })
-  const sinkMeta = SINK_TYPES.find(t => t.id === sink.sinkType)
 
   // Sync Kafka environment with metadata environment
   useEffect(() => {
