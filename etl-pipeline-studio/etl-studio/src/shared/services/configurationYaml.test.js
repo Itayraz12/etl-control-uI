@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatTransformationYamlItem, quoteYamlDoubleQuoted, formatInputFieldsYamlSection } from './configurationYaml.js'
+import { formatTransformationYamlItem, quoteYamlDoubleQuoted, formatInputFieldsYamlSection, formatKeyValueYamlSection } from './configurationYaml.js'
 import { formatFilterYamlItem } from './configurationYaml.js'
 import { hydrateWizardStateFromYaml } from './configurationHydrator.js'
 
@@ -78,6 +78,16 @@ sink:
     expect(formatFilterYamlItem('(id f-2 2)')).toBe('  - "(id f-2 2)"')
   })
 
+  it('serializes Kafka additional properties as a YAML subsection', () => {
+    expect(formatKeyValueYamlSection('additional_properties', [
+      { id: '1', key: 'acks', value: 'all' },
+      { id: '2', key: 'compression.type', value: 'gzip' },
+      { id: '3', key: '   ', value: 'ignored' },
+    ])).toBe(`  additional_properties:
+    "acks": "all"
+    "compression.type": "gzip"`)
+  })
+
   it('hydrates filters from quoted YAML filter entries', () => {
     const yaml = `metadata:
   entity: Product
@@ -97,6 +107,9 @@ filters:
 sink:
   type: kafka
   topic: etl_products_v3
+  additional_properties:
+    "acks": "all"
+    "compression.type": "gzip"
 `
 
     const state = hydrateWizardStateFromYaml(yaml, {
@@ -113,5 +126,9 @@ sink:
         { field: 'id', op: 'f-2', value: '2' },
       ],
     })
+    expect(state.sink.sinkKafkaAdditionalProperties).toEqual([
+      { id: 'sink-kafka-prop-0', key: 'acks', value: 'all' },
+      { id: 'sink-kafka-prop-1', key: 'compression.type', value: 'gzip' },
+    ])
   })
 })

@@ -82,10 +82,18 @@ export const ENVIRONMENTS = ['dev', 'staging', 'production']
  */
 
 /**
+ * @typedef {Object} KeyValueEntry
+ * @property {string} id
+ * @property {string} key
+ * @property {string} value
+ */
+
+/**
  * @typedef {Object} SinkState
  * @property {'kafka'|'file'|'db'|'http'} sinkType
  * @property {string} [sinkKafkaTopic]
  * @property {string} [sinkKafkaBootstrap]
+ * @property {KeyValueEntry[]} [sinkKafkaAdditionalProperties]
  * @property {string} [sinkFilePath]
  * @property {string} [sinkDbConn]
  * @property {string} [sinkDbTable]

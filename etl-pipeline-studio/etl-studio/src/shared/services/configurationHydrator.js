@@ -114,6 +114,39 @@ function normalizeTransformationEntry(entry) {
   return asString(entry)
 }
 
+function buildKeyValueEntries(value, idPrefix = 'entry') {
+  if (!value || typeof value !== 'object') return []
+
+  if (Array.isArray(value)) {
+    return value
+      .map((entry, index) => {
+        if (!entry || typeof entry !== 'object') return null
+        const key = asString(entry.key).trim()
+        if (!key) return null
+
+        return {
+          id: `${idPrefix}-${index}`,
+          key,
+          value: asString(entry.value),
+        }
+      })
+      .filter(Boolean)
+  }
+
+  return Object.entries(value)
+    .map(([key, entryValue], index) => {
+      const normalizedKey = asString(key).trim()
+      if (!normalizedKey) return null
+
+      return {
+        id: `${idPrefix}-${index}`,
+        key: normalizedKey,
+        value: asString(entryValue),
+      }
+    })
+    .filter(Boolean)
+}
+
 function parseTransformationLine(line) {
   const raw = normalizeTransformationEntry(line).trim().replace(/^-\s*/, '')
   if (!raw) return null
@@ -329,6 +362,9 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const sinkType = normalizeSinkType(sink.type)
   const sourceTopic = asString(source.topic)
   const sinkTopic = asString(sink.topic)
+  const sinkKafkaAdditionalProperties = sinkType === 'kafka'
+    ? buildKeyValueEntries(sink.additional_properties ?? sink.additionalProperties, 'sink-kafka-prop')
+    : []
 
   return {
     metadata: {
@@ -359,6 +395,8 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       sinkType,
       sinkKafkaTopic: sinkType === 'kafka' ? sinkTopic : '',
       sinkKafkaEnv: environment,
+      sinkKafkaAdditionalPropertiesEnabled: sinkKafkaAdditionalProperties.length > 0,
+      sinkKafkaAdditionalProperties,
       sinkRmqQueue: sinkType === 'rabbitmq' ? sinkTopic : '',
       shadow: sink.shadow === true,
       shadowTopic: asString(sink.shadow_topic) === 'auto' ? '' : asString(sink.shadow_topic),

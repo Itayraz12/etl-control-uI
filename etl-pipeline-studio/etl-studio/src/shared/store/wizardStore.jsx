@@ -65,6 +65,8 @@ const initialState = {
     sinkType:        'kafka',
     sinkKafkaTopic:  'etl_products_v3',
     sinkKafkaEnv:    'production',
+    sinkKafkaAdditionalPropertiesEnabled: false,
+    sinkKafkaAdditionalProperties: [],
     shadow:          false,
     shadowTopic:     '',
     saknay:          false,

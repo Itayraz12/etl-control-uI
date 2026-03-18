@@ -10,8 +10,58 @@ const SINK_TYPES = [
   { id: 'rabbitmq',  icon: '🐇', name: 'RabbitMQ',      sub: 'Message queue'        },
 ]
 
+function createKafkaAdditionalProperty() {
+  return {
+    id: `sink-kafka-prop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    key: '',
+    value: '',
+  }
+}
+
+function normalizeKafkaAdditionalProperties(entries = []) {
+  if (!Array.isArray(entries)) return []
+
+  return entries
+    .map((entry, index) => {
+      if (!entry || typeof entry !== 'object') return null
+      return {
+        id: entry.id == null ? `sink-kafka-prop-${index}` : String(entry.id),
+        key: entry.key == null ? '' : String(entry.key),
+        value: entry.value == null ? '' : String(entry.value),
+      }
+    })
+    .filter(Boolean)
+}
+
 function SinkConfigPanel({ type, sink, u, metadata }) {
   const hasCatalogOption = sink?.shadow || sink?.saknay
+  const kafkaAdditionalProperties = normalizeKafkaAdditionalProperties(sink?.sinkKafkaAdditionalProperties)
+  const isApssPropertiesEnabled = sink?.sinkKafkaAdditionalPropertiesEnabled ?? kafkaAdditionalProperties.length > 0
+
+  const updateKafkaAdditionalProperties = (nextEntries) => {
+    u('sinkKafkaAdditionalProperties', normalizeKafkaAdditionalProperties(nextEntries))
+  }
+
+  const handleKafkaAdditionalPropertyChange = (id, field, value) => {
+    updateKafkaAdditionalProperties(
+      kafkaAdditionalProperties.map(entry => (
+        entry.id === id
+          ? { ...entry, [field]: value }
+          : entry
+      ))
+    )
+  }
+
+  const handleAddKafkaAdditionalProperty = () => {
+    updateKafkaAdditionalProperties([
+      ...kafkaAdditionalProperties,
+      createKafkaAdditionalProperty(),
+    ])
+  }
+
+  const handleRemoveKafkaAdditionalProperty = (id) => {
+    updateKafkaAdditionalProperties(kafkaAdditionalProperties.filter(entry => entry.id !== id))
+  }
   
   if (type === 'kafka') return (
     <CfgPanel title="☕ Kafka Sink">
@@ -29,6 +79,65 @@ function SinkConfigPanel({ type, sink, u, metadata }) {
           {ENVIRONMENTS.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       </FormGroup>
+
+      <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)' }}>
+          <input
+            type="checkbox"
+            checked={Boolean(isApssPropertiesEnabled)}
+            onChange={e => u('sinkKafkaAdditionalPropertiesEnabled', e.target.checked)}
+            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+          />
+          <span>Add APSS properites (optional)</span>
+        </label>
+
+        {isApssPropertiesEnabled && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>⚙️ Additional Properties</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Add APSS properties as key / value pairs.</div>
+              </div>
+              <Btn v="ghost" sm onClick={handleAddKafkaAdditionalProperty}>＋ Add property</Btn>
+            </div>
+
+            <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--surf2)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(180px, 1fr) 84px', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--border)', background: 'rgba(79,110,247,.06)', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <div>Key</div>
+                <div>Value</div>
+                <div>Action</div>
+              </div>
+
+              {kafkaAdditionalProperties.length === 0 ? (
+                <div style={{ padding: '14px 12px', fontSize: 12, color: 'var(--muted)' }}>No additional Kafka properties defined.</div>
+              ) : kafkaAdditionalProperties.map((entry) => (
+                <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(180px, 1fr) 84px', gap: 10, padding: '10px 12px', borderTop: '1px solid rgba(255,255,255,0.03)', alignItems: 'center' }}>
+                  <input
+                    value={entry.key}
+                    onChange={e => handleKafkaAdditionalPropertyChange(entry.id, 'key', e.target.value)}
+                    placeholder="acks"
+                    aria-label={`Kafka property key ${entry.id}`}
+                  />
+                  <input
+                    value={entry.value}
+                    onChange={e => handleKafkaAdditionalPropertyChange(entry.id, 'value', e.target.value)}
+                    placeholder="all"
+                    aria-label={`Kafka property value ${entry.id}`}
+                  />
+                  <Btn
+                    v="danger"
+                    sm
+                    onClick={() => handleRemoveKafkaAdditionalProperty(entry.id)}
+                    style={{ justifyContent: 'center', paddingInline: 0 }}
+                  >
+                    Remove
+                  </Btn>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Data Catalog Options */}
       <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
