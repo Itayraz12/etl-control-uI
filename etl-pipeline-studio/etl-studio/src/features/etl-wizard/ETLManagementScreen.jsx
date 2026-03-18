@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Rocket, SquarePen, Trash2 } from 'lucide-react';
+import { CircleArrowUp, Rocket, SquarePen, Trash2 } from 'lucide-react';
 import { Btn, Chip } from '../../shared/components/index.jsx';
 import * as deploymentsService from '../../shared/services/deploymentsService.js';
 import { fetchDraftConfiguration } from '../../shared/services/configService.js';
@@ -502,21 +502,21 @@ export default function ETLManagementScreen() {
                           title={!canUpgrade && hasVersionMismatch ? 'Pipeline must be running' : !canUpgrade ? 'No update available' : 'Upgrade to latest version'}
                           style={{
                             ...ICON_BUTTON_STYLE,
-                            borderColor: '#22c55e',
-                            color: '#22c55e',
+                            borderColor: 'var(--warning)',
+                            color: 'var(--warning)',
                             opacity: !canUpgrade ? 0.4 : 1,
                             cursor: !canUpgrade ? 'not-allowed' : 'pointer',
                           }}
                           onMouseEnter={e => {
                             if (canUpgrade) {
-                              e.currentTarget.style.background = 'rgba(34,197,94,0.15)';
+                              e.currentTarget.style.background = 'rgba(245,158,11,0.15)';
                             }
                           }}
                           onMouseLeave={e => {
                             e.currentTarget.style.background = 'var(--bg)';
                           }}
                         >
-                          <RefreshCw size={15} strokeWidth={2.1} />
+                          <CircleArrowUp size={15} strokeWidth={2.1} />
                         </button>
 
                         {/* Edit Button */}
