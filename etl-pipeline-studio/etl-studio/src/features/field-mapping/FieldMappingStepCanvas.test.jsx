@@ -334,6 +334,10 @@ describe('FieldMappingStep transformer modal regression', () => {
       expect(firstMapping?.extraInputs?.some(input => input?.nodeId === 'src-price')).toBe(true)
       const extra = firstMapping?.extraInputs?.find(input => input?.nodeId === 'src-price')
       expect(extra?.transformerIndex).toBe(2)
+      expect(document.getElementById('nd-src-productName')).toHaveStyle({ top: '30px' })
+      expect(document.getElementById('nd-tgt-name')).toHaveStyle({ top: '114px' })
+      expect(document.getElementById('nd-src-price')).toHaveStyle({ top: '198px' })
+      expect(document.getElementById('nd-tgt-id')).toHaveStyle({ top: '282px' })
     })
   })
 

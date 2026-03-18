@@ -472,6 +472,7 @@ export default function FieldMappingStep() {
             dropY >= box.y && dropY <= box.y + box.h
           )
           if (hit) {
+            let shouldAutoAlign = false
             applyEdges(prev => {
               const targetEdge = prev[hit.edgeIdx]
               if (!targetEdge) return prev
@@ -479,10 +480,14 @@ export default function FieldMappingStep() {
               const tf = findTransformer(transformers, hitChain[hit.chainIndex]?.id)
               if (!tf?.isMultipleInput) return prev
               if (targetEdge.from === nodeId) return prev
+              const alreadyConnected = (targetEdge.extraInputs || []).includes(nodeId)
+              if (!alreadyConnected) {
+                shouldAutoAlign = true
+              }
               return prev.map((e, i) => i === hit.edgeIdx
                 ? {
                     ...e,
-                    extraInputs: (e.extraInputs || []).includes(nodeId)
+                    extraInputs: alreadyConnected
                       ? (e.extraInputs || [])
                       : [...(e.extraInputs || []), nodeId],
                     extraInputTargets: {
@@ -493,6 +498,9 @@ export default function FieldMappingStep() {
                 : e
               )
             })
+            if (shouldAutoAlign) {
+              alignNodes()
+            }
             return
           }
         }
