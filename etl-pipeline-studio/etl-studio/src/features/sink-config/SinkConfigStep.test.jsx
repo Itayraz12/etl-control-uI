@@ -1,15 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import SinkConfigStep from './SinkConfigStep.jsx'
 import { WizardProvider } from '../../shared/store/wizardStore.jsx'
 
-const testKafkaConnection = vi.fn()
 const WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
-
-vi.mock('../../shared/services/kafkaService.js', () => ({
-  testKafkaConnection: (...args) => testKafkaConnection(...args),
-}))
 
 function renderStep(initialSink = {}, initialMappings = []) {
   localStorage.setItem(
@@ -66,7 +61,6 @@ function renderStep(initialSink = {}, initialMappings = []) {
 describe('SinkConfigStep Kafka additional properties', () => {
   beforeEach(() => {
     localStorage.clear()
-    testKafkaConnection.mockReset()
   })
 
   it('lets the user add, edit, and persist Kafka additional properties', async () => {
@@ -176,47 +170,10 @@ describe('SinkConfigStep Kafka additional properties', () => {
     expect(screen.queryByDisplayValue('legacy-topic')).not.toBeInTheDocument()
   })
 
-  it('calls the Kafka test endpoint and shows a success icon for the sink config', async () => {
-    const user = userEvent.setup()
-    testKafkaConnection.mockResolvedValue({ success: true, message: 'Kafka sink reachable' })
-
+  it('does not render a test connection button in sink config', () => {
     renderStep()
 
-    await user.click(screen.getByRole('button', { name: /test connection/i }))
-
-    await waitFor(() => {
-      expect(testKafkaConnection).toHaveBeenCalledWith({
-        topic: 'etl_products_v3',
-        environment: 'production',
-      })
-    })
-
-    expect(await screen.findByLabelText('Kafka connection test succeeded')).toBeInTheDocument()
-    expect(screen.getByText('Kafka sink reachable')).toBeInTheDocument()
-  })
-
-  it('shows a failure icon when the Kafka sink test request fails', async () => {
-    const user = userEvent.setup()
-    testKafkaConnection.mockRejectedValue(new Error('Broker unreachable'))
-
-    renderStep()
-
-    await user.click(screen.getByRole('button', { name: /test connection/i }))
-
-    expect(await screen.findByLabelText('Kafka connection test failed')).toBeInTheDocument()
-    expect(screen.getByText('Broker unreachable')).toBeInTheDocument()
-  })
-
-  it('shows a validation error instead of calling the API when sink topic is missing', async () => {
-    const user = userEvent.setup()
-
-    renderStep({ sinkKafkaTopic: '' })
-
-    await user.click(screen.getByRole('button', { name: /test connection/i }))
-
-    expect(testKafkaConnection).not.toHaveBeenCalled()
-    expect(await screen.findByLabelText('Kafka connection test failed')).toBeInTheDocument()
-    expect(screen.getByText('Topic and environment are required to test the Kafka connection.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /test connection/i })).not.toBeInTheDocument()
   })
 })
 
