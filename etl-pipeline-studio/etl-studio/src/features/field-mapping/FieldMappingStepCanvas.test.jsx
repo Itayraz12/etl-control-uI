@@ -885,6 +885,24 @@ describe('FieldMappingStep required-prop validation', () => {
     const node = await screen.findByTestId('transformer-node-0-0')
     expect(node).toHaveAttribute('data-invalid', 'true')
 
+    fireEvent.mouseEnter(node)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('invalid-transformer-tooltip')).toHaveTextContent('Missing required fields: Logic')
+    })
+
+    fireEvent.mouseLeave(node)
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('invalid-transformer-tooltip')).not.toBeInTheDocument()
+    })
+
+    fireEvent.mouseEnter(node)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('invalid-transformer-tooltip')).toHaveTextContent('Missing required fields: Logic')
+    })
+
     // Click the node to open the edit modal
     await user.click(node)
 
@@ -902,6 +920,7 @@ describe('FieldMappingStep required-prop validation', () => {
     // Node should now be valid
     await waitFor(() => {
       expect(screen.getByTestId('transformer-node-0-0')).toHaveAttribute('data-invalid', 'false')
+      expect(screen.queryByTestId('invalid-transformer-tooltip')).not.toBeInTheDocument()
     })
   })
 })

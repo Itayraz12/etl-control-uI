@@ -25,9 +25,19 @@ function getPropsSchema(transformers, transformerRef) {
  * Returns true when any required property of the transformer is missing or blank.
  * Used to highlight transformer nodes in red on the canvas.
  */
-function hasMissingRequiredProps(transformers, transformerRef, savedProps = {}) {
+function isMissingRequiredPropValue(value) {
+  if (value === 0 || value === false) return false
+  if (typeof value === 'string') return value.trim() === ''
+  return !value
+}
+
+function getMissingRequiredProps(transformers, transformerRef, savedProps = {}) {
   const schema = getPropsSchema(transformers, transformerRef)
-  return schema.some(p => p.required && (!savedProps[p.key] && savedProps[p.key] !== 0 && savedProps[p.key] !== false))
+  return schema.filter(p => p.required && isMissingRequiredPropValue(savedProps[p.key]))
+}
+
+function hasMissingRequiredProps(transformers, transformerRef, savedProps = {}) {
+  return getMissingRequiredProps(transformers, transformerRef, savedProps).length > 0
 }
 
 function parseTransformerChainEntry(entry) {
@@ -114,6 +124,7 @@ export default function FieldMappingStep() {
   const [selectedTf, setSelectedTf] = useState(null)
   const [tfPropValues, setTfPropValues] = useState({})
   const [zoom, setZoom] = useState(1)
+  const [invalidTransformerHover, setInvalidTransformerHover] = useState(null)
 
     // Load saved mappings from state on mount
     useEffect(() => {
@@ -1644,10 +1655,46 @@ export default function FieldMappingStep() {
                         ? `${fromNode.name}${extraInputCount > 0 ? ` +${extraInputCount}` : ''}`
                         : `${previousTransformer?.name || 'Previous'} output`
 
-                      const isInvalid = hasMissingRequiredProps(transformers, chainItem.id, chainItem.props || {})
+                      const missingRequiredProps = getMissingRequiredProps(transformers, chainItem.id, chainItem.props || {})
+                      const isInvalid = missingRequiredProps.length > 0
                       const borderColor = isInvalid ? 'var(--danger)' : 'var(--accent)'
                       const stripeColor = isInvalid ? 'var(--danger)' : 'var(--accent)'
                       const iconBg = isInvalid ? 'rgba(239,68,68,0.1)' : 'rgba(79,110,247,0.1)'
+                      const missingRequiredPropsMessage = isInvalid
+                        ? `Missing required fields: ${missingRequiredProps.map(prop => prop.label || prop.key).join(', ')}`
+                        : undefined
+                      const showInvalidTransformerHover = () => {
+                        if (!isInvalid) return
+                        setInvalidTransformerHover({
+                          edgeIdx: idx,
+                          chainIndex,
+                          message: missingRequiredPropsMessage,
+                          x: chainTf.leftX + chainTf.tfWidth / 2,
+                          y: chainTf.midY + chainTf.tfHeight / 2 + 12,
+                        })
+                      }
+                      const clearInvalidTransformerHover = () => {
+                        setInvalidTransformerHover(current => (
+                          current?.edgeIdx === idx && current?.chainIndex === chainIndex
+                            ? null
+                            : current
+                        ))
+                      }
+                      const handleTransformerMouseEnter = (e) => {
+                        showInvalidTransformerHover()
+                        e.currentTarget.style.borderColor = borderColor
+                        e.currentTarget.style.boxShadow = isInvalid ? '0 4px 12px rgba(239,68,68,0.28)' : '0 4px 12px rgba(79,110,247,0.2)'
+                      }
+                      const handleTransformerMouseLeave = (e) => {
+                        clearInvalidTransformerHover()
+                        e.currentTarget.style.borderColor = borderColor
+                        e.currentTarget.style.boxShadow = isInvalid ? '0 2px 8px rgba(239,68,68,0.18)' : '0 2px 8px rgba(0,0,0,0.08)'
+                      }
+                      const handleTransformerMouseOut = (e) => {
+                        const relatedTarget = e.relatedTarget
+                        if (relatedTarget && e.currentTarget.contains(relatedTarget)) return
+                        clearInvalidTransformerHover()
+                      }
 
                       return (
                        <foreignObject
@@ -1662,18 +1709,25 @@ export default function FieldMappingStep() {
                          <div
                            data-testid={`transformer-node-${idx}-${chainIndex}`}
                            data-invalid={isInvalid ? 'true' : 'false'}
+                            aria-describedby={invalidTransformerHover?.edgeIdx === idx && invalidTransformerHover?.chainIndex === chainIndex ? 'invalid-transformer-tooltip' : undefined}
                            onClick={(e) => {
                              e.stopPropagation()
                              e.preventDefault()
+                              setInvalidTransformerHover(null)
                              setCurrentEdge(edge)
                              openTransformerModal(edge, 'edit', chainIndex)
                            }}
                            onContextMenu={(e) => {
                              e.preventDefault()
                              e.stopPropagation()
+                              setInvalidTransformerHover(null)
                              setCurrentEdge(edge)
                              setPlusCtxMenu({ x: e.clientX, y: e.clientY, edge, kind: 'transformer', chainIndex })
                            }}
+                            onMouseEnter={handleTransformerMouseEnter}
+                            onMouseOver={showInvalidTransformerHover}
+                            onMouseLeave={handleTransformerMouseLeave}
+                            onMouseOut={handleTransformerMouseOut}
                            className={transformer?.isMultipleInput ? 'tf-multi-input-node' : ''}
                            style={{
                             width: '100%',
@@ -1689,14 +1743,6 @@ export default function FieldMappingStep() {
                             boxShadow: isInvalid ? '0 2px 8px rgba(239,68,68,0.18)' : '0 2px 8px rgba(0,0,0,0.08)',
                             userSelect: 'none',
                             transition: 'all 0.15s',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = borderColor
-                            e.currentTarget.style.boxShadow = isInvalid ? '0 4px 12px rgba(239,68,68,0.28)' : '0 4px 12px rgba(79,110,247,0.2)'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = borderColor
-                            e.currentTarget.style.boxShadow = isInvalid ? '0 2px 8px rgba(239,68,68,0.18)' : '0 2px 8px rgba(0,0,0,0.08)'
                           }}
                         >
                           {/* Left stripe */}
@@ -2199,6 +2245,37 @@ export default function FieldMappingStep() {
             </div>
               )
             })()}
+              {invalidTransformerHover && (
+                <div
+                  id="invalid-transformer-tooltip"
+                  data-testid="invalid-transformer-tooltip"
+                  style={{
+                    position: 'absolute',
+                    left: `${invalidTransformerHover.x}px`,
+                    top: `${invalidTransformerHover.y}px`,
+                    transform: 'translateX(-50%)',
+                    maxWidth: '260px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    background: 'var(--surf)',
+                    border: '1px solid var(--danger)',
+                    color: 'var(--text)',
+                    boxShadow: '0 12px 32px rgba(0,0,0,0.28)',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    lineHeight: 1.4,
+                    zIndex: 30,
+                    pointerEvents: 'none',
+                    animation: 'fadeIn .15s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--danger)', marginBottom: 2 }}>
+                    <span>⚠</span>
+                    <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Required fields</span>
+                  </div>
+                  <div style={{ color: 'var(--text)' }}>{invalidTransformerHover.message}</div>
+                </div>
+              )}
               </div>
             </div>
 
