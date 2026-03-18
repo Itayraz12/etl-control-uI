@@ -112,12 +112,16 @@ export function UserProvider({ children }) {
     const activeUser = userRef.current
     clearIdleLogoutTimer()
 
-    if (reason === 'idle' && activeUser?.userId) {
-      scheduleScopeReset(activeUser.userId)
+    if (activeUser?.userId) {
+      if (reason === 'idle') {
+        scheduleScopeReset(activeUser.userId)
+      } else {
+        finalizeScopeReset(activeUser.userId)
+      }
     }
 
     setUserState(null)
-  }, [clearIdleLogoutTimer, scheduleScopeReset])
+  }, [clearIdleLogoutTimer, finalizeScopeReset, scheduleScopeReset])
 
   const restartIdleLogoutTimer = useCallback(() => {
     clearIdleLogoutTimer()
