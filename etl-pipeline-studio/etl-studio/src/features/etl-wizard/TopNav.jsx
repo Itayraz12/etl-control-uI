@@ -5,6 +5,7 @@ import { useUser } from '../../shared/store/userContext.jsx'
 export default function TopNav() {
   const { state, actions } = useWizard()
   const { logout } = useUser()
+  const appVersion = `v${__APP_VERSION__}`
 
   function handleBrandClick() {
     actions.setNavigationMode('etl-management')
@@ -39,6 +40,9 @@ export default function TopNav() {
         ETL<span style={{ color: 'var(--text)' }}>Management</span>
       </button>
       <Chip c="purple">ENTERPRISE</Chip>
+      <span style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+        {appVersion}
+      </span>
       <div style={{ flex: 1 }} />
       <Btn
         v="ghost" sm

@@ -4,6 +4,7 @@ import { useUser } from '../../shared/store/userContext.jsx';
 export default function MainMenu() {
   const { state, actions } = useWizard()
   const { user, logout } = useUser();
+  const appVersion = `v${__APP_VERSION__}`;
 
   const handleETLConfiguration = () => {
     actions.setNavigationMode('etl-config')
@@ -158,7 +159,7 @@ export default function MainMenu() {
         color: 'var(--muted)',
         textAlign: 'center',
       }}>
-        v1.0.0
+        {appVersion}
       </div>
       <button
         onClick={handleLogout}

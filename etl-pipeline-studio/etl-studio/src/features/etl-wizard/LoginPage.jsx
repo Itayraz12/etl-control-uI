@@ -7,6 +7,7 @@ export default function LoginPage() {
   const { login } = useUser();
   const { useMock, setUseMock } = useMockMode();
   const { teamNames, loadingTeamNames, teamNamesError, refreshTeamNames } = useTeamNames();
+  const appVersion = `v${__APP_VERSION__}`;
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [teamName, setTeamName] = useState('');
@@ -25,6 +26,7 @@ export default function LoginPage() {
         <div style={{ fontSize: 48, marginBottom: 12 }}>⚡</div>
         <div style={{ fontSize: 36, fontWeight: 700, marginBottom: 8, color: 'var(--text)' }}>ETL Studio</div>
         <div style={{ fontSize: 14, color: 'var(--muted)' }}>Enterprise Data Integration Platform</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>{appVersion}</div>
       </div>
       <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 24, color: 'var(--text)' }}>Log In</div>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 320 }}>
