@@ -1,144 +1,154 @@
 // Backend service for deployments data
 const API_BASE = 'http://localhost:8080/api'
 
+function buildMockDeployments() {
+  return [
+    {
+      id: '1',
+      productType: 'Data Pipeline',
+      productSource: 'GitHub',
+      environment: 'production',
+      deploymentStatus: 'draft',
+      savedVersion: '1.0.0',
+      deployedVersion: '1.0.0',
+      lastStatusChange: Date.now() - 3600 * 1000,
+      createdAt: Date.now() - 86400 * 1000,
+    },
+    {
+      id: '2',
+      productType: 'ETL Job',
+      productSource: 'Bitbucket',
+      environment: 'staging',
+      deploymentStatus: 'running',
+      savedVersion: '2.1.3',
+      deployedVersion: '2.0.5',
+      lastStatusChange: Date.now() - 1800 * 1000,
+      createdAt: Date.now() - 172800 * 1000,
+    },
+    {
+      id: '3',
+      productType: 'Analytics',
+      productSource: 'GitLab',
+      environment: 'development',
+      deploymentStatus: 'stopped',
+      savedVersion: '1.5.2',
+      deployedVersion: '1.5.2',
+      lastStatusChange: Date.now() - 7200 * 1000,
+      createdAt: Date.now() - 259200 * 1000,
+    },
+    {
+      id: '4',
+      productType: 'Analytics4',
+      productSource: 'GitLab',
+      environment: 'production',
+      deploymentStatus: 'running',
+      savedVersion: '3.0.1',
+      deployedVersion: '2.9.0',
+      lastStatusChange: Date.now() - 7200 * 1000,
+      createdAt: Date.now() - 259200 * 1000,
+    },
+    {
+      id: '5',
+      productType: 'Analytics5',
+      productSource: 'GitLab',
+      environment: 'staging',
+      deploymentStatus: 'stopped',
+      savedVersion: '1.2.0',
+      deployedVersion: '1.2.0',
+      lastStatusChange: Date.now() - 7200 * 1000,
+      createdAt: Date.now() - 259200 * 1000,
+    },
+    {
+      id: '6',
+      productType: 'Analytics6',
+      productSource: 'GitLab',
+      environment: 'development',
+      deploymentStatus: 'draft',
+      savedVersion: '2.0.0',
+      deployedVersion: null,
+      lastStatusChange: Date.now() - 7200 * 1000,
+      createdAt: Date.now() - 259200 * 1000,
+    },
+    {
+      id: '7',
+      productType: 'Analytics7',
+      productSource: 'GitLab',
+      environment: 'production',
+      deploymentStatus: 'draft',
+      savedVersion: '1.3.5',
+      deployedVersion: null,
+      lastStatusChange: Date.now() - 7200 * 1000,
+      createdAt: Date.now() - 259200 * 1000,
+    },
+    {
+      id: '8',
+      productType: 'Analytics8',
+      productSource: 'GitLab',
+      environment: 'staging',
+      deploymentStatus: 'draft',
+      savedVersion: '2.2.1',
+      deployedVersion: null,
+      lastStatusChange: Date.now() - 7200 * 1000,
+      createdAt: Date.now() - 259200 * 1000,
+    },
+    {
+      id: '9',
+      productType: 'Analytics9',
+      productSource: 'GitLab',
+      environment: 'development',
+      deploymentStatus: 'draft',
+      savedVersion: '1.1.0',
+      deployedVersion: null,
+      lastStatusChange: Date.now() - 7200 * 1000,
+      createdAt: Date.now() - 259200 * 1000,
+    },
+    {
+      id: '10',
+      productType: 'Analytics10',
+      productSource: 'GitLab',
+      environment: 'production',
+      deploymentStatus: 'draft',
+      savedVersion: '1.7.2',
+      deployedVersion: null,
+      lastStatusChange: Date.now() - 7200 * 1000,
+      createdAt: Date.now() - 259200 * 1000,
+    },
+    {
+      id: '11',
+      productType: 'Analytics11',
+      productSource: 'GitLab',
+      environment: 'staging',
+      deploymentStatus: 'draft',
+      savedVersion: '2.3.0',
+      deployedVersion: null,
+      lastStatusChange: Date.now() - 7200 * 1000,
+      createdAt: Date.now() - 259200 * 1000,
+    },
+    {
+      id: '12',
+      productType: 'Analytics12',
+      productSource: 'GitLab',
+      environment: 'development',
+      deploymentStatus: 'draft',
+      savedVersion: '1.4.8',
+      deployedVersion: null,
+      lastStatusChange: Date.now() - 7200 * 1000,
+      createdAt: Date.now() - 259200 * 1000,
+    },
+  ]
+}
+
+let mockDeploymentsStore = buildMockDeployments()
+
+function cloneMockDeployments() {
+  return mockDeploymentsStore.map(item => ({ ...item }))
+}
+
 export async function fetchDeployments(teamName = 'default', useMock = false) {
   if (useMock) {
     // Simulate network delay
     await new Promise(r => setTimeout(r, 300));
-    return [
-      {
-        id: '1',
-        productType: 'Data Pipeline',
-        productSource: 'GitHub',
-        environment: 'production',
-        deploymentStatus: 'draft',
-        savedVersion: '1.0.0',
-        deployedVersion: '1.0.0',
-        lastStatusChange: Date.now() - 3600 * 1000,
-        createdAt: Date.now() - 86400 * 1000,
-      },
-      {
-        id: '2',
-        productType: 'ETL Job',
-        productSource: 'Bitbucket',
-        environment: 'staging',
-        deploymentStatus: 'running',
-        savedVersion: '2.1.3',
-        deployedVersion: '2.0.5',
-        lastStatusChange: Date.now() - 1800 * 1000,
-        createdAt: Date.now() - 172800 * 1000,
-      },
-      {
-        id: '3',
-        productType: 'Analytics',
-        productSource: 'GitLab',
-        environment: 'development',
-        deploymentStatus: 'stopped',
-        savedVersion: '1.5.2',
-        deployedVersion: '1.5.2',
-        lastStatusChange: Date.now() - 7200 * 1000,
-        createdAt: Date.now() - 259200 * 1000,
-      },
-      {
-        id: '4',
-        productType: 'Analytics4',
-        productSource: 'GitLab',
-        environment: 'production',
-        deploymentStatus: 'running',
-        savedVersion: '3.0.1',
-        deployedVersion: '2.9.0',
-        lastStatusChange: Date.now() - 7200 * 1000,
-        createdAt: Date.now() - 259200 * 1000,
-      },
-      {
-        id: '5',
-        productType: 'Analytics5',
-        productSource: 'GitLab',
-        environment: 'staging',
-        deploymentStatus: 'stopped',
-        savedVersion: '1.2.0',
-        deployedVersion: '1.2.0',
-        lastStatusChange: Date.now() - 7200 * 1000,
-        createdAt: Date.now() - 259200 * 1000,
-      },
-      {
-        id: '6',
-        productType: 'Analytics6',
-        productSource: 'GitLab',
-        environment: 'development',
-        deploymentStatus: 'draft',
-        savedVersion: '2.0.0',
-        deployedVersion: null,
-        lastStatusChange: Date.now() - 7200 * 1000,
-        createdAt: Date.now() - 259200 * 1000,
-      },
-      {
-        id: '7',
-        productType: 'Analytics7',
-        productSource: 'GitLab',
-        environment: 'production',
-        deploymentStatus: 'draft',
-        savedVersion: '1.3.5',
-        deployedVersion: null,
-        lastStatusChange: Date.now() - 7200 * 1000,
-        createdAt: Date.now() - 259200 * 1000,
-      },
-      {
-        id: '8',
-        productType: 'Analytics8',
-        productSource: 'GitLab',
-        environment: 'staging',
-        deploymentStatus: 'draft',
-        savedVersion: '2.2.1',
-        deployedVersion: null,
-        lastStatusChange: Date.now() - 7200 * 1000,
-        createdAt: Date.now() - 259200 * 1000,
-      },
-      {
-        id: '9',
-        productType: 'Analytics9',
-        productSource: 'GitLab',
-        environment: 'development',
-        deploymentStatus: 'draft',
-        savedVersion: '1.1.0',
-        deployedVersion: null,
-        lastStatusChange: Date.now() - 7200 * 1000,
-        createdAt: Date.now() - 259200 * 1000,
-      },
-      {
-        id: '10',
-        productType: 'Analytics10',
-        productSource: 'GitLab',
-        environment: 'production',
-        deploymentStatus: 'draft',
-        savedVersion: '1.7.2',
-        deployedVersion: null,
-        lastStatusChange: Date.now() - 7200 * 1000,
-        createdAt: Date.now() - 259200 * 1000,
-      },
-      {
-        id: '11',
-        productType: 'Analytics11',
-        productSource: 'GitLab',
-        environment: 'staging',
-        deploymentStatus: 'draft',
-        savedVersion: '2.3.0',
-        deployedVersion: null,
-        lastStatusChange: Date.now() - 7200 * 1000,
-        createdAt: Date.now() - 259200 * 1000,
-      },
-      {
-        id: '12',
-        productType: 'Analytics12',
-        productSource: 'GitLab',
-        environment: 'development',
-        deploymentStatus: 'draft',
-        savedVersion: '1.4.8',
-        deployedVersion: null,
-        lastStatusChange: Date.now() - 7200 * 1000,
-        createdAt: Date.now() - 259200 * 1000,
-      }
-    ];
+    return cloneMockDeployments();
   } else {
     try {
       const url = `${API_BASE}/backend/deployments?teamName=${encodeURIComponent(teamName)}`;
@@ -187,7 +197,17 @@ export async function deployService(id, useMock = false) {
   if (useMock) {
     // Simulate network delay
     await new Promise(r => setTimeout(r, 200));
-    return { success: true };
+    mockDeploymentsStore = mockDeploymentsStore.map(item => (
+      item.id === id
+        ? {
+            ...item,
+            deploymentStatus: 'running',
+            deployedVersion: item.savedVersion,
+            lastStatusChange: Date.now(),
+          }
+        : item
+    ))
+    return { success: true, id };
   } else {
     try {
       const url = `${API_BASE}/backend/deployments/${id}/deploy`;
@@ -252,6 +272,7 @@ export async function stopDeployment(id, useMock = false) {
 export async function deleteDeployment(id, useMock = false) {
   if (useMock) {
     await new Promise(r => setTimeout(r, 200));
+    mockDeploymentsStore = mockDeploymentsStore.filter(item => item.id !== id)
     return { success: true, id };
   } else {
     try {

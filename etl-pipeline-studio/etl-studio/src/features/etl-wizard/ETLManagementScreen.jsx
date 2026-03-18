@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { CircleArrowUp, Rocket, SquarePen, Trash2 } from 'lucide-react';
-import { Btn, Chip } from '../../shared/components/index.jsx';
+import { Btn, Chip, DeployProgressModal, ModalDialog } from '../../shared/components/index.jsx';
 import * as deploymentsService from '../../shared/services/deploymentsService.js';
 import { fetchDraftConfiguration } from '../../shared/services/configService.js';
 import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js';
+import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js';
 import { useWizard } from '../../shared/store/wizardStore.jsx';
 import { useMockMode } from '../../shared/store/mockModeContext.jsx';
 import { useUser } from '../../shared/store/userContext.jsx';
@@ -80,12 +81,50 @@ export default function ETLManagementScreen() {
   const [sortOrder, setSortOrder] = useState('asc');
   const [filterText, setFilterText] = useState("");
   const [screenError, setScreenError] = useState('');
+  const [screenNotice, setScreenNotice] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [activeDeployId, setActiveDeployId] = useState(null);
   const { actions, state } = useWizard();
   const { useMock, setUseMock } = useMockMode();
   const { user } = useUser();
 
   // Use team name from user context
   const teamName = user?.teamName || 'default';
+
+  const deployment = useDeploymentProgress({
+    autoAdvance: true,
+    stepDuration: useMock ? 600 : 900,
+    onDeploymentComplete: async () => {
+      if (activeDeployId) {
+        await refreshDeployments();
+        setActionLoading(a => ({ ...a, [activeDeployId]: null }));
+        setScreenNotice({
+          tone: 'success',
+          message: 'Deployment completed successfully. The table has been refreshed.',
+        });
+        setActiveDeployId(null);
+      }
+    },
+    onDeploymentError: (_stepIndex, error) => {
+      if (activeDeployId) {
+        setActionLoading(a => ({ ...a, [activeDeployId]: null }));
+        setActiveDeployId(null);
+      }
+      setScreenError(error || 'Deployment failed.');
+      setScreenNotice(null);
+    },
+  });
+
+  async function refreshDeployments() {
+    setLoading(true);
+    try {
+      const data = await deploymentsService.fetchDeployments(teamName, useMock);
+      setDeployments(data);
+      return data;
+    } finally {
+      setLoading(false);
+    }
+  }
 
   // Expose the toggle to the service
   function handleMockToggle(e) {
@@ -98,12 +137,28 @@ export default function ETLManagementScreen() {
   }
 
   useEffect(() => {
-    setLoading(true);
-    deploymentsService.fetchDeployments(teamName, useMock).then(data => {
-      setDeployments(data);
-      setLoading(false);
-    });
+    refreshDeployments();
   }, [teamName, useMock]);
+
+  // Clear screenNotice after 10 seconds
+  useEffect(() => {
+    if (screenNotice) {
+      const timer = setTimeout(() => {
+        setScreenNotice(null);
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [screenNotice]);
+
+  // Clear screenError after 10 seconds
+  useEffect(() => {
+    if (screenError) {
+      const timer = setTimeout(() => {
+        setScreenError('');
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [screenError]);
 
   const handleSort = (columnKey) => {
     if (sortKey === columnKey) {
@@ -150,36 +205,69 @@ export default function ETLManagementScreen() {
     return 0;
   });
 
-  const handleDeploy = async (id) => {
-    setActionLoading(a => ({ ...a, [id]: 'deploy' }));
+  const handleDeploy = async (deploymentRow) => {
+    if (actionLoading[deploymentRow.id]) return;
+
+    setScreenError('');
+    setScreenNotice(null);
+    setActiveDeployId(deploymentRow.id);
+    setActionLoading(a => ({ ...a, [deploymentRow.id]: 'deploy' }));
+
+    deployment.startDeployment([
+      { id: 'validate', label: `Validating ${deploymentRow.productSource}` },
+      { id: 'prepare', label: 'Preparing deployment artifacts' },
+      { id: 'release', label: 'Rolling out the pipeline' },
+      { id: 'health', label: 'Running health checks' },
+    ]);
+
     console.log('[ETLManagementScreen] handleDeploy, useMock:', useMock);
-    await deploymentsService.deployService(id, useMock);
-    setActionLoading(a => ({ ...a, [id]: null }));
-    // Optionally refresh deployments
+    const result = await deploymentsService.deployService(deploymentRow.id, useMock);
+
+    if (result?.success === false) {
+      deployment.failStep(result.error || 'Unable to deploy the selected pipeline.');
+      return;
+    }
   };
 
   const handleDelete = async (id) => {
+    setScreenError('');
+    setScreenNotice(null);
     setActionLoading(a => ({ ...a, [id]: 'delete' }));
     console.log('[ETLManagementScreen] handleDelete, useMock:', useMock);
     const result = await deploymentsService.deleteDeployment(id, useMock);
 
     if (result?.success !== false) {
-      setDeployments(current => current.filter(dep => dep.id !== id));
+      await refreshDeployments();
+      setScreenNotice({
+        tone: 'success',
+        message: 'Deployment deleted successfully.',
+      });
+    } else {
+      setScreenError(result?.error || 'Failed to delete the selected deployment.');
     }
 
     setActionLoading(a => ({ ...a, [id]: null }));
   };
 
   const handleUpgrade = async (id) => {
+    setScreenError('');
+    setScreenNotice(null);
     setActionLoading(a => ({ ...a, [id]: 'upgrade' }));
     console.log('[ETLManagementScreen] handleUpgrade, useMock:', useMock);
-    await deploymentsService.deployService(id, useMock);
+    const result = await deploymentsService.deployService(id, useMock);
+    if (result?.success === false) {
+      setScreenError(result.error || 'Upgrade failed.');
+    } else {
+      await refreshDeployments();
+      setScreenNotice({ tone: 'success', message: 'Deployment upgraded to the latest saved version.' });
+    }
     setActionLoading(a => ({ ...a, [id]: null }));
   };
 
   const handleEdit = async (dep) => {
     setActionLoading(a => ({ ...a, [dep.id]: 'edit' }));
     setScreenError('');
+    setScreenNotice(null);
     console.log('[ETLManagementScreen] handleEdit, useMock:', useMock);
 
     try {
@@ -238,6 +326,36 @@ export default function ETLManagementScreen() {
       mappings: [],
       filters: [],
       sink: {},
+    });
+  }
+
+  function requestDelete(dep) {
+    setConfirmDialog({
+      title: 'Delete deployment?',
+      message: `Delete ${dep.productSource} / ${dep.productType}? This action removes the deployment from the management list and cannot be undone.`,
+      tone: 'danger',
+      icon: '🗑️',
+      confirmLabel: 'Delete',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        await handleDelete(dep.id);
+      },
+    });
+  }
+
+  function requestEdit(dep) {
+    setConfirmDialog({
+      title: 'Open deployment for editing?',
+      message: `You are about to open ${dep.productSource} / ${dep.productType} in the wizard. Continue to the editable configuration flow?`,
+      tone: 'accent',
+      icon: '✏️',
+      confirmLabel: 'Continue',
+      confirmVariant: 'primary',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        await handleEdit(dep);
+      },
     });
   }
 
@@ -317,6 +435,20 @@ export default function ETLManagementScreen() {
             + New Configuration
           </Btn>
         </div>
+        {screenNotice && (
+          <div style={{
+            width: '100%',
+            marginBottom: 16,
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: screenNotice.tone === 'success' ? 'rgba(34,197,94,0.12)' : 'rgba(79,110,247,0.12)',
+            border: screenNotice.tone === 'success' ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(79,110,247,0.35)',
+            color: screenNotice.tone === 'success' ? 'var(--success)' : 'var(--accent)',
+            fontSize: 13,
+          }}>
+            {screenNotice.message}
+          </div>
+        )}
         {screenError && (
           <div style={{
             width: '100%',
@@ -448,18 +580,18 @@ export default function ETLManagementScreen() {
                       <td style={{ padding: 8, textAlign: 'center', display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
                         {/* Deploy/Play Button */}
                         <button
-                          onClick={() => handleDeploy(dep.id)}
-                          disabled={dep.deploymentStatus === 'running'}
-                          title={dep.deploymentStatus === 'running' ? 'Already running' : 'Deploy pipeline'}
+                          onClick={() => handleDeploy(dep)}
+                          disabled={dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy'}
+                          title={dep.deploymentStatus === 'running' ? 'Already running' : actionLoading[dep.id] === 'deploy' ? 'Deploying pipeline' : 'Deploy pipeline'}
                           style={{
                             ...ICON_BUTTON_STYLE,
                             borderColor: '#22c55e',
                             color: '#22c55e',
-                            opacity: dep.deploymentStatus === 'running' ? 0.4 : 1,
-                            cursor: dep.deploymentStatus === 'running' ? 'not-allowed' : 'pointer',
+                            opacity: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy') ? 0.4 : 1,
+                            cursor: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy') ? 'not-allowed' : 'pointer',
                           }}
                           onMouseEnter={e => {
-                            if (dep.deploymentStatus !== 'running') {
+                            if (dep.deploymentStatus !== 'running' && actionLoading[dep.id] !== 'deploy') {
                               e.currentTarget.style.background = 'rgba(34,197,94,0.15)';
                             }
                           }}
@@ -472,18 +604,18 @@ export default function ETLManagementScreen() {
 
                         {/* Delete Button */}
                         <button
-                          onClick={() => handleDelete(dep.id)}
-                          disabled={dep.deploymentStatus === 'running'}
-                          title={dep.deploymentStatus === 'running' ? 'Cannot delete a running pipeline' : 'Delete pipeline'}
+                          onClick={() => requestDelete(dep)}
+                          disabled={dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete'}
+                          title={dep.deploymentStatus === 'running' ? 'Cannot delete a running pipeline' : actionLoading[dep.id] === 'delete' ? 'Deleting pipeline' : 'Delete pipeline'}
                           style={{
                             ...ICON_BUTTON_STYLE,
                             borderColor: '#ef4444',
                             color: '#ef4444',
-                            opacity: dep.deploymentStatus === 'running' ? 0.4 : 1,
-                            cursor: dep.deploymentStatus === 'running' ? 'not-allowed' : 'pointer',
+                            opacity: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete') ? 0.4 : 1,
+                            cursor: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete') ? 'not-allowed' : 'pointer',
                           }}
                           onMouseEnter={e => {
-                            if (dep.deploymentStatus !== 'running') {
+                            if (dep.deploymentStatus !== 'running' && actionLoading[dep.id] !== 'delete') {
                               e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
                             }
                           }}
@@ -497,17 +629,17 @@ export default function ETLManagementScreen() {
                         {/* Upgrade Button */}
                         <button
                           onClick={() => handleUpgrade(dep.id)}
-                          disabled={!canUpgrade}
-                          title={!canUpgrade && hasVersionMismatch ? 'Pipeline must be running' : !canUpgrade ? 'No update available' : 'Upgrade to latest version'}
+                          disabled={!canUpgrade || actionLoading[dep.id] === 'upgrade'}
+                          title={!canUpgrade && hasVersionMismatch ? 'Pipeline must be running' : !canUpgrade ? 'No update available' : actionLoading[dep.id] === 'upgrade' ? 'Upgrading deployment' : 'Upgrade to latest version'}
                           style={{
                             ...ICON_BUTTON_STYLE,
                             borderColor: 'var(--warning)',
                             color: 'var(--warning)',
-                            opacity: !canUpgrade ? 0.4 : 1,
-                            cursor: !canUpgrade ? 'not-allowed' : 'pointer',
+                            opacity: (!canUpgrade || actionLoading[dep.id] === 'upgrade') ? 0.4 : 1,
+                            cursor: (!canUpgrade || actionLoading[dep.id] === 'upgrade') ? 'not-allowed' : 'pointer',
                           }}
                           onMouseEnter={e => {
-                            if (canUpgrade) {
+                            if (canUpgrade && actionLoading[dep.id] !== 'upgrade') {
                               e.currentTarget.style.background = 'rgba(245,158,11,0.15)';
                             }
                           }}
@@ -520,13 +652,20 @@ export default function ETLManagementScreen() {
 
                         {/* Edit Button */}
                         <button
-                          onClick={() => handleEdit(dep)}
-                          title="Edit configuration"
-                          style={ICON_BUTTON_STYLE}
+                          onClick={() => requestEdit(dep)}
+                          title={actionLoading[dep.id] === 'edit' ? 'Opening deployment editor' : 'Edit configuration'}
+                          disabled={actionLoading[dep.id] === 'edit'}
+                          style={{
+                            ...ICON_BUTTON_STYLE,
+                            opacity: actionLoading[dep.id] === 'edit' ? 0.4 : 1,
+                            cursor: actionLoading[dep.id] === 'edit' ? 'not-allowed' : 'pointer',
+                          }}
                           onMouseEnter={e => {
-                            e.currentTarget.style.background = 'rgba(79,110,247,0.15)';
-                            e.currentTarget.style.borderColor = 'var(--accent)';
-                            e.currentTarget.style.color = 'var(--accent)';
+                            if (actionLoading[dep.id] !== 'edit') {
+                              e.currentTarget.style.background = 'rgba(79,110,247,0.15)';
+                              e.currentTarget.style.borderColor = 'var(--accent)';
+                              e.currentTarget.style.color = 'var(--accent)';
+                            }
                           }}
                           onMouseLeave={e => {
                             e.currentTarget.style.background = 'var(--bg)';
@@ -545,6 +684,35 @@ export default function ETLManagementScreen() {
             </div>
           </div>
         )}
+        <ModalDialog
+          isOpen={Boolean(confirmDialog)}
+          title={confirmDialog?.title}
+          message={confirmDialog?.message}
+          icon={confirmDialog?.icon}
+          tone={confirmDialog?.tone}
+          confirmLabel={confirmDialog?.confirmLabel}
+          confirmVariant={confirmDialog?.confirmVariant}
+          onConfirm={confirmDialog?.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+        <DeployProgressModal
+          isOpen={deployment.isOpen}
+          steps={deployment.steps}
+          currentStepIndex={deployment.currentStepIndex}
+          isComplete={deployment.isComplete}
+          isError={deployment.isError}
+          errorMessage={deployment.errorMessage}
+          onClose={() => {
+            deployment.reset();
+            if (activeDeployId) {
+              setActionLoading(a => ({ ...a, [activeDeployId]: null }));
+              setActiveDeployId(null);
+            }
+          }}
+          title="Deploying pipeline from management..."
+          successTitle="Deployment completed successfully"
+          failureTitle="Deployment failed"
+        />
       </div>
     </div>
   );
