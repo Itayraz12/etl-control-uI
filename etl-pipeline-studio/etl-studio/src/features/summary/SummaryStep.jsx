@@ -263,13 +263,34 @@ ${state.source.format === 'CSV' ? `  delimited:
               argParts.push('[]') // keep field slot empty when there are no fields but props exist
             }
             if (propsStr) argParts.push(propsStr)
-            return argParts.length > 0
+            const transformerCall = argParts.length > 0
               ? `${transformerName}(${argParts.join(',')})`
               : transformerName
+            // For a multi-transformer chain each hop uses the same -> (type, outField) structure
+            // as a single transformer. Intermediate hops emit a named token consumed by the next hop;
+            // the last hop emits the actual target field. Hops are joined by -->.
+            if (transformerChain.length > 1) {
+              const isLast = hopIndex === transformerChain.length - 1
+              if (isLast) {
+                const tgtType = getFieldType(m.tgt, true)
+                return `${transformerCall} -> (${tgtType}, ${m.tgt})`
+              } else {
+                const primarySrc = sourceFields[0] || 'input'
+                const safeSrcName = String(primarySrc).replace(/[^a-zA-Z0-9_]/g, '_')
+                const outToken = `$${safeSrcName}${hopIndex + 1}`
+                const srcType = getFieldType(primarySrc, false)
+                return `${transformerCall} -> (${srcType}, ${outToken})`
+              }
+            }
+            return transformerCall
           })
           .join(' --> ')
         const tgtType = getFieldType(m.tgt, true)
-        const expression = `${chainWithInputs} -> (${tgtType}, ${m.tgt})`
+        // Single transformer: append the output suffix here.
+        // Multiple transformers: each hop already contains its own -> (type, outField) suffix.
+        const expression = transformerChain.length > 1
+          ? chainWithInputs
+          : `${chainWithInputs} -> (${tgtType}, ${m.tgt})`
         return formatTransformationYamlItem(expression)
       })
 
