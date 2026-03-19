@@ -376,9 +376,9 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
 
   return {
     metadata: {
-      productSource: asString(metadata.product_source, fallback.source),
-      productType: asString(metadata.product_type, fallback.productType),
-      team: asString(fallback.teamName || metadata.team),
+      productSource: asString(metadata.productSource ?? metadata.product_source, fallback.source),
+      productType: asString(metadata.productType ?? metadata.product_type, fallback.productType),
+      team: asString(fallback.teamName || metadata.owner || metadata.team),
       environment,
       entityName: asString(metadata.entity),
       tags: '',

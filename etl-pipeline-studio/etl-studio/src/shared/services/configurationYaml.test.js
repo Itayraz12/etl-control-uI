@@ -16,10 +16,10 @@ describe('configuration YAML helpers', () => {
   it('hydrates mapping from quoted transformation entries', () => {
     const yaml = `metadata:
   entity: Product
-  product_source: ERP
-  product_type: Inventory
+  productSource: ERP
+  productType: Inventory
   environment: production
-  team: data-platform
+  owner: data-platform
 source:
   type: kafka
   format: CSV
@@ -97,7 +97,7 @@ sink:
     expect(state.mappings[0].extraInputs.map(input => input.field)).toEqual(['productName', 'price'])
   })
 
-  it('hydrates legacy tgt_expression mappings', () => {
+  it('hydrates legacy snake_case metadata keys', () => {
     const yaml = `metadata:
   entity: Product
   product_source: ERP
@@ -135,6 +135,10 @@ sink:
       tgtMetadata: {
         expression: 'trim(name)',
       },
+    })
+    expect(state.metadata).toMatchObject({
+      productSource: 'ERP',
+      productType: 'Inventory',
     })
   })
 

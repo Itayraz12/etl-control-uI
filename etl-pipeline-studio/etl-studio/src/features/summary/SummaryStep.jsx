@@ -271,10 +271,10 @@ ${state.source.format === 'CSV' ? `  delimited:
 metadata:
   id: etl-${Math.random().toString(36).slice(2, 9)}
   entity: ${state.metadata.entityName}
-  product_source: ${state.metadata.productSource}
-  product_type: ${state.metadata.productType}
+  productSource: ${state.metadata.productSource}
+  productType: ${state.metadata.productType}
   environment: ${state.metadata.environment}
-  team: ${state.metadata.team}
+  owner: ${state.metadata.team}
   data_stream_info:
     streaming_continuity: ${state.source.streamingContinuity || 'continuous'}
     avg_records_amount: ${state.source.recordsPerDay || 'millions'}

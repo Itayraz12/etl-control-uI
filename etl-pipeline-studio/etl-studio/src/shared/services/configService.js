@@ -413,10 +413,10 @@ export async function fetchDraftConfiguration({ productType, source, team, envir
 metadata:
   id: etl-mock-edit
   entity: Product
-  product_source: ${source || 'Mock Source'}
-  product_type: ${productType || 'Mock Type'}
+  productSource: ${source || 'Mock Source'}
+  productType: ${productType || 'Mock Type'}
   environment: ${environment || 'production'}
-  team: ${team || 'default'}
+  owner: ${team || 'default'}
   data_stream_info:
     streaming_continuity: continuous
     avg_records_amount: millions
