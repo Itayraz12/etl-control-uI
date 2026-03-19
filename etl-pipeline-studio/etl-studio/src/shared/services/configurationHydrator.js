@@ -1,5 +1,5 @@
 import { parse } from 'yaml'
-import { FIELD_TYPES } from '../types/index.js'
+import { FIELD_TYPES, normalizeSourceSchema } from '../types/index.js'
 import { MOCK_FILTER_OPERATORS } from './configService.js'
 
 const VALID_ENVS = new Set(['dev', 'staging', 'production'])
@@ -310,13 +310,13 @@ function buildMappings(mappings, transformations) {
 
   return mappings
     .map((mapping, index) => {
-      const targetField = asString(mapping?.tgt)
+      const targetField = asString(mapping?.outName || mapping?.tgt)
       const transformation = transformationByTarget.get(targetField)
       const inputFieldsFromTransformation = transformation?.inputs?.map(input => input.field).filter(Boolean) || []
       const mappedAdditionalInputs = Array.isArray(mapping?.additional_inputs)
         ? mapping.additional_inputs.map(asString).filter(Boolean)
         : []
-      const primarySource = asString(mapping?.src || inputFieldsFromTransformation[0])
+      const primarySource = asString(mapping?.inName || mapping?.src || inputFieldsFromTransformation[0])
       const extraInputFields = mappedAdditionalInputs.length > 0
         ? mappedAdditionalInputs
         : inputFieldsFromTransformation.slice(primarySource ? 1 : 0)
@@ -335,8 +335,8 @@ function buildMappings(mappings, transformations) {
           expression: asString(mapping?.src_expression),
         },
         tgtMetadata: {
-          sendToSaknay: true,
-          expression: asString(mapping?.tgt_expression),
+          sendToSaknay: mapping?.sendToSaknay ?? true,
+          expression: asString(mapping?.expression ?? mapping?.tgt_expression),
         },
         transformer: transformation?.transformer || 'none',
         transformerInputType: transformation?.inputs?.[0]?.type === 'unknown' ? 'any' : (transformation?.inputs?.[0]?.type || 'any'),
@@ -356,6 +356,8 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const parsed = parse(asString(yamlText, '')) || {}
   const metadata = parsed.metadata || {}
   const source = parsed.source || {}
+  const inputFields = normalizeSourceSchema(parsed.inputFields)
+  const schema = parsed.schema || {}
   const sink = parsed.sink || {}
   const environment = normalizeEnvironment(metadata.environment ?? fallback.environment)
   const sourceType = normalizeSourceType(source.type)
@@ -388,8 +390,10 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
     },
     upload: {
       done: true,
+      schema: inputFields,
+      schemaName: asString(schema.inputSchema ?? fallback.upload?.schemaName),
     },
-    mappings: buildMappings(parsed.mappings, parsed.transformations),
+    mappings: buildMappings(parsed.mapping || parsed.mappings, parsed.transformations),
     filters: buildFilterGroups(parsed.filters),
     sink: {
       sinkType,

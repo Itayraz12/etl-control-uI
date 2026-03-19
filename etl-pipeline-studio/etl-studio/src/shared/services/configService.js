@@ -18,6 +18,11 @@ import { MOCK_SCHEMA, normalizeSourceSchema, TARGET_FIELDS } from '../types/inde
 
 const API_BASE = 'http://localhost:8080/api'
 
+function asString(value, fallback = '') {
+  if (value === undefined || value === null) return fallback
+  return String(value)
+}
+
 // ── Helper ────────────────────────────────────────────────────────────────
 
 /**
@@ -154,14 +159,6 @@ export const MOCK_TRANSFORMERS = RAW_MOCK_TRANSFORMERS.map(t => ({
 }))
 
 /**
- * Mock filters — shape mirrors filters.json
- */
-export const MOCK_FILTERS = [
-  { id: 'f-1', name: 'Filter 1', rule: 'severity >= warning',      isInclude: true  },
-  { id: 'f-2', name: 'Filter 2', rule: 'source == legacy-system',  isInclude: false },
-]
-
-/**
  * Mock filter operators used in the FiltersStep rule builder.
  * Each operator can include additionalProperties with:
  *   - options: Array of predefined values (renders a dropdown)
@@ -235,6 +232,19 @@ function normalizeSchemaByExamplePayload(payload) {
   return normalizeSourceSchema(extractSchemaArray(payload))
 }
 
+export function extractSchemaNameFromExamplePayload(payload, fallback = '') {
+  if (!payload || Array.isArray(payload)) return asString(fallback)
+
+  const candidate = payload.name
+    ?? payload.schemaName
+    ?? payload.title
+    ?? payload.schema?.name
+    ?? payload.schema?.schemaName
+    ?? payload.schema?.title
+
+  return asString(candidate, fallback).trim() || asString(fallback)
+}
+
 export async function fetchEntitySchema(entityName, useMock = true) {
   if (useMock) {
     await new Promise(r => setTimeout(r, 150))
@@ -257,7 +267,7 @@ export async function fetchEntitySchema(entityName, useMock = true) {
   }
 
   const contentType = response.headers.get('content-type') || ''
-  let payload = null
+  let payload
 
   if (contentType.includes('application/json')) {
     payload = await response.json()
@@ -281,7 +291,11 @@ export async function fetchEntitySchema(entityName, useMock = true) {
 export async function fetchSchemaByExample({ example, fileName = '', contentType = 'text/plain' }, useMock = true) {
   if (useMock) {
     await new Promise(r => setTimeout(r, 150))
-    return normalizeSourceSchema(MOCK_SCHEMA)
+    return {
+      title: 'MockSourceSchema',
+      name: 'MockSourceSchema',
+      schema: normalizeSourceSchema(MOCK_SCHEMA),
+    }
   }
 
   const response = await fetch(`${API_BASE}/backend/schemaByExample`, {
@@ -304,7 +318,7 @@ export async function fetchSchemaByExample({ example, fileName = '', contentType
   }
 
   const responseType = response.headers.get('content-type') || ''
-  let payload = null
+  let payload
 
   if (responseType.includes('application/json')) {
     payload = await response.json()
@@ -322,7 +336,7 @@ export async function fetchSchemaByExample({ example, fileName = '', contentType
     throw new Error('Schema inference returned no fields')
   }
 
-  return schema
+  return payload
 }
 
 /**
@@ -411,11 +425,22 @@ source:
   type: kafka
   format: JSON
   topic: source_products_raw
-mappings:
-  - src: productName
-    tgt: name
-  - src: price
-    tgt: unitPrice
+inputFields:
+  - name: id
+    type: string
+  - name: productName
+    type: string
+  - name: price
+    type: number
+mapping:
+  - inName: productName
+    outName: name
+    sendToGP: true
+    sendToSaknay: true
+  - inName: price
+    outName: unitPrice
+    sendToGP: true
+    sendToSaknay: true
 transformations:
   - "Uppercase(string, productName) -> (string, name)"
 filters:

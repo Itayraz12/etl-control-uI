@@ -48,6 +48,7 @@ const initialState = {
   upload: {
     done: false,
     schema: [],
+    schemaName: '',
     fileName: '',
     fileType: '',
     fileSize: 0,

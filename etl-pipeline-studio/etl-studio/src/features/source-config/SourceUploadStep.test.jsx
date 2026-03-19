@@ -8,6 +8,7 @@ const fetchSchemaByExample = vi.fn()
 
 vi.mock('../../shared/services/configService.js', () => ({
   fetchSchemaByExample: (...args) => fetchSchemaByExample(...args),
+  extractSchemaNameFromExamplePayload: (payload, fallback = '') => String(payload?.name ?? payload?.schemaName ?? payload?.title ?? fallback ?? '').trim(),
 }))
 
 vi.mock('../../shared/store/mockModeContext.jsx', () => ({
@@ -40,6 +41,7 @@ describe('SourceUploadStep', () => {
 
   it('parses a JSON Schema response and persists the inferred source fields', async () => {
     fetchSchemaByExample.mockResolvedValue({
+      name: 'CustomerSchema',
       type: 'object',
       required: ['customerId'],
       properties: {
@@ -75,7 +77,7 @@ describe('SourceUploadStep', () => {
     expect(screen.getByText('amount')).toBeInTheDocument()
     expect(screen.getByText('customer.email')).toBeInTheDocument()
     expect(screen.queryByText('customer')).not.toBeInTheDocument()
-    expect(screen.getByText('Backend schema inference completed')).toBeInTheDocument()
+    expect(screen.getByText('Sample uploaded')).toBeInTheDocument()
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem('etl-studio-wizard-draft') || '{}')
@@ -83,6 +85,7 @@ describe('SourceUploadStep', () => {
         done: true,
         fileName: 'sample.json',
         fileType: 'application/json',
+        schemaName: 'CustomerSchema',
       })
       expect(persisted.upload.schema).toEqual(
         expect.arrayContaining([

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useWizard } from "../../shared/store/wizardStore";
+import { useWizard } from "../../shared/store/wizardStore.jsx";
 import { useConfig } from "../../shared/store/configContext.jsx";
 import { Card, CardTitle, ValidationItem, Btn, DeployProgressModal } from '../../shared/components/index.jsx'
 import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js'
@@ -276,9 +276,14 @@ source:
 ${state.source.jsonSplit ? `  split_key: ${state.source.jsonSplit}
 ` : ''}
 ${sourceFieldsYaml ? `${sourceFieldsYaml}
-` : ''}mappings:
+` : ''}${state.upload.schemaName ? `schema:
+  inputSchema: ${quoteYamlDoubleQuoted(String(state.upload.schemaName).trim())}
+
+` : ''}mapping:
 ${state.mappings.map(m => {
-  let mapping = `  - src: ${m.src}\n    tgt: ${m.tgt}`
+  let mapping = `  - inName: ${m.src}\n    outName: ${m.tgt}`
+  mapping += `\n    sendToGP: true`
+  mapping += `\n    sendToSaknay: ${m.tgtMetadata?.sendToSaknay ?? true}`
   const additionalInputs = Array.isArray(m.extraInputs) ? m.extraInputs.map(input => input?.field).filter(Boolean) : []
   if (additionalInputs.length > 0) {
     mapping += `\n    additional_inputs:\n${additionalInputs.map(input => `      - ${input}`).join('\n')}`
@@ -287,7 +292,7 @@ ${state.mappings.map(m => {
     mapping += `\n    src_expression: ${quoteYamlDoubleQuoted(String(m.srcMetadata.expression).trim())}`
   }
   if (m.tgtMetadata?.expression) {
-    mapping += `\n    tgt_expression: ${quoteYamlDoubleQuoted(String(m.tgtMetadata.expression).trim())}`
+    mapping += `\n    expression: ${quoteYamlDoubleQuoted(String(m.tgtMetadata.expression).trim())}`
   }
   return mapping
 }).join('\n')}

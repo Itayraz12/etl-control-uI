@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { Card, CardTitle, ValidationItem, Btn, Spinner, TypeBadge } from '../../shared/components/index.jsx'
 import { normalizeSourceSchema, resolveSourceSchema } from '../../shared/types/index.js'
-import { fetchSchemaByExample } from '../../shared/services/configService.js'
+import { extractSchemaNameFromExamplePayload, fetchSchemaByExample } from '../../shared/services/configService.js'
 import { useMockMode } from '../../shared/store/mockModeContext.jsx'
 
 export default function SourceUploadStep() {
@@ -39,14 +39,18 @@ export default function SourceUploadStep() {
         fileName: file.name,
         contentType: file.type || (file.name.toLowerCase().endsWith('.json') ? 'application/json' : 'text/plain'),
       }, useMock)
-      const schema = normalizeSourceSchema(schemaResponse)
+      const schemaPayload = schemaResponse?.schema ?? schemaResponse
+      const schema = normalizeSourceSchema(schemaPayload)
       if (schema.length === 0) {
         throw new Error('Schema inference returned no fields')
       }
 
+      const schemaName = extractSchemaNameFromExamplePayload(schemaResponse, file.name.replace(/\.[^.]+$/, ''))
+
       actions.updateUpload({
         done: true,
         schema,
+        schemaName,
         fileName: file.name,
         fileType: file.type || inferFileType(file.name),
         fileSize: file.size || 0,

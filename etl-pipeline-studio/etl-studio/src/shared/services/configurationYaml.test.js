@@ -13,7 +13,7 @@ describe('configuration YAML helpers', () => {
     expect(quoteYamlDoubleQuoted('A \\ B')).toBe('"A \\\\ B"')
   })
 
-  it('hydrates mappings from quotבישמעed transformation entries', () => {
+  it('hydrates mapping from quoted transformation entries', () => {
     const yaml = `metadata:
   entity: Product
   product_source: ERP
@@ -24,9 +24,21 @@ source:
   type: kafka
   format: JSON
   topic: source_products_raw
-mappings:
-  - src: id
-    tgt: name
+inputFields:
+  - name: id
+    type: string
+  - name: productName
+    type: string
+  - name: price
+    type: number
+schema:
+  inputSchema: CustomerSchema
+mapping:
+  - inName: id
+    outName: name
+    sendToGP: true
+    sendToSaknay: false
+    expression: trim(name)
     additional_inputs:
       - productName
       - price
@@ -48,6 +60,10 @@ sink:
     expect(state.mappings[0]).toMatchObject({
       src: 'id',
       tgt: 'name',
+      tgtMetadata: {
+        sendToSaknay: false,
+        expression: 'trim(name)',
+      },
       transformer: 'ConvertMulti',
       transformerProps: {
         logic: 'a:b:c?120|c:d:e?130',
@@ -55,7 +71,56 @@ sink:
         case_sensitive: 'true',
       },
     })
+    expect(state.upload).toMatchObject({
+      schemaName: 'CustomerSchema',
+    })
+    expect(state.upload.schema).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'id', type: 'string' }),
+        expect.objectContaining({ id: 'productName', type: 'string' }),
+        expect.objectContaining({ id: 'price', type: 'number' }),
+      ])
+    )
     expect(state.mappings[0].extraInputs.map(input => input.field)).toEqual(['productName', 'price'])
+  })
+
+  it('hydrates legacy tgt_expression mappings', () => {
+    const yaml = `metadata:
+  entity: Product
+  product_source: ERP
+  product_type: Inventory
+  environment: production
+  team: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+inputFields:
+  - name: id
+    type: string
+mapping:
+  - inName: id
+    outName: name
+    tgt_expression: trim(name)
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.mappings[0]).toMatchObject({
+      src: 'id',
+      tgt: 'name',
+      tgtMetadata: {
+        expression: 'trim(name)',
+      },
+    })
   })
 
   it('serializes inputFields with source field names and types', () => {
@@ -99,9 +164,9 @@ source:
   type: kafka
   format: JSON
   topic: source_products_raw
-mappings:
-  - src: id
-    tgt: name
+mapping:
+  - inName: id
+    outName: name
 filters:
   - "(id f-2 2)"
 sink:
