@@ -490,12 +490,17 @@ export async function saveDraftConfiguration({ productType, source, team, enviro
   url.searchParams.set('team', team ?? '')
   url.searchParams.set('environment', environment ?? '')
 
+  const cleanYaml = (yaml ?? '')
+    .split('\n')
+    .filter(line => line.trim() !== '')
+    .join('\n')
+
   const response = await fetch(url.toString(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: yaml ?? '',
+    body: cleanYaml,
   })
 
   if (!response.ok) {
