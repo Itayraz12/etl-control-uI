@@ -207,7 +207,17 @@ export default function SummaryStep() {
     }
 
     // Find source and target field types
-    const sourceFieldsYaml = formatInputFieldsYamlSection(sourceSchema)
+    const inputMappingYaml = formatInputFieldsYamlSection(sourceSchema)
+    const inputFormat = state.source.format === 'CSV' ? 'delimited' : 'JSON'
+    const columnDelimiter = state.source.csvDelimiter == null || state.source.csvDelimiter === ''
+      ? ','
+      : String(state.source.csvDelimiter)
+    const inputSectionYaml = `input:
+${state.source.format === 'CSV' ? `  delimited:
+    columnDelimiter: ${quoteYamlDoubleQuoted(columnDelimiter)}
+
+` : ''}${inputMappingYaml ? `${inputMappingYaml}
+` : ''}`
 
     const getFieldType = (fieldName, isTarget = false) => {
       const schema = isTarget ? targetSchema : sourceSchema
@@ -275,11 +285,13 @@ source:
   topic: ${state.source.kafkaTopic || 'N/A'}
 ${state.source.jsonSplit ? `  split_key: ${state.source.jsonSplit}
 ` : ''}
-${sourceFieldsYaml ? `${sourceFieldsYaml}
-` : ''}${state.upload.schemaName ? `schema:
+${inputSectionYaml}${state.upload.schemaName ? `schema:
   inputSchema: ${quoteYamlDoubleQuoted(String(state.upload.schemaName).trim())}
 
-` : ''}output:
+` : ''}general:
+  inputFormat: ${inputFormat}
+
+output:
   mapping:
 ${state.mappings.map(m => {
   let mapping = `    - inName: ${m.src}\n      outName: ${m.tgt}`

@@ -22,17 +22,22 @@ describe('configuration YAML helpers', () => {
   team: data-platform
 source:
   type: kafka
-  format: JSON
+  format: CSV
   topic: source_products_raw
-inputFields:
-  - name: id
-    type: string
-  - name: productName
-    type: string
-  - name: price
-    type: number
 schema:
   inputSchema: CustomerSchema
+general:
+  inputFormat: delimited
+input:
+  delimited:
+    columnDelimiter: ";"
+  mapping:
+    - name: id
+      type: string
+    - name: productName
+      type: string
+    - name: price
+      type: number
 output:
   mapping:
     - inName: id
@@ -43,8 +48,10 @@ output:
       additional_inputs:
         - productName
         - price
-transformations:
-  - "ConvertMulti(logic: a:b:c?120|c:d:e?130, defaultValue: 0, case_sensitive: true)(string, id), (string, productName), (number, price) -> (string, name)"
+  transformations:
+    - "ConvertMulti(logic: a:b:c?120|c:d:e?130, defaultValue: 0, case_sensitive: true)(string, id), (string, productName), (number, price) -> (string, name)"
+  filters:
+    - "(id f-2 2)"
 sink:
   type: kafka
   topic: etl_products_v3
@@ -72,6 +79,10 @@ sink:
         case_sensitive: 'true',
       },
     })
+    expect(state.source).toMatchObject({
+      format: 'CSV',
+      csvDelimiter: ';',
+    })
     expect(state.upload).toMatchObject({
       schemaName: 'CustomerSchema',
     })
@@ -82,6 +93,7 @@ sink:
         expect.objectContaining({ id: 'price', type: 'number' }),
       ])
     )
+    expect(state.filters).toHaveLength(1)
     expect(state.mappings[0].extraInputs.map(input => input.field)).toEqual(['productName', 'price'])
   })
 
@@ -96,9 +108,10 @@ source:
   type: kafka
   format: JSON
   topic: source_products_raw
-inputFields:
-  - name: id
-    type: string
+input:
+  mapping:
+    - name: id
+      type: string
 output:
   mapping:
     - inName: id
@@ -132,13 +145,13 @@ sink:
       { name: 'id', type: 'boolean' },
       { name: 'createdAt' },
       { name: '   ' },
-    ])).toBe(`inputFields:
-  - name: id
-    type: string
-  - name: price
-    type: number
-  - name: createdAt
-    type: unknown`)
+    ])).toBe(`  mapping:
+    - name: id
+      type: string
+    - name: price
+      type: number
+    - name: createdAt
+      type: unknown`)
   })
 
   it('serializes filter expressions as double-quoted YAML items', () => {

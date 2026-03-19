@@ -42,7 +42,7 @@ export function formatKeyValueYamlSection(sectionName = '', entries = [], indent
   return `${indent}${sectionName}:\n${normalizedEntries.map(entry => `${childIndent}${quoteYamlDoubleQuoted(entry.key)}: ${quoteYamlDoubleQuoted(entry.value)}`).join('\n')}`
 }
 
-export function formatInputFieldsYamlSection(fields = []) {
+export function formatInputFieldsYamlSection(fields = [], indent = '  ') {
   const normalizedFields = fields
     .map(field => ({
       name: field?.name == null ? '' : String(field.name).trim(),
@@ -53,5 +53,6 @@ export function formatInputFieldsYamlSection(fields = []) {
 
   if (normalizedFields.length === 0) return ''
 
-  return `inputFields:\n${normalizedFields.map(field => `  - name: ${field.name}\n    type: ${field.type}`).join('\n')}`
+  const childIndent = `${indent}  `
+  return `${indent}mapping:\n${normalizedFields.map(field => `${childIndent}- name: ${field.name}\n${childIndent}  type: ${field.type}`).join('\n')}`
 }

@@ -357,10 +357,15 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const metadata = parsed.metadata || {}
   const source = parsed.source || {}
   const output = parsed.output || {}
-  const inputFields = normalizeSourceSchema(parsed.inputFields)
+  const general = parsed.general || {}
+  const input = parsed.input || {}
+  const inputFields = normalizeSourceSchema(input.mapping || input.mappings || parsed.inputFields)
   const schema = parsed.schema || {}
   const sink = parsed.sink || {}
   const environment = normalizeEnvironment(metadata.environment ?? fallback.environment)
+  const sourceFormatRaw = asString(general.inputFormat || source.format, 'JSON').trim().toLowerCase()
+  const sourceFormat = sourceFormatRaw === 'delimited' ? 'CSV' : sourceFormatRaw.toUpperCase()
+  const csvDelimiter = asString(input.delimited?.columnDelimiter ?? source.csvDelimiter ?? ',', ',')
   const sourceType = normalizeSourceType(source.type)
   const sinkType = normalizeSinkType(sink.type)
   const sourceTopic = asString(source.topic)
@@ -384,7 +389,8 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       kafkaEnv: environment,
       kafkaTopic: sourceType === 'kafka' ? sourceTopic : '',
       rmqQueue: sourceType === 'rabbitmq' ? sourceTopic : '',
-      format: asString(source.format, 'JSON').toUpperCase(),
+      format: sourceFormat,
+      csvDelimiter,
       jsonSplit: asString(source.split_key),
       streamingContinuity: asString(metadata.data_stream_info?.streaming_continuity, 'continuous'),
       recordsPerDay: asString(metadata.data_stream_info?.avg_records_amount, 'millions'),
@@ -395,7 +401,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       schemaName: asString(schema.inputSchema ?? fallback.upload?.schemaName),
     },
     mappings: buildMappings(output.mapping || output.mappings || parsed.mapping || parsed.mappings, output.transformations || parsed.transformations),
-    filters: buildFilterGroups(parsed.filters),
+    filters: buildFilterGroups(output.filters || parsed.filters),
     sink: {
       sinkType,
       sinkKafkaTopic: sinkType === 'kafka' ? sinkTopic : '',

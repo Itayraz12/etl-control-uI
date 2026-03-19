@@ -425,13 +425,18 @@ source:
   type: kafka
   format: JSON
   topic: source_products_raw
-inputFields:
-  - name: id
-    type: string
-  - name: productName
-    type: string
-  - name: price
-    type: number
+general:
+  inputFormat: JSON
+
+input:
+  mapping:
+    - name: id
+      type: string
+    - name: productName
+      type: string
+    - name: price
+      type: number
+
 output:
   mapping:
     - inName: productName
@@ -442,10 +447,10 @@ output:
       outName: unitPrice
       sendToGP: true
       sendToSaknay: true
-transformations:
-  - "Uppercase(string, productName) -> (string, name)"
-filters:
-  - "(isActive equals true)"
+  transformations:
+    - "Uppercase(string, productName) -> (string, name)"
+  filters:
+    - "(isActive equals true)"
 
 sink:
   type: kafka
