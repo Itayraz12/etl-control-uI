@@ -30,6 +30,28 @@ function normalizeSinkType(value, fallback = 'kafka') {
   return VALID_SINK_TYPES.has(normalized) ? normalized : fallback
 }
 
+function extractBracketGroups(text = '') {
+  const groups = []
+  let depth = 0
+  let start = -1
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]
+    if (ch === '[') {
+      if (depth === 0) start = i + 1
+      depth += 1
+    } else if (ch === ']') {
+      depth -= 1
+      if (depth === 0 && start >= 0) {
+        groups.push(text.slice(start, i).trim())
+        start = -1
+      }
+    }
+  }
+
+  return groups
+}
+
 function extractParentheticalGroups(text = '') {
   const groups = []
   let depth = 0
@@ -147,6 +169,50 @@ function buildKeyValueEntries(value, idPrefix = 'entry') {
     .filter(Boolean)
 }
 
+/**
+ * Tries to parse the new-format transformer expression from the left side of "->".
+ * New format: TransformerName([field1,field2],[prop: val]) or chains with -->
+ * Returns null if the text does not match the new format.
+ */
+function tryParseNewFormatTransformer(left = '') {
+  // Get the last hop when a chain (-->) is present
+  const lastHop = left.includes('-->')
+    ? left.split('-->').map(s => s.trim()).filter(Boolean).at(-1) || ''
+    : left.trim()
+
+  const parenStart = lastHop.indexOf('(')
+  if (parenStart === -1) return null
+
+  const transformerName = lastHop.slice(0, parenStart).trim()
+  if (!transformerName) return null
+
+  // New format is identified by the argument list starting with '['
+  if (lastHop[parenStart + 1] !== '[') return null
+
+  // Extract the single parenthetical group: ([fields],[props])
+  const innerGroups = extractParentheticalGroups(lastHop.slice(parenStart))
+  if (innerGroups.length === 0) return null
+
+  const innerContent = innerGroups[0]
+  const bracketGroups = extractBracketGroups(innerContent)
+  if (bracketGroups.length === 0) return null
+
+  // First bracket group = comma-separated field names
+  const fields = bracketGroups[0].split(',').map(s => s.trim()).filter(Boolean)
+
+  // Second bracket group (optional) = transformer props
+  const transformerProps = bracketGroups.length > 1
+    ? parseTransformerProps(bracketGroups[1])
+    : {}
+
+  // Build inputs array; skip chained reference tokens (start with $)
+  const inputs = fields
+    .filter(f => !f.startsWith('$'))
+    .map(field => ({ type: 'unknown', field }))
+
+  return { transformer: transformerName, transformerProps, inputs }
+}
+
 function parseTransformationLine(line) {
   const raw = normalizeTransformationEntry(line).trim().replace(/^-\s*/, '')
   if (!raw) return null
@@ -160,6 +226,20 @@ function parseTransformationLine(line) {
   const output = parseTypeFieldTuple(outputTuple || '')
   if (!output) return null
 
+  // ── New format: TransformerName([field1,field2],[prop: val]) -> (type, output) ──
+  const newFormat = tryParseNewFormatTransformer(left)
+  if (newFormat) {
+    return {
+      transformer: newFormat.transformer || 'none',
+      transformerProps: newFormat.transformerProps,
+      inputs: newFormat.inputs,
+      outputType: output.type,
+      targetField: output.field,
+    }
+  }
+
+  // ── Legacy formats ──
+  // e.g. TransformerName[props](type, field), ... or TransformerName(props)(type, field), ...
   const { transformer, transformerProps: headTransformerProps } = parseTransformerHead(left)
   const firstParenIndex = left.indexOf('(')
   const groups = extractParentheticalGroups(firstParenIndex === -1 ? '' : left.slice(firstParenIndex))

@@ -228,22 +228,19 @@ ${state.source.format === 'CSV' ? `  delimited:
     const getHopInputsDescription = (sourceFields, hopIndex) => {
       if (!Array.isArray(sourceFields) || sourceFields.length === 0) return ''
 
-      // First transformer shows direct source tuple(s).
+      // First transformer: use source field names directly.
       if (hopIndex === 0) {
-        return sourceFields
-          .map(src => `(${getFieldType(src, false)}, ${src})`)
-          .join(', ')
+        return `[${sourceFields.join(',')}]`
       }
 
-      // Chained transformers reference prior output with unique tokens per source field:
+      // Chained transformers: reference prior hop output with unique tokens per source field:
       // $<sourceFieldName><hopIndex>, e.g. $stockQty1, $stockQty2
-      return sourceFields
+      return `[${sourceFields
         .map((src) => {
           const safeSourceName = String(src || 'input').replace(/[^a-zA-Z0-9_]/g, '_')
-          const refToken = `$${safeSourceName}${hopIndex}`
-          return `(${getFieldType(src, false)}, ${refToken})`
+          return `$${safeSourceName}${hopIndex}`
         })
-        .join(', ')
+        .join(',')}]`
     }
 
     // Get transformations with field details
@@ -254,8 +251,21 @@ ${state.source.format === 'CSV' ? `  delimited:
         const sourceFields = getMappingSources(m)
         const chainWithInputs = transformerChain
           .map((desc, hopIndex) => {
-            const hopInputs = getHopInputsDescription(sourceFields, hopIndex)
-            return `${desc}${hopInputs ? hopInputs : ''}`
+            const fieldsList = getHopInputsDescription(sourceFields, hopIndex)
+            // Split desc into transformer name and props bracket (e.g. "Name[props]" or "Name")
+            const bracketStart = desc.indexOf('[')
+            const transformerName = bracketStart !== -1 ? desc.slice(0, bracketStart) : desc
+            const propsStr = bracketStart !== -1 ? desc.slice(bracketStart) : '' // e.g. "[logic: a:b?1]"
+            const argParts = []
+            if (fieldsList) {
+              argParts.push(fieldsList)
+            } else if (propsStr) {
+              argParts.push('[]') // keep field slot empty when there are no fields but props exist
+            }
+            if (propsStr) argParts.push(propsStr)
+            return argParts.length > 0
+              ? `${transformerName}(${argParts.join(',')})`
+              : transformerName
           })
           .join(' --> ')
         const tgtType = getFieldType(m.tgt, true)

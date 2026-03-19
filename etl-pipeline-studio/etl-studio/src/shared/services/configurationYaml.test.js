@@ -5,10 +5,11 @@ import { hydrateWizardStateFromYaml } from './configurationHydrator.js'
 
 describe('configuration YAML helpers', () => {
   it('wraps transformation expressions in double quotes and escapes embedded quotes', () => {
-    const expression = 'ConvertMulti(logic: a:b:c?120|c:d:e?130, defaultValue: "0", case_sensitive: true)(string, id), (string, productName), (number, price) -> (string, name)'
+    // New format: TransformerName([fields],[props]) -> (type, output)
+    const expression = 'ConvertMulti([id,productName,price],[logic: a:b:c?120|c:d:e?130, defaultValue: "0", case_sensitive: true]) -> (string, name)'
 
     expect(formatTransformationYamlItem(expression)).toBe(
-      '  - "ConvertMulti(logic: a:b:c?120|c:d:e?130, defaultValue: \\\"0\\\", case_sensitive: true)(string, id), (string, productName), (number, price) -> (string, name)"'
+      '  - "ConvertMulti([id,productName,price],[logic: a:b:c?120|c:d:e?130, defaultValue: \\"0\\", case_sensitive: true]) -> (string, name)"'
     )
     expect(quoteYamlDoubleQuoted('A \\ B')).toBe('"A \\\\ B"')
   })
@@ -95,6 +96,73 @@ sink:
     )
     expect(state.filters).toHaveLength(1)
     expect(state.mappings[0].extraInputs.map(input => input.field)).toEqual(['productName', 'price'])
+  })
+
+  it('hydrates mapping from new-format transformation entries', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  type: kafka
+  format: CSV
+  topic: source_products_raw
+schema:
+  inputSchema: CustomerSchema
+general:
+  inputFormat: delimited
+input:
+  delimited:
+    columnDelimiter: ";"
+  mapping:
+    - name: id
+      type: string
+    - name: productName
+      type: string
+    - name: price
+      type: number
+output:
+  mapping:
+    - inName: id
+      outName: name
+      sendToGP: true
+      sendToSaknay: false
+      expression: trim(name)
+  transformations:
+    - "ConvertMulti([id,productName,price],[logic: a:b:c?120|c:d:e?130, defaultValue: 0, case_sensitive: true]) -> (string, name)"
+  filters:
+    - "(id f-2 2)"
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.mappings).toHaveLength(1)
+    expect(state.mappings[0]).toMatchObject({
+      src: 'id',
+      tgt: 'name',
+      tgtMetadata: {
+        sendToSaknay: false,
+        expression: 'trim(name)',
+      },
+      transformer: 'ConvertMulti',
+      transformerProps: {
+        logic: 'a:b:c?120|c:d:e?130',
+        defaultValue: '0',
+        case_sensitive: 'true',
+      },
+    })
+    expect(state.mappings[0].extraInputs.map(input => input.field)).toEqual(['productName', 'price'])
+    expect(state.filters).toHaveLength(1)
   })
 
   it('hydrates legacy snake_case metadata keys', () => {
