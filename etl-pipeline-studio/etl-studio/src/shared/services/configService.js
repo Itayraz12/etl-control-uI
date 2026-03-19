@@ -432,15 +432,16 @@ inputFields:
     type: string
   - name: price
     type: number
-mapping:
-  - inName: productName
-    outName: name
-    sendToGP: true
-    sendToSaknay: true
-  - inName: price
-    outName: unitPrice
-    sendToGP: true
-    sendToSaknay: true
+output:
+  mapping:
+    - inName: productName
+      outName: name
+      sendToGP: true
+      sendToSaknay: true
+    - inName: price
+      outName: unitPrice
+      sendToGP: true
+      sendToSaknay: true
 transformations:
   - "Uppercase(string, productName) -> (string, name)"
 filters:

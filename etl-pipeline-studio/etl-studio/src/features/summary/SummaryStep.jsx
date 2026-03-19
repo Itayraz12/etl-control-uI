@@ -279,20 +279,21 @@ ${sourceFieldsYaml ? `${sourceFieldsYaml}
 ` : ''}${state.upload.schemaName ? `schema:
   inputSchema: ${quoteYamlDoubleQuoted(String(state.upload.schemaName).trim())}
 
-` : ''}mapping:
+` : ''}output:
+  mapping:
 ${state.mappings.map(m => {
-  let mapping = `  - inName: ${m.src}\n    outName: ${m.tgt}`
-  mapping += `\n    sendToGP: true`
-  mapping += `\n    sendToSaknay: ${m.tgtMetadata?.sendToSaknay ?? true}`
+  let mapping = `    - inName: ${m.src}\n      outName: ${m.tgt}`
+  mapping += `\n      sendToGP: true`
+  mapping += `\n      sendToSaknay: ${m.tgtMetadata?.sendToSaknay ?? true}`
   const additionalInputs = Array.isArray(m.extraInputs) ? m.extraInputs.map(input => input?.field).filter(Boolean) : []
   if (additionalInputs.length > 0) {
-    mapping += `\n    additional_inputs:\n${additionalInputs.map(input => `      - ${input}`).join('\n')}`
+    mapping += `\n      additional_inputs:\n${additionalInputs.map(input => `        - ${input}`).join('\n')}`
   }
   if (m.srcMetadata?.expression) {
-    mapping += `\n    src_expression: ${quoteYamlDoubleQuoted(String(m.srcMetadata.expression).trim())}`
+    mapping += `\n      src_expression: ${quoteYamlDoubleQuoted(String(m.srcMetadata.expression).trim())}`
   }
   if (m.tgtMetadata?.expression) {
-    mapping += `\n    expression: ${quoteYamlDoubleQuoted(String(m.tgtMetadata.expression).trim())}`
+    mapping += `\n      expression: ${quoteYamlDoubleQuoted(String(m.tgtMetadata.expression).trim())}`
   }
   return mapping
 }).join('\n')}

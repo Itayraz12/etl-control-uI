@@ -33,15 +33,16 @@ inputFields:
     type: number
 schema:
   inputSchema: CustomerSchema
-mapping:
-  - inName: id
-    outName: name
-    sendToGP: true
-    sendToSaknay: false
-    expression: trim(name)
-    additional_inputs:
-      - productName
-      - price
+output:
+  mapping:
+    - inName: id
+      outName: name
+      sendToGP: true
+      sendToSaknay: false
+      expression: trim(name)
+      additional_inputs:
+        - productName
+        - price
 transformations:
   - "ConvertMulti(logic: a:b:c?120|c:d:e?130, defaultValue: 0, case_sensitive: true)(string, id), (string, productName), (number, price) -> (string, name)"
 sink:
@@ -98,10 +99,11 @@ source:
 inputFields:
   - name: id
     type: string
-mapping:
-  - inName: id
-    outName: name
-    tgt_expression: trim(name)
+output:
+  mapping:
+    - inName: id
+      outName: name
+      tgt_expression: trim(name)
 sink:
   type: kafka
   topic: etl_products_v3

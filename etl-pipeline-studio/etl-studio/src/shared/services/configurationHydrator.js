@@ -356,6 +356,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const parsed = parse(asString(yamlText, '')) || {}
   const metadata = parsed.metadata || {}
   const source = parsed.source || {}
+  const output = parsed.output || {}
   const inputFields = normalizeSourceSchema(parsed.inputFields)
   const schema = parsed.schema || {}
   const sink = parsed.sink || {}
@@ -393,7 +394,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       schema: inputFields,
       schemaName: asString(schema.inputSchema ?? fallback.upload?.schemaName),
     },
-    mappings: buildMappings(parsed.mapping || parsed.mappings, parsed.transformations),
+    mappings: buildMappings(output.mapping || output.mappings || parsed.mapping || parsed.mappings, output.transformations || parsed.transformations),
     filters: buildFilterGroups(parsed.filters),
     sink: {
       sinkType,
