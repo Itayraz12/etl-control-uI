@@ -1133,6 +1133,7 @@ export default function FieldMappingStep() {
     })
 
     applyCanvas(nextNodes, nextEdges)
+    alignNodes()
   }
 
   const bezier = (x1, y1, x2, y2) => {
