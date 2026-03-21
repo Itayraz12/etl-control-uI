@@ -15,6 +15,11 @@ The application combines a login flow, a management screen for existing deployme
 - Required transformer-property validation that highlights invalid transformer nodes in red
 - Target metadata editing for Saknay and expression values
 - Deployment edit flow that hydrates wizard state from backend YAML
+- Real-time deployment progress modal driven by Server-Sent Events (SSE) from the backend
+- Consistent deploy UX across both the Summary wizard tab and the Management screen:
+  - Progress modal with per-step status (pending → active → done / failed)
+  - Error popup on any failure (pre-flight or SSE), matching the Summary tab's style
+  - Full-screen success page with pipeline info and Grafana dashboard link after successful deployment
 
 ## Quick start
 
@@ -35,15 +40,6 @@ npm run dev
 Open `http://localhost:5173`.
 
 ## Verified scripts
-
-The following commands were run successfully in this workspace on March 14, 2026:
-
-```bash
-npm run test
-npm run build
-```
-
-Project scripts:
 
 ```bash
 npm run dev
@@ -122,7 +118,12 @@ src/
 │       └── SummaryStep.jsx
 └── shared/
     ├── components/
+    ├── hooks/
+    │   └── useDeploymentProgress.js
     ├── services/
+    │   ├── configService.js
+    │   ├── deploymentsService.js
+    │   └── ...
     ├── store/
     └── types/
 ```
@@ -171,18 +172,106 @@ While those requests are in flight, the shell shows a centered loading spinner i
 
 All live calls use `http://localhost:8080/api`.
 
-| Area | Method | Endpoint |
-|---|---|---|
-| Transformers | GET | `/config/transformers` |
-| Filter operators | GET | `/config/filters` |
-| Entities | GET | `/backbone/entities` |
-| Deployments list | GET | `/backend/deployments?teamName=<team>` |
-| Deploy deployment | POST | `/backend/deployments/{id}/deploy` |
-| Stop deployment | POST | `/backend/deployments/{id}/stop` |
-| Draft YAML | GET | `/backend/configuration/yaml?productType=...&source=...&team=...&environment=...` |
-| Save draft YAML | POST | `/backend/configuration/yaml?productType=...&source=...&team=...&environment=...` |
+| Area | Method | Endpoint | Notes |
+|---|---|---|---|
+| Transformers | GET | `/config/transformers` | |
+| Filter operators | GET | `/config/filters` | |
+| Entities | GET | `/backbone/entities` | |
+| Deployments list | GET | `/backend/deployments?teamName=<team>` | |
+| Deployment steps | GET | `/backend/deployments/steps` | Returns `[{ id, label }]`; falls back to built-in list on error |
+| Deploy from YAML | POST | `/backend/deployments/deploy` | `Content-Type: text/plain`; raw YAML body; returns `{ success, deploymentId }` |
+| Deployment progress | GET | `/backend/deployments/:deploymentId/progress` | SSE stream — see event contract below |
+| Stop deployment | POST | `/backend/deployments/:id/stop` | |
+| Draft YAML (read) | GET | `/backend/configuration/yaml?productType=&source=&team=&environment=` | |
+| Draft YAML (save) | POST | `/backend/configuration/yaml?productType=&source=&team=&environment=` | |
 
-When mock mode is enabled, these calls are replaced with in-memory sample data and simulated responses.
+> **Note:** Both the Summary wizard tab and the Management screen use the same
+> `POST /backend/deployments/deploy` endpoint.  The management deploy flow fetches
+> the saved YAML via the draft endpoint first, then posts it — exactly like the wizard.
+
+When mock mode is enabled, network calls are replaced with in-memory sample data and simulated responses.
+
+## Deployment flow
+
+Both the Summary tab and the Management screen share the same four-phase deploy flow:
+
+```
+1. GET  /backend/deployments/steps           → ordered step list for the modal
+2. Open DeployProgressModal (steps visible)
+3. POST /backend/deployments/deploy          → returns { success, deploymentId }
+4. GET  /backend/deployments/:id/progress    → SSE stream drives step progress
+```
+
+### SSE event contract
+
+The frontend listens for these **named** SSE events:
+
+| Event name | Data shape | Action |
+|---|---|---|
+| `step-start` | `{ stepIndex, stepId?, label? }` | Mark step active; optionally update label |
+| `step-complete` | `{ stepIndex, label? }` | Mark step done; activate next step |
+| `step-failed` | `{ stepIndex?, error? }` | Show error popup; close progress modal |
+| `deployment-complete` | _(none)_ | Transition to success page |
+| `deployment-failed` | `{ error? }` | Show error popup; close progress modal |
+
+**Fallback for unnamed events:** If the backend sends plain `data:` lines without an
+`event:` type header, the `onmessage` handler inspects the JSON payload for a `type`,
+`event`, or `eventType` field and dispatches to the same handler.
+
+**`onerror` guard:** `onerror` is silently ignored after any terminal event
+(`deployment-complete`, `step-failed`, `deployment-failed`) to prevent a false failure
+when the server closes the connection normally.
+
+### `deploymentId` resolution
+
+The response from `POST /backend/deployments/deploy` is checked for the run ID in this
+priority order, making the client resilient to different backend field-naming conventions:
+
+```
+result.deploymentId ?? result.id ?? result.runId ?? result.run_id ?? result.jobId ?? result.job_id
+```
+
+If none of those fields are present, the progress modal shows an error immediately.
+
+## Deploy UX — Summary tab vs Management screen
+
+Both screens have identical UX behaviour:
+
+| Phase | Behaviour |
+|---|---|
+| In progress | `DeployProgressModal` open; steps advance via SSE events |
+| Any failure | Progress modal closes; `ModalDialog` error popup opens (`tone="danger"`, "Got it" button) |
+| Success | Progress modal closes after 500 ms; full-screen **success overlay** appears |
+
+### Success overlay
+
+The success overlay (`🎉 Pipeline Deployed!`) displays:
+
+- **Info card** — Pipeline ID (generated client-side), Product Type, Product Source, Environment
+- **Grafana dashboard card** — generated link, copy-to-clipboard button, and direct link
+- **"View in Management"** button (Summary tab) / **"Back to Deployments"** button (Management screen)
+
+## `useDeploymentProgress` hook
+
+`src/shared/hooks/useDeploymentProgress.js` manages all deploy modal state.
+
+Key options:
+
+| Option | Default | Description |
+|---|---|---|
+| `autoAdvance` | `true` | Set `false` when SSE drives progress (both deploy flows) |
+| `stepDuration` | `2000` | Auto-advance interval in ms (unused when `autoAdvance: false`) |
+| `onDeploymentComplete` | — | Called when `isComplete` transitions to `true` via `completeStep` |
+| `onDeploymentError` | — | Called when `failStep` is invoked |
+
+External-control methods returned by the hook (used by SSE callbacks):
+
+- `startDeployment(steps)` — initialises the modal with the step list
+- `updateStep(index, updates)` — patches a single step's status/label/error
+- `setCurrentStepIndex(i)` — moves the active-step cursor
+- `setIsComplete(true)` — signals overall success
+- `setIsError(true)` / `setErrorMessage(msg)` — signals overall failure
+- `reset()` — closes and clears all state
 
 ## Backend data contracts
 
@@ -235,6 +324,22 @@ Notes:
 { "id": "eq", "name": "Equals", "rule": "=", "isInclude": true }
 ```
 
+### Deployment list item contract
+
+```json
+{
+  "id": "pipeline-uuid",
+  "productType": "Product Catalog",
+  "productSource": "Salesforce",
+  "environment": "production",
+  "deploymentStatus": "running",
+  "savedVersion": "2.1.0",
+  "deployedVersion": "2.0.5",
+  "lastStatusChange": 1700000000000,
+  "createdAt": 1699000000000
+}
+```
+
 ## Field mapping canvas behavior
 
 `FieldMappingStepCanvas.jsx` provides the richest interaction surface in the app.
@@ -279,8 +384,12 @@ Mock mode affects:
 - transformers
 - filter operators
 - entities
-- deployments
+- deployments list
 - draft YAML retrieval for edit flows
+
+> **Deploy flow is always live.** `fetchDeploymentSteps`, `deployFromYaml`, and
+> `subscribeToDeploymentProgress` always hit the real backend regardless of the
+> mock-mode toggle.
 
 ## Persistence behavior
 
@@ -320,6 +429,10 @@ Relevant files:
 
 | Symptom | Check |
 |---|---|
+| Deploy modal shows fallback step labels | Verify `GET /backend/deployments/steps` is reachable and returns `[{ id, label }]` |
+| Deploy modal stuck at step 0 with no progress | Check browser console for `[deploymentsService] SSE …` logs; verify the backend sends named SSE events (`event: step-start` etc.) or unnamed events with a `type` field in the JSON body |
+| Deploy error: "No deployment ID returned" | Verify `POST /backend/deployments/deploy` response includes a run ID under one of: `deploymentId`, `id`, `runId`, `run_id`, `jobId`, `job_id` |
+| Deploy error: "Failed to fetch pipeline configuration" | Verify `GET /backend/configuration/yaml` is reachable for the deployment's `productType`, `source`, `team`, and `environment` |
 | Transformer properties do not appear | Verify the backend returns `additionalProperties` (or legacy `additionalProperites`) |
 | Summary shows transformer `_id` values after refresh | Verify step `6` prefetches `/api/config/transformers` and wait for `loadingTransformers` to complete |
 | Metadata step has no entities | Check `/api/backbone/entities` or enable mock mode |

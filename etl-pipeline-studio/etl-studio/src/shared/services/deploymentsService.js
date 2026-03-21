@@ -1,6 +1,245 @@
 // Backend service for deployments data
 const API_BASE = 'http://localhost:8080/api'
 
+// ── Create + deploy from wizard YAML ─────────────────────────────────────
+
+/**
+ * POSTs the generated YAML to the backend to create and immediately start a
+ * new deployment.  Used by the Summary wizard step.
+ *
+ * Backend endpoint: POST /api/backend/deployments/deploy
+ * Content-Type: text/plain (raw YAML)
+ *
+ * Expected response: { success: true, deploymentId: "run-uuid-..." }
+ *
+ * @returns {{ success: boolean, deploymentId?: string, error?: string }}
+ */
+export async function deployFromYaml(yamlContent) {
+  try {
+    const url = `${API_BASE}/backend/deployments/deploy`
+    console.log('[deploymentsService] deployFromYaml →', url)
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: yamlContent,
+    })
+    if (!response.ok) throw new Error(`Deploy failed: ${response.status}`)
+    const data = await response.json()
+    console.log('[deploymentsService] deployFromYaml result:', data)
+    return data
+  } catch (err) {
+    console.error('[deploymentsService] deployFromYaml error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+// ── Deployments list ─────────────────────────────────────────────────────
+
+/**
+ * Fallback steps shown when the backend /steps endpoint is unavailable.
+ * The real list always comes from the backend; this is only a safety net.
+ */
+const FALLBACK_DEPLOYMENT_STEPS = [
+  { id: 'validate-config',   label: 'Validating pipeline configuration' },
+  { id: 'prepare-resources', label: 'Preparing Kafka topics'            },
+  { id: 'validate-mappings', label: 'Validating field mappings'         },
+  { id: 'prepare-flink',     label: 'Preparing Flink job'               },
+  { id: 'upload-artifacts',  label: 'Uploading pipeline artifacts'      },
+  { id: 'register-pipeline', label: 'Registering pipeline'              },
+  { id: 'deploy-job',        label: 'Deploying Flink job'               },
+  { id: 'health-checks',     label: 'Running health checks'             },
+]
+
+/**
+ * Fetches the ordered list of deployment steps to display in the progress modal.
+ * Always tries the backend first; falls back to FALLBACK_DEPLOYMENT_STEPS on
+ * any error or empty response.
+ * Expected response: Array<{ id: string, label: string }>
+ */
+export async function fetchDeploymentSteps(useMock = false) {
+  try {
+    const response = await fetch(`${API_BASE}/backend/deployments/steps`)
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = await response.json()
+    if (Array.isArray(data) && data.length > 0) {
+      console.log('[deploymentsService] fetchDeploymentSteps: received', data.length, 'steps from backend')
+      return data
+    }
+    console.warn('[deploymentsService] fetchDeploymentSteps: empty response, using fallback')
+    return FALLBACK_DEPLOYMENT_STEPS
+  } catch (err) {
+    console.warn('[deploymentsService] fetchDeploymentSteps fallback:', err.message)
+    if (useMock) await new Promise(r => setTimeout(r, 80))
+    return FALLBACK_DEPLOYMENT_STEPS
+  }
+}
+
+// ── Real-time deployment progress via Server-Sent Events ─────────────────
+
+/**
+ * Opens an SSE connection to receive real-time deployment progress events
+ * from the Java backend.
+ *
+ * Backend endpoint:
+ *   GET /api/backend/deployments/:deploymentId/progress
+ *   Content-Type: text/event-stream
+ *
+ * Expected SSE event types:
+ *   event: step-start       data: { stepIndex, stepId, label }
+ *   event: step-complete    data: { stepIndex }
+ *   event: step-failed      data: { stepIndex, error }
+ *   event: deployment-complete  data: { success: true }
+ *   event: deployment-failed    data: { error }
+ *
+ * @returns {Function} cleanup — call to close the connection early
+ */
+export function subscribeToDeploymentProgress(deploymentId, {
+  onStepStart       = () => {},
+  onStepComplete    = () => {},
+  onStepFailed      = () => {},
+  onComplete        = () => {},
+  onConnectionError = () => {},
+} = {}) {
+  if (!deploymentId || deploymentId === 'undefined') {
+    console.error('[deploymentsService] subscribeToDeploymentProgress called with invalid deploymentId:', deploymentId)
+    onConnectionError('No deployment ID returned by the server. Cannot track progress.')
+    return () => {}
+  }
+
+  const url = `${API_BASE}/backend/deployments/${encodeURIComponent(deploymentId)}/progress`
+  console.log('[deploymentsService] Opening SSE connection →', url)
+
+  const source = new EventSource(url)
+
+  // Track whether we already received a terminal event so that the browser's
+  // automatic reconnect attempt (which fires onerror) is not treated as a failure.
+  let terminalEventReceived = false
+
+  source.onopen = () => console.log('[deploymentsService] SSE open for deployment', deploymentId)
+
+  source.onerror = (e) => {
+    if (terminalEventReceived) {
+      // onerror fires when the server closes the connection after sending the
+      // terminal event — this is normal; ignore it.
+      console.log('[deploymentsService] SSE closed after terminal event (expected), ignoring onerror')
+      source.close()
+      return
+    }
+    console.error('[deploymentsService] SSE error for deployment', deploymentId, e)
+    source.close()
+    onConnectionError('Lost connection to server during deployment.')
+  }
+
+  // ── Helper: dispatch a parsed SSE payload to the right callback ──────────
+  function dispatch(type, data) {
+    console.log('[deploymentsService] SSE event:', type, data)
+    switch (type) {
+      case 'step-start':
+        onStepStart(data)
+        break
+      case 'step-complete':
+        onStepComplete(data)
+        break
+      case 'step-failed':
+        terminalEventReceived = true
+        source.close()
+        onStepFailed(data)
+        break
+      case 'deployment-complete':
+        terminalEventReceived = true
+        source.close()
+        onComplete()
+        break
+      case 'deployment-failed':
+        terminalEventReceived = true
+        source.close()
+        onStepFailed({ error: data?.error || 'Deployment failed.' })
+        break
+      default:
+        console.warn('[deploymentsService] SSE unknown event type:', type, data)
+    }
+  }
+
+  // ── Named event listeners (standard SSE with "event:" field) ─────────────
+  source.addEventListener('step-start', e => {
+    try { dispatch('step-start', JSON.parse(e.data)) }
+    catch (err) { console.error('[deploymentsService] SSE step-start parse error:', err, e.data) }
+  })
+  source.addEventListener('step-complete', e => {
+    try { dispatch('step-complete', JSON.parse(e.data)) }
+    catch (err) { console.error('[deploymentsService] SSE step-complete parse error:', err, e.data) }
+  })
+  source.addEventListener('step-failed', e => {
+    try { dispatch('step-failed', JSON.parse(e.data)) }
+    catch (err) { console.error('[deploymentsService] SSE step-failed parse error:', err, e.data) }
+  })
+  source.addEventListener('deployment-complete', e => {
+    try { dispatch('deployment-complete', e.data ? JSON.parse(e.data) : {}) }
+    catch { dispatch('deployment-complete', {}) }
+  })
+  source.addEventListener('deployment-failed', e => {
+    try { dispatch('deployment-failed', JSON.parse(e.data)) }
+    catch (err) { console.error('[deploymentsService] SSE deployment-failed parse error:', err, e.data) }
+  })
+
+  // ── Fallback: unnamed "message" events ────────────────────────────────────
+  // Some backends emit plain data events without an "event:" type line.
+  // In that case EventSource fires the generic "message" event.
+  // We inspect the JSON payload for a "type" or "event" discriminator field.
+  source.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data)
+      const type = d?.type || d?.event || d?.eventType
+      if (!type) {
+        console.warn('[deploymentsService] SSE unnamed message with no type field:', d)
+        return
+      }
+      dispatch(type, d)
+    } catch (err) {
+      console.error('[deploymentsService] SSE unnamed message parse error:', err, e.data)
+    }
+  }
+
+  return () => {
+    console.log('[deploymentsService] Closing SSE connection for deployment', deploymentId)
+    source.close()
+  }
+}
+
+// ── Mock SSE simulation (same callback contract, no network) ─────────────
+
+/**
+ * Simulates SSE progress events using timers in mock mode.
+ * Uses the identical callback signature as subscribeToDeploymentProgress.
+ * @returns {Function} cleanup — call to cancel the simulation
+ */
+export function simulateDeploymentProgress(steps, {
+  onStepStart       = () => {},
+  onStepComplete    = () => {},
+  onStepFailed      = () => {},
+  onComplete        = () => {},
+  onConnectionError = () => {},
+} = {}, stepDurationMs = 700) {
+  let cancelled = false
+  const timers = []
+
+  steps.forEach((step, i) => {
+    timers.push(setTimeout(() => {
+      if (!cancelled) onStepStart({ stepIndex: i, stepId: step.id, label: step.label })
+    }, i * stepDurationMs * 2))
+
+    timers.push(setTimeout(() => {
+      if (!cancelled) {
+        onStepComplete({ stepIndex: i })
+        if (i === steps.length - 1) onComplete()
+      }
+    }, i * stepDurationMs * 2 + stepDurationMs))
+  })
+
+  return () => { cancelled = true; timers.forEach(clearTimeout) }
+}
+
+// Mock data for deployments
 function buildMockDeployments() {
   return [
     {

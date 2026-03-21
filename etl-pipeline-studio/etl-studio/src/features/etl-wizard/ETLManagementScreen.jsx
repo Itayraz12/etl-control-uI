@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CircleArrowUp, Rocket, SquarePen, Trash2 } from 'lucide-react';
-import { Btn, Chip, DeployProgressModal, ModalDialog } from '../../shared/components/index.jsx';
+import { Btn, Card, Chip, DeployProgressModal, ModalDialog } from '../../shared/components/index.jsx';
 import * as deploymentsService from '../../shared/services/deploymentsService.js';
+import { fetchDeploymentSteps, subscribeToDeploymentProgress, deployFromYaml }
+  from '../../shared/services/deploymentsService.js';
 import { fetchDraftConfiguration } from '../../shared/services/configService.js';
 import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js';
 import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js';
@@ -83,6 +85,9 @@ export default function ETLManagementScreen() {
   const [screenError, setScreenError] = useState('');
   const [screenNotice, setScreenNotice] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [errorModal, setErrorModal] = useState(null);
+  const [successInfo, setSuccessInfo] = useState(null);   // success overlay data
+  const [successCopied, setSuccessCopied] = useState(false);
   const [activeDeployId, setActiveDeployId] = useState(null);
   const { actions, state } = useWizard();
   const { useMock, setUseMock } = useMockMode();
@@ -92,8 +97,8 @@ export default function ETLManagementScreen() {
   const teamName = user?.teamName || 'default';
 
   const deployment = useDeploymentProgress({
-    autoAdvance: true,
-    stepDuration: useMock ? 600 : 900,
+    autoAdvance: false,  // steps are driven by SSE events (or mock simulation)
+    stepDuration: 700,
     onDeploymentComplete: async () => {
       if (activeDeployId) {
         await refreshDeployments();
@@ -114,6 +119,20 @@ export default function ETLManagementScreen() {
       setScreenNotice(null);
     },
   });
+
+  // Holds the SSE / simulation cleanup function for the active deployment
+  const sseCleanupRef = useRef(null);
+
+  // Close the SSE stream when the user closes the modal early
+  useEffect(() => {
+    if (!deployment.isOpen && sseCleanupRef.current) {
+      sseCleanupRef.current();
+      sseCleanupRef.current = null;
+    }
+  }, [deployment.isOpen]);
+
+  // Always clean up on unmount
+  useEffect(() => () => { sseCleanupRef.current?.() }, []);
 
   async function refreshDeployments() {
     setLoading(true);
@@ -206,27 +225,154 @@ export default function ETLManagementScreen() {
   });
 
   const handleDeploy = async (deploymentRow) => {
-    if (actionLoading[deploymentRow.id]) return;
+    const id = deploymentRow.id;
+    if (actionLoading[id]) return;
 
     setScreenError('');
     setScreenNotice(null);
-    setActiveDeployId(deploymentRow.id);
-    setActionLoading(a => ({ ...a, [deploymentRow.id]: 'deploy' }));
+    setActiveDeployId(id);
+    setActionLoading(a => ({ ...a, [id]: 'deploy' }));
 
-    deployment.startDeployment([
-      { id: 'validate', label: `Validating ${deploymentRow.productSource}` },
-      { id: 'prepare', label: 'Preparing deployment artifacts' },
-      { id: 'release', label: 'Rolling out the pipeline' },
-      { id: 'health', label: 'Running health checks' },
-    ]);
+    console.log('[handleDeploy] ── start ──────────────────────');
+    console.log('[handleDeploy] pipeline id:', id);
 
-    console.log('[ETLManagementScreen] handleDeploy, useMock:', useMock);
-    const result = await deploymentsService.deployService(deploymentRow.id, useMock);
+    // Helper: close the progress modal and show the error popup,
+    // mirroring the exact behaviour of SummaryStep's handleFailure.
+    const showDeployError = (msg) => {
+      deployment.reset();                       // close progress modal
+      setErrorModal({ icon: '❌', title: 'Deployment Failed', message: msg });
+      setActionLoading(a => ({ ...a, [id]: null }));
+      setActiveDeployId(null);
+    };
 
-    if (result?.success === false) {
-      deployment.failStep(result.error || 'Unable to deploy the selected pipeline.');
+    // 1. Fetch the ordered step list from the backend (falls back to built-in list)
+    const steps = await fetchDeploymentSteps(false);
+    console.log('[handleDeploy] steps:', steps.length, steps.map(s => s.id));
+
+    // 2. Open the progress modal immediately — all steps shown as 'pending'
+    deployment.startDeployment(steps);
+
+    // 3. Fetch the saved YAML for this pipeline, then POST it to the same
+    //    deploy endpoint used by the Summary wizard tab.
+    const environment = deploymentRow.environment || 'production';
+    let yamlText;
+    try {
+      console.log('[handleDeploy] fetching YAML for', deploymentRow.productType, '/', deploymentRow.productSource);
+      yamlText = await fetchDraftConfiguration({
+        productType: deploymentRow.productType,
+        source: deploymentRow.productSource,
+        team: teamName,
+        environment,
+      }, false);
+    } catch (fetchErr) {
+      const msg = fetchErr?.message || 'Failed to fetch pipeline configuration.';
+      console.error('[handleDeploy] fetchDraftConfiguration failed:', msg);
+      showDeployError(msg);
       return;
     }
+
+    if (!yamlText) {
+      showDeployError('No saved YAML configuration found for this pipeline.');
+      return;
+    }
+
+    console.log('[handleDeploy] posting YAML to deploy endpoint...');
+    const result = await deployFromYaml(yamlText);
+    console.log('[handleDeploy] deployFromYaml result:', JSON.stringify(result));
+
+    if (!result || result.success === false) {
+      showDeployError(result?.error || 'Unable to start deployment.');
+      return;
+    }
+
+    // The backend may use any of these field names for the run ID.
+    const deploymentId =
+      result?.deploymentId ??
+      result?.id           ??
+      result?.runId        ??
+      result?.run_id       ??
+      result?.jobId        ??
+      result?.job_id;
+    console.log('[handleDeploy] full result:', JSON.stringify(result));
+    console.log('[handleDeploy] opening SSE stream for deploymentId:', deploymentId);
+
+    if (!deploymentId) {
+      showDeployError('Server did not return a deployment ID. Cannot track progress.');
+      return;
+    }
+
+    // ── Shared SSE failure handler ────────────────────────────────────────
+    const handleFailure = (stepIndex, error) => {
+      const msg = error || 'Deployment step failed.';
+      const idx = typeof stepIndex === 'number' ? stepIndex : 0;
+      console.warn('[handleDeploy] failure at step', idx, ':', msg);
+      showDeployError(msg);
+    };
+
+    // ── Progress callbacks driven by SSE events ───────────────────────────
+    const progressCallbacks = {
+      onStepStart: ({ stepIndex, label } = {}) => {
+        console.log('[handleDeploy] → step-start', stepIndex, label);
+        if (typeof stepIndex !== 'number') {
+          console.warn('[handleDeploy] step-start missing stepIndex:', { stepIndex, label });
+          return;
+        }
+        deployment.setCurrentStepIndex(stepIndex);
+        deployment.updateStep(stepIndex, {
+          status: 'active',
+          ...(label ? { label } : {}),
+        });
+      },
+      onStepComplete: ({ stepIndex, label } = {}) => {
+        console.log('[handleDeploy] → step-complete', stepIndex);
+        if (typeof stepIndex !== 'number') {
+          console.warn('[handleDeploy] step-complete missing stepIndex:', { stepIndex });
+          return;
+        }
+        deployment.updateStep(stepIndex, {
+          status: 'done',
+          ...(label ? { label } : {}),
+        });
+        if (stepIndex < steps.length - 1) {
+          deployment.setCurrentStepIndex(stepIndex + 1);
+          deployment.updateStep(stepIndex + 1, { status: 'active' });
+        }
+      },
+      onStepFailed: ({ stepIndex, error } = {}) => handleFailure(stepIndex, error),
+      onComplete: async () => {
+        console.log('[handleDeploy] → deployment-complete');
+        deployment.updateStep(steps.length - 1, { status: 'done' });
+        deployment.setIsComplete(true);
+        try { await refreshDeployments(); } catch (e) {
+          console.warn('[handleDeploy] refresh failed:', e);
+        }
+        setActionLoading(a => ({ ...a, [id]: null }));
+        setActiveDeployId(null);
+        // Auto-transition to success page after a short delay — mirrors SummaryStep
+        setTimeout(() => {
+          deployment.reset();
+          const pipelineId = `ETL-${Date.now().toString(36).toUpperCase()}`;
+          const grafanaLink = `https://grafana.etl-studio.io/d/pipeline-${pipelineId.toLowerCase()}` +
+            `?source=${encodeURIComponent(deploymentRow.productSource || '')}` +
+            `&type=${encodeURIComponent(deploymentRow.productType || '')}` +
+            `&refresh=30s`;
+          setSuccessInfo({
+            productType:   deploymentRow.productType,
+            productSource: deploymentRow.productSource,
+            environment,
+            pipelineId,
+            grafanaLink,
+          });
+        }, 500);
+      },
+      onConnectionError: (msg) => {
+        console.warn('[handleDeploy] → SSE connection error:', msg);
+        handleFailure(undefined, msg);
+      },
+    };
+
+    sseCleanupRef.current = subscribeToDeploymentProgress(deploymentId, progressCallbacks);
+    console.log('[handleDeploy] SSE stream opened');
   };
 
   const handleDelete = async (id) => {
@@ -695,6 +841,19 @@ export default function ETLManagementScreen() {
           onConfirm={confirmDialog?.onConfirm}
           onCancel={() => setConfirmDialog(null)}
         />
+
+        {/* Deployment error popup — mirrors SummaryStep behaviour */}
+        <ModalDialog
+          isOpen={Boolean(errorModal)}
+          title={errorModal?.title}
+          message={errorModal?.message}
+          icon={errorModal?.icon}
+          tone="danger"
+          cancelLabel="Got it"
+          onCancel={() => setErrorModal(null)}
+          disableBackdropClose={false}
+        />
+
         <DeployProgressModal
           isOpen={deployment.isOpen}
           steps={deployment.steps}
@@ -714,6 +873,114 @@ export default function ETLManagementScreen() {
           failureTitle="Deployment failed"
         />
       </div>
+
+      {/* ── Success overlay — mirrors SummaryStep's submitted page ─────────── */}
+      {successInfo && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          background: 'var(--bg)',
+          zIndex: 1500,
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          overflow: 'auto',
+          padding: '40px 20px',
+          animation: 'fadeIn .25s ease',
+        }}>
+          {/* Header */}
+          <div style={{ padding: '10px 20px 10px', textAlign: 'center', flexShrink: 0 }}>
+            <div style={{ fontSize: 64, marginBottom: 10 }}>🎉</div>
+            <h2 style={{
+              fontSize: 26, fontWeight: 800, marginBottom: 8,
+              background: 'linear-gradient(135deg,#4f6ef7,#7c3aed)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            }}>
+              Pipeline Deployed!
+            </h2>
+          </div>
+
+          {/* Subtitle */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 80, marginBottom: 20 }}>
+            <p style={{ color: 'var(--muted)', maxWidth: 440, textAlign: 'center' }}>
+              Your ETL pipeline has been deployed and is now running.
+            </p>
+          </div>
+
+          {/* Info card */}
+          <Card style={{ width: '100%', maxWidth: 460, textAlign: 'left', marginBottom: 20 }} p="18px 22px">
+            {[
+              ['Pipeline ID',     successInfo.pipelineId],
+              ['Product Type',    successInfo.productType],
+              ['Product Source',  successInfo.productSource],
+              ['Environment',     successInfo.environment],
+            ].map(([k, v]) => (
+              <div key={k} style={{
+                display: 'flex', justifyContent: 'space-between',
+                padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13,
+              }}>
+                <span style={{ color: 'var(--muted)' }}>{k}</span>
+                <span style={{ fontWeight: 600, fontFamily: 'var(--mono)', color: 'var(--accent)' }}>{v}</span>
+              </div>
+            ))}
+          </Card>
+
+          {/* Grafana dashboard card */}
+          <Card style={{ width: '100%', maxWidth: 460, textAlign: 'left', marginBottom: 24 }} p="18px 22px">
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--accent)' }}>
+              📊 Grafana Dashboard
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Dashboard Link</div>
+                <div style={{
+                  fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--text)',
+                  wordBreak: 'break-all', background: 'var(--surf2)',
+                  padding: '8px', borderRadius: '6px', border: '1px solid var(--border)',
+                }}>
+                  {successInfo.grafanaLink}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(successInfo.grafanaLink);
+                  setSuccessCopied(true);
+                  setTimeout(() => setSuccessCopied(false), 2000);
+                }}
+                style={{
+                  padding: '8px 12px',
+                  background: successCopied ? 'var(--success)' : 'var(--accent)',
+                  color: 'white', border: 'none', borderRadius: '6px',
+                  cursor: 'pointer', fontSize: '12px', fontWeight: 600,
+                  transition: 'all 0.2s', whiteSpace: 'nowrap',
+                }}
+              >
+                {successCopied ? '✓ Copied' : '📋 Copy'}
+              </button>
+            </div>
+            <a
+              href={successInfo.grafanaLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-block', padding: '8px 16px',
+                background: 'transparent', border: '1px solid var(--accent)',
+                color: 'var(--accent)', borderRadius: '6px',
+                textDecoration: 'none', fontSize: '12px', fontWeight: 600,
+                cursor: 'pointer', transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.color = 'white'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--accent)'; }}
+            >
+              🔗 Open in Grafana
+            </a>
+          </Card>
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Btn v="primary" onClick={() => { setSuccessInfo(null); setSuccessCopied(false); }}>
+              Back to Deployments
+            </Btn>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

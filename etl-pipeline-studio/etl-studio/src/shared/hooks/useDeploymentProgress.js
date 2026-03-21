@@ -189,6 +189,12 @@ export const useDeploymentProgress = (options = {}) => {
 
     // Utilities
     setIsOpen,
+
+    // External control — used by SSE / simulation callbacks
+    setIsComplete,
+    setCurrentStepIndex,
+    setIsError,
+    setErrorMessage,
   };
 };
 

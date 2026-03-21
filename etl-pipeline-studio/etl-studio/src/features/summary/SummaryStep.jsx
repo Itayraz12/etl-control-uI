@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useWizard } from "../../shared/store/wizardStore.jsx";
 import { useConfig } from "../../shared/store/configContext.jsx";
 import { Card, CardTitle, ValidationItem, Btn, DeployProgressModal } from '../../shared/components/index.jsx'
 import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js'
 import { SOURCE_TYPES, resolveSourceSchema, resolveTargetSchema } from '../../shared/types/index.js'
 import { MOCK_FILTER_OPERATORS, saveDraftConfiguration } from '../../shared/services/configService.js'
+import { fetchDeploymentSteps, deployFromYaml, subscribeToDeploymentProgress }
+  from '../../shared/services/deploymentsService.js'
 import { formatTransformationYamlItem, quoteYamlDoubleQuoted, formatKeyValueYamlSection } from '../../shared/services/configurationYaml.js'
 import { formatInputFieldsYamlSection } from '../../shared/services/configurationYaml.js'
 import { formatFilterYamlItem } from '../../shared/services/configurationYaml.js'
@@ -92,11 +94,10 @@ export default function SummaryStep() {
 
   // Deployment progress modal hook
   const deployment = useDeploymentProgress({
-    autoAdvance: true,
+    autoAdvance: false,   // driven by real SSE events from the backend
     stepDuration: 2000,
     onDeploymentComplete: () => {
       setDeployDisabled(false)
-      // Show the success screen after deployment completes
       setTimeout(() => {
         setSubmitted(true)
         deployment.reset()
@@ -112,6 +113,18 @@ export default function SummaryStep() {
       deployment.reset()
     },
   })
+
+  // Holds the SSE cleanup function — closed when the modal closes or component unmounts
+  const sseCleanupRef = useRef(null)
+
+  useEffect(() => {
+    if (!deployment.isOpen && sseCleanupRef.current) {
+      sseCleanupRef.current()
+      sseCleanupRef.current = null
+    }
+  }, [deployment.isOpen])
+
+  useEffect(() => () => { sseCleanupRef.current?.() }, [])
 
   const srcMeta = SOURCE_TYPES.find(t => t.id === state.source.sourceType)
   const requiredTargetFieldIds = targetSchema.filter(field => field.required).map(field => field.id)
@@ -366,7 +379,7 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
     { type: state.sink.sinkType ? 'ok' : 'err', text: `Sink configured: ${state.sink.sinkType || 'none'}` },
   ]
 
-  const handleCreatePipeline = () => {
+  const handleCreatePipeline = async () => {
     // Validate required fields
     if (unmappedRequired.length > 0) {
       setErrorModal({
@@ -407,21 +420,116 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
       return
     }
     
-    // All validations passed - start deployment
+    // All validations passed — deploy via real backend
     setDeployDisabled(true)
-    
-    const deploymentSteps = [
-      { id: 'validate-config', label: 'Validating pipeline configuration' },
-      { id: 'prepare-resources', label: 'Preparing Kafka topics' },
-      { id: 'validate-mappings', label: 'Validating field mappings' },
-      { id: 'prepare-flink', label: 'Preparing Flink job' },
-      { id: 'upload-artifacts', label: 'Uploading pipeline artifacts' },
-      { id: 'register-pipeline', label: 'Registering pipeline' },
-      { id: 'deploy-job', label: 'Deploying Flink job' },
-      { id: 'health-checks', label: 'Running health checks' },
-    ]
 
-    deployment.startDeployment(deploymentSteps)
+    console.log('[SummaryStep] handleCreatePipeline — start')
+
+    // 1. Fetch ordered step list from backend (falls back to built-in list)
+    const steps = await fetchDeploymentSteps(false)
+    console.log('[SummaryStep] steps:', steps.length, steps.map(s => s.id))
+
+    // 2. Open the progress modal immediately
+    deployment.startDeployment(steps)
+
+    // 3. POST the generated YAML to the backend to create + start the deployment
+    console.log('[SummaryStep] posting YAML to backend...')
+    const result = await deployFromYaml(yaml)
+    console.log('[SummaryStep] deployFromYaml result:', JSON.stringify(result))
+
+    if (!result || result.success === false) {
+      const msg = result?.error || 'Unable to start deployment.'
+      console.warn('[SummaryStep] deploy failed:', msg)
+      deployment.updateStep(0, { status: 'failed', error: msg })
+      deployment.setIsError(true)
+      deployment.setErrorMessage(msg)
+      setDeployDisabled(false)
+      return
+    }
+
+    // 4. Open SSE stream keyed by the run ID returned by the backend
+    // The backend may use any of these field names for the deployment run ID.
+    const deploymentId =
+      result?.deploymentId ??
+      result?.id           ??
+      result?.runId        ??
+      result?.run_id       ??
+      result?.jobId        ??
+      result?.job_id
+    console.log('[SummaryStep] deployFromYaml full result:', JSON.stringify(result))
+    console.log('[SummaryStep] opening SSE stream for deploymentId:', deploymentId)
+
+    if (!deploymentId) {
+      console.error('[SummaryStep] backend did not return a deploymentId — cannot track progress. Full result:', result)
+      deployment.updateStep(0, { status: 'failed', error: 'Server did not return a deployment ID.' })
+      deployment.setIsError(true)
+      deployment.setErrorMessage('Server did not return a deployment ID. Check the backend response.')
+      setDeployDisabled(false)
+      return
+    }
+
+    // ── Shared failure handler ────────────────────────────────────────────
+    const handleFailure = (stepIndex, error) => {
+      const msg = error || 'Deployment step failed.'
+      const idx = typeof stepIndex === 'number' ? stepIndex : 0
+      console.warn('[SummaryStep] failure at step', idx, ':', msg)
+      deployment.updateStep(idx, { status: 'failed', error: msg })
+      deployment.setIsError(true)
+      deployment.setErrorMessage(msg)
+      setDeployDisabled(false)
+      setErrorModal({ icon: '❌', title: 'Deployment Failed', message: msg })
+      deployment.reset()
+    }
+
+    // ── SSE progress callbacks ────────────────────────────────────────────
+    sseCleanupRef.current = subscribeToDeploymentProgress(deploymentId, {
+      onStepStart: ({ stepIndex, label } = {}) => {
+        console.log('[SummaryStep] → step-start', stepIndex, label)
+        if (typeof stepIndex !== 'number') {
+          console.warn('[SummaryStep] step-start missing stepIndex:', { stepIndex, label })
+          return
+        }
+        deployment.setCurrentStepIndex(stepIndex)
+        // If the backend provides a label in the SSE event, use it so the modal
+        // shows the real backend step name instead of the fallback/cached label.
+        deployment.updateStep(stepIndex, {
+          status: 'active',
+          ...(label ? { label } : {}),
+        })
+      },
+      onStepComplete: ({ stepIndex, label } = {}) => {
+        console.log('[SummaryStep] → step-complete', stepIndex)
+        if (typeof stepIndex !== 'number') {
+          console.warn('[SummaryStep] step-complete missing stepIndex:', { stepIndex })
+          return
+        }
+        deployment.updateStep(stepIndex, {
+          status: 'done',
+          ...(label ? { label } : {}),
+        })
+        if (stepIndex < steps.length - 1) {
+          deployment.setCurrentStepIndex(stepIndex + 1)
+          deployment.updateStep(stepIndex + 1, { status: 'active' })
+        }
+      },
+      onStepFailed: ({ stepIndex, error } = {}) => handleFailure(stepIndex, error),
+      onComplete: () => {
+        console.log('[SummaryStep] → deployment-complete')
+        deployment.updateStep(steps.length - 1, { status: 'done' })
+        deployment.setIsComplete(true)
+        // setIsComplete doesn't trigger onDeploymentComplete — call it directly
+        setDeployDisabled(false)
+        setTimeout(() => {
+          setSubmitted(true)
+          deployment.reset()
+        }, 500)
+      },
+      onConnectionError: (msg) => {
+        console.warn('[SummaryStep] → SSE connection error:', msg)
+        handleFailure(undefined, msg)
+      },
+    })
+    console.log('[SummaryStep] SSE stream opened')
   }
 
   const handleSaveDraft = async () => {
@@ -547,29 +655,7 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
           </Card>
 
           <div style={{ display: 'flex', gap: 12 }}>
-            <Btn v="secondary" onClick={() => actions.setNavigationMode('etl-management')}>View in Management</Btn>
-            <Btn v="primary" onClick={() => {
-              actions.setNavigationMode('etl-config');
-              actions.setStep(0);
-              actions.loadState({
-                currentStep: 0,
-                completedSteps: new Set(),
-              });
-              actions.updateMetadata({
-                team: state.metadata.team,
-                productSource: '',
-                productType: '',
-                environment: '',
-                entityName: '',
-                tags: '',
-              });
-              actions.updateSource({});
-              actions.setUploadDone(false);
-              actions.setMappings([]);
-              actions.setFilters([]);
-              actions.updateSink({});
-              setSubmitted(false);
-            }}>Create Another</Btn>
+            <Btn v="primary" onClick={() => actions.setNavigationMode('etl-management')}>View in Management</Btn>
           </div>
         </div>
       </div>
