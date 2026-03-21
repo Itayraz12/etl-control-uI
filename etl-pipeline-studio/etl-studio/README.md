@@ -195,7 +195,7 @@ When mock mode is enabled, these calls are replaced with in-memory sample data a
   "description": "Convert a date string to a canonical timestamp",
   "format": "string",
   "canonize": false,
-  "isMultipleInput": false,
+  "inputType": "SINGLE",
   "additionalProperties": {
     "_required": ["format", "zone"],
     "format": "dd/MM/yyyy",
@@ -204,6 +204,14 @@ When mock mode is enabled, these calls are replaced with in-memory sample data a
   }
 }
 ```
+
+`inputType` enum values:
+
+| Value | Meaning |
+|---|---|
+| `NONE` | Transformer takes **no** input field (rare — e.g. constant-value producers). Canvas shows a red **no input** badge. |
+| `SINGLE` | Transformer takes exactly **one** input field. Default for most transformers. |
+| `MULTI` | Transformer takes **multiple** input fields (e.g. Concatenate). Canvas shows a green **multi** badge and allows dropping extra source fields onto the node. |
 
 `configService.js` derives a `propsSchema` array from `additionalProperties` so the UI can render editable transformer fields without hardcoding each transformer type.
 

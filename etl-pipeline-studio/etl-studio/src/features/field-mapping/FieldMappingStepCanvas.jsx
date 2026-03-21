@@ -135,9 +135,11 @@ export default function FieldMappingStep() {
       const nodeIdMap = {}
 
       state.mappings.forEach((mapping) => {
-        // Create source node if not exists
-        const srcKey = mapping.srcNodeId || `src-${mapping.src}`
-        if (!nodeIdMap[srcKey]) {
+        const isHeadlessMapping = mapping.fromType === 'none' || (!mapping.src && !mapping.srcNodeId)
+
+        // Create source node if not exists (skip for headless NONE-input transformer mappings)
+        const srcKey = isHeadlessMapping ? null : (mapping.srcNodeId || `src-${mapping.src}`)
+        if (!isHeadlessMapping && srcKey && !nodeIdMap[srcKey]) {
           const srcNode = {
             id: srcKey,
             name: mapping.src,
@@ -230,9 +232,9 @@ export default function FieldMappingStep() {
             : [])
 
         loadedEdges.push({
-          from: nodeIdMap[srcKey],
+          from: isHeadlessMapping ? null : nodeIdMap[srcKey],
           to: nodeIdMap[tgtKey],
-          fromType: 'source',
+          fromType: isHeadlessMapping ? 'none' : 'source',
           toType: 'target',
           transformer: chainEntries[0]?.id || 'none',
           transformerProps: chainEntries[0]?.props || {},
@@ -283,7 +285,7 @@ export default function FieldMappingStep() {
   }
 
   const sanitizeExtraInputsForChain = (edge, chain = getEdgeTransformerChain(edge)) => {
-    const firstMultiIndex = chain.findIndex(item => findTransformer(transformers, item.id)?.isMultipleInput)
+    const firstMultiIndex = chain.findIndex(item => findTransformer(transformers, item.id)?.inputType === 'MULTI')
     if (firstMultiIndex < 0) {
       return { extraInputs: [], extraInputTargets: {} }
     }
@@ -294,7 +296,7 @@ export default function FieldMappingStep() {
       if (!nodeId || nodeId === edge.from || nextInputs.includes(nodeId)) return
       const preferredIndex = getEdgeExtraInputTransformerIndex(edge, nodeId)
       const preferredTransformer = chain[preferredIndex] ? findTransformer(transformers, chain[preferredIndex].id) : null
-      const targetIndex = preferredTransformer?.isMultipleInput ? preferredIndex : firstMultiIndex
+      const targetIndex = preferredTransformer?.inputType === 'MULTI' ? preferredIndex : firstMultiIndex
       nextInputs.push(nodeId)
       nextTargets[nodeId] = targetIndex
     })
@@ -478,7 +480,7 @@ export default function FieldMappingStep() {
               if (!targetEdge) return prev
               const hitChain = getEdgeTransformerChain(targetEdge)
               const tf = findTransformer(transformers, hitChain[hit.chainIndex]?.id)
-              if (!tf?.isMultipleInput) return prev
+              if (tf?.inputType !== 'MULTI') return prev
               if (targetEdge.from === nodeId) return prev
               const alreadyConnected = (targetEdge.extraInputs || []).includes(nodeId)
               if (!alreadyConnected) {
@@ -729,8 +731,9 @@ export default function FieldMappingStep() {
       return {
         src: srcNode?.fieldId || srcNode?.name || '',
         tgt: tgtNode?.fieldId || tgtNode?.name || '',
-        srcNodeId: srcNode?.id,
+        srcNodeId: srcNode?.id || null,
         tgtNodeId: tgtNode?.id,
+        fromType: edge.fromType || 'source',
         srcPos: { x: srcNode?.x || 0, y: srcNode?.y || 0 },
         tgtPos: { x: tgtNode?.x || 0, y: tgtNode?.y || 0 },
         srcMetadata: {
@@ -877,7 +880,7 @@ export default function FieldMappingStep() {
         const hasMultiInputTargets = (edge.extraInputs || []).some(extraId => {
           const targetIndex = getEdgeExtraInputTransformerIndex(edge, extraId)
           const tf = findTransformer(transformers, chain[targetIndex]?.id)
-          return !!tf?.isMultipleInput
+          return tf?.inputType === 'MULTI'
         })
 
         if (hasMultiInputTargets) {
@@ -1247,6 +1250,21 @@ export default function FieldMappingStep() {
     setTfPropValues({})
   }
 
+  // Opens the transformer modal filtered to NONE-input transformers only.
+  // Used when right-clicking an unconnected target node to attach a constant-value transformer.
+  const openNoneInputTransformerModal = (targetNode) => {
+    setAddTransformerModal({
+      edge: null,
+      mode: 'add',
+      chainIndex: 0,
+      headlessTargetNodeId: targetNode.id,
+      filterInputType: 'NONE',
+    })
+    setTransformerSearch('')
+    setSelectedTf(null)
+    setTfPropValues({})
+  }
+
   tfBoxesRef.current = []
 
   const stageWidth = nodes.length > 0 ? Math.max(1000, Math.max(...nodes.map(n => n.x + NODE_WIDTH)) + 200) : 1000
@@ -1584,12 +1602,17 @@ export default function FieldMappingStep() {
                 </marker>
               </defs>
               {edges.map((edge, idx) => {
-                const fromNode = nodes.find(n => n.id === edge.from)
+                const isHeadlessEdge = edge.fromType === 'none' || edge.from === null
+                const fromNode = isHeadlessEdge ? null : nodes.find(n => n.id === edge.from)
                 const toNode = nodes.find(n => n.id === edge.to)
-                if (!fromNode || !toNode) return null
+                // Regular edges need both nodes; headless edges only need the target node
+                if (!toNode) return null
+                if (!isHeadlessEdge && !fromNode) return null
 
-                const x1 = fromNode.x + NODE_WIDTH
-                const y1 = fromNode.y + NODE_HALF_HEIGHT
+                // For headless edges use a virtual source point 280px left of the target
+                // so the transformer box is centred between the virtual point and the target.
+                const x1 = isHeadlessEdge ? toNode.x - 280 : fromNode.x + NODE_WIDTH
+                const y1 = isHeadlessEdge ? toNode.y + NODE_HALF_HEIGHT : fromNode.y + NODE_HALF_HEIGHT
                 const x2 = toNode.x
                 const y2 = toNode.y + NODE_HALF_HEIGHT
                 const chain = getEdgeTransformerChain(edge)
@@ -1635,19 +1658,22 @@ export default function FieldMappingStep() {
                   <g key={idx} style={{ cursor: 'pointer' }}>
                     {chain.length > 0 ? (
                       <>
-                        {segmentPaths.map(segment => (
+                        {segmentPaths
+                          // For headless edges skip seg-0 (the virtual source → transformer-left stub)
+                          .filter((_, pIdx) => !isHeadlessEdge || pIdx !== 0)
+                          .map(segment => (
                           <g key={segment.key}>
                             <path d={segment.d} stroke="#4f6ef7" strokeWidth="7" fill="none" opacity="0.12" />
                             <path d={segment.d} stroke="#4f6ef7" strokeWidth="2.5" fill="none" markerEnd={segment.isLast ? 'url(#arr)' : undefined} style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
                           </g>
                         ))}
                       </>
-                    ) : (
+                    ) : !isHeadlessEdge ? (
                       <>
                         <path d={directPath} stroke="#4f6ef7" strokeWidth="7" fill="none" opacity="0.12" />
                         <path d={directPath} stroke="#4f6ef7" strokeWidth="2.5" fill="none" markerEnd="url(#arr)" style={{ strokeDasharray: '600', animation: 'eDraw 0.4s ease forwards' }} />
                       </>
-                    )}
+                    ) : null}
                     
                     {/* Transformer nodes (chained) */}
                     {chain.map((chainItem, chainIndex) => {
@@ -1660,7 +1686,9 @@ export default function FieldMappingStep() {
                         : null
                       const extraInputCount = (edge.extraInputs || []).filter(id => getEdgeExtraInputTransformerIndex(edge, id) === chainIndex).length
                       const inputCaption = chainIndex === 0
-                        ? `${fromNode.name}${extraInputCount > 0 ? ` +${extraInputCount}` : ''}`
+                        ? (isHeadlessEdge
+                            ? 'No source input'
+                            : `${fromNode.name}${extraInputCount > 0 ? ` +${extraInputCount}` : ''}`)
                         : `${previousTransformer?.name || 'Previous'} output`
 
                       const missingRequiredProps = getMissingRequiredProps(transformers, chainItem.id, chainItem.props || {})
@@ -1736,7 +1764,7 @@ export default function FieldMappingStep() {
                             onMouseOver={showInvalidTransformerHover}
                             onMouseLeave={handleTransformerMouseLeave}
                             onMouseOut={handleTransformerMouseOut}
-                           className={transformer?.isMultipleInput ? 'tf-multi-input-node' : ''}
+                           className={transformer?.inputType === 'MULTI' ? 'tf-multi-input-node' : transformer?.inputType === 'NONE' ? 'tf-no-input-node' : ''}
                            style={{
                             width: '100%',
                             height: '100%',
@@ -1831,7 +1859,7 @@ export default function FieldMappingStep() {
                               )
                             })()}
                             {/* Drop hint for multi-input transformers with no extra inputs yet */}
-                            {transformer?.isMultipleInput && !(edge.extraInputs || []).some(id => getEdgeExtraInputTransformerIndex(edge, id) === chainIndex) && (
+                            {transformer?.inputType === 'MULTI' && !(edge.extraInputs || []).some(id => getEdgeExtraInputTransformerIndex(edge, id) === chainIndex) && (
                               <div style={{
                                 fontSize: '8px', fontWeight: 600,
                                 color: 'rgba(79,110,247,0.6)',
@@ -1848,6 +1876,9 @@ export default function FieldMappingStep() {
 
                     {/* Insertion points for transformer chaining */}
                     {chain.length > 0 && Array.from({ length: chain.length + 1 }).map((_, slotIndex) => {
+                      // Hide the + before a NONE-input transformer — nothing may precede it
+                      if (findTransformer(transformers, chain[slotIndex]?.id)?.inputType === 'NONE') return null
+
                       const before = slotIndex === 0
                         ? { x: x1, y: y1 }
                         : { x: chainGeometry[slotIndex - 1].rightX, y: chainGeometry[slotIndex - 1].midY }
@@ -2426,9 +2457,12 @@ export default function FieldMappingStep() {
         if (!liveNode || liveNode.type !== 'target') return null
         const expressionValue = String(liveNode.expression || '')
         const trimmedExpression = expressionValue.trim()
+        const hasNoConnection = !edges.some(e => e.to === liveNode.id)
+        const hasNoneTransformers = transformers.some(t => t.inputType === 'NONE')
+        const showAddTransformerBtn = hasNoConnection && hasNoneTransformers
         const targetCtxMenuWidth = trimmedExpression
-          ? Math.min(320, Math.max(120, 120 + trimmedExpression.length * 8))
-          : 120
+          ? Math.min(320, Math.max(170, 120 + trimmedExpression.length * 8))
+          : showAddTransformerBtn ? 170 : 120
 
         return (
           <>
@@ -2512,6 +2546,25 @@ export default function FieldMappingStep() {
                     }}
                   />
                 </label>
+
+                {showAddTransformerBtn && (
+                  <button
+                    data-testid="ctxmenu-add-transformer"
+                    onClick={() => {
+                      setCtxMenu(null)
+                      setCurrentCtxId(null)
+                      openNoneInputTransformerModal(liveNode)
+                    }}
+                    style={{
+                      width: '100%', padding: '7px 10px',
+                      background: 'rgba(79,110,247,0.08)', border: '1px solid rgba(79,110,247,0.3)',
+                      borderRadius: '6px', color: 'var(--accent)', fontSize: '12px', fontWeight: 600,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                    }}
+                  >
+                    <span>⚙</span> Add Transformer
+                  </button>
+                )}
               </div>
             </div>
           </>
@@ -2526,6 +2579,9 @@ export default function FieldMappingStep() {
         const transformerIndex = Number.isInteger(plusCtxMenu.chainIndex) ? plusCtxMenu.chainIndex : 0
         const slotIndex = Number.isInteger(plusCtxMenu.slotIndex) ? plusCtxMenu.slotIndex : 0
         const hasTransformer = chain.length > 0
+        // A NONE-input transformer must always be first — nothing may be inserted before it.
+        const noneAtSlot = findTransformer(transformers, chain[slotIndex]?.id)?.inputType === 'NONE'
+        const currentTfIsNone = findTransformer(transformers, chain[transformerIndex]?.id)?.inputType === 'NONE'
 
         return (
           <div
@@ -2549,7 +2605,7 @@ export default function FieldMappingStep() {
               Connection
             </div>
 
-            {menuKind === 'slot' && (
+            {menuKind === 'slot' && !noneAtSlot && (
               <div
                 style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
                 onClick={() => {
@@ -2566,6 +2622,7 @@ export default function FieldMappingStep() {
 
             {menuKind === 'transformer' && (
               <>
+                {!currentTfIsNone && (
                 <div
                   style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
                   onClick={() => {
@@ -2578,6 +2635,7 @@ export default function FieldMappingStep() {
                   <span style={{ fontSize: '16px' }}>↤</span>
                   <span>Add Transformer Before</span>
                 </div>
+                )}
                 <div
                   style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px', transition: 'background 0.15s' }}
                   onClick={() => {
@@ -2781,16 +2839,23 @@ export default function FieldMappingStep() {
 
       {/* Add / Edit Transformer Modal */}
       {addTransformerModal && (() => {
-        const currentModalEdge = edges.find(e => e.from === addTransformerModal.edge?.from && e.to === addTransformerModal.edge?.to) || addTransformerModal.edge
+        const isHeadlessAdd = !!addTransformerModal.headlessTargetNodeId
+        const currentModalEdge = isHeadlessAdd
+          ? null
+          : (edges.find(e => e.from === addTransformerModal.edge?.from && e.to === addTransformerModal.edge?.to) || addTransformerModal.edge)
         const chain = getEdgeTransformerChain(currentModalEdge)
         const currentChainIndex = Math.max(0, Math.min(addTransformerModal.chainIndex || 0, chain.length))
         const existingChainEntry = chain[currentChainIndex] || null
         const hadAssignedTransformer = !!existingChainEntry
         const currentAssignedTransformer = findTransformer(transformers, existingChainEntry?.id)
-        const filtered = transformers.filter(t =>
-          t.name.toLowerCase().includes(transformerSearch.toLowerCase()) ||
-          t._id.toLowerCase().includes(transformerSearch.toLowerCase())
-        )
+        const filtered = transformers
+          .filter(t => addTransformerModal.filterInputType
+            ? t.inputType === addTransformerModal.filterInputType
+            : t.inputType !== 'NONE')  // NONE-input transformers are only shown in the headless-add modal
+          .filter(t =>
+            t.name.toLowerCase().includes(transformerSearch.toLowerCase()) ||
+            t._id.toLowerCase().includes(transformerSearch.toLowerCase())
+          )
         const schema = selectedTf ? getPropsSchema(transformers, selectedTf._id) : []
         const hasProps = schema.length > 0
 
@@ -2805,6 +2870,25 @@ export default function FieldMappingStep() {
         const handleApply = () => {
           if (!selectedTf) return
 
+          // ── Headless edge: NONE-input transformer attached directly to a target node ──
+          if (isHeadlessAdd) {
+            applyEdges(prev => [...prev, {
+              from: null,
+              to: addTransformerModal.headlessTargetNodeId,
+              fromType: 'none',
+              toType: 'target',
+              transformer: selectedTf._id,
+              transformerProps: { ...tfPropValues },
+              additionalTransformers: [],
+              additionalTransformerProps: [],
+              extraInputs: [],
+              extraInputTargets: {},
+            }])
+            alignNodes()
+            resetTransformerModal()
+            return
+          }
+
           let shouldAutoAlign = false
 
           applyEdges(prev => prev.map(e => {
@@ -2814,6 +2898,9 @@ export default function FieldMappingStep() {
             const payload = { id: selectedTf._id, props: { ...tfPropValues } }
 
             if (addTransformerModal.mode === 'insert') {
+              // Safety guard: never insert before a NONE-input transformer
+              const tfAtInsertPos = findTransformer(transformers, edgeChain[currentChainIndex]?.id)
+              if (tfAtInsertPos?.inputType === 'NONE') return e
               shouldAutoAlign = true
               nextChain.splice(currentChainIndex, 0, payload)
             } else if (existingChainEntry) {
@@ -2912,7 +2999,8 @@ export default function FieldMappingStep() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                               {t.name}
-                              {t.isMultipleInput && <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)', color: 'var(--success)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>multi</span>}
+                              {t.inputType === 'MULTI' && <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)', color: 'var(--success)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>multi</span>}
+                              {t.inputType === 'NONE' && <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--danger)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>no input</span>}
                             </div>
                             <div style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                               {propCount > 0 ? `${propCount} propert${propCount === 1 ? 'y' : 'ies'}` : 'no properties'}

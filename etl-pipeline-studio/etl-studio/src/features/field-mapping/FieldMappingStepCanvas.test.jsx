@@ -11,7 +11,7 @@ vi.mock('../../shared/store/configContext.jsx', () => ({
         _id: 'tf-1',
         name: 'Concatenate',
         icon: '∥',
-        isMultipleInput: true,
+        inputType: 'MULTI',
         propsSchema: [
           { key: 'separator', label: 'Separator', type: 'text', default: '-', required: false, description: '' },
         ],
@@ -20,25 +20,34 @@ vi.mock('../../shared/store/configContext.jsx', () => ({
         _id: 'tf-2',
         name: 'Uppercase',
         icon: 'Aa',
-        isMultipleInput: false,
+        inputType: 'SINGLE',
         propsSchema: [],
       },
       {
         _id: 'tf-3',
         name: 'MergeFields',
         icon: '⇉',
-        isMultipleInput: true,
+        inputType: 'MULTI',
         propsSchema: [],
       },
       {
         _id: 'tf-4',
         name: 'ConvertMulti',
         icon: '⚙',
-        isMultipleInput: false,
+        inputType: 'SINGLE',
         propsSchema: [
           { key: 'logic', label: 'Logic', type: 'text', default: '', required: true, description: 'e.g. a:b:c' },
         ],
       },
+      {
+        _id: 'tf-4',
+        name: 'ConvertMulti',
+        icon: '⚙',
+        inputType: 'NONE',
+        propsSchema: [
+          { key: 'InputValue', label: 'InputValue', type: 'text', default: '', required: true, description: 'e.g. good' },
+        ],
+      }
     ],
   }),
 }))

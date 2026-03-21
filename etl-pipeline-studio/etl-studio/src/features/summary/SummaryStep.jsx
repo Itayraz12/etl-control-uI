@@ -325,7 +325,9 @@ ${inputSectionYaml}${state.upload.schemaName ? `schema:
 output:
   mapping:
 ${state.mappings.map(m => {
-  let mapping = `    - inName: ${m.src}\n      outName: ${m.tgt}`
+  let mapping = m.src
+    ? `    - inName: ${m.src}\n      outName: ${m.tgt}`
+    : `    - outName: ${m.tgt}`
   mapping += `\n      sendToGP: true`
   mapping += `\n      sendToSaknay: ${m.tgtMetadata?.sendToSaknay ?? true}`
   const additionalInputs = Array.isArray(m.extraInputs) ? m.extraInputs.map(input => input?.field).filter(Boolean) : []
