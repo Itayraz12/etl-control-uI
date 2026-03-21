@@ -1,7 +1,63 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { Card, CardTitle, FormRow, FormGroup, CfgPanel, Btn } from '../../shared/components/index.jsx'
 import { ENVIRONMENTS } from '../../shared/types/index.js'
+
+/** Styled info tooltip — matches the system's dark design, no OS tooltip. */
+function Hint({ text }) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <span
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={() => setVisible(false)}
+    >
+      {/* Badge */}
+      <span style={{
+        width: 15, height: 15, borderRadius: '50%',
+        background: visible ? 'var(--accent)' : 'var(--surf3)',
+        border: `1px solid ${visible ? 'var(--accent)' : 'var(--border)'}`,
+        color: visible ? '#fff' : 'var(--muted)',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 9, fontWeight: 900, lineHeight: 1,
+        cursor: 'help', userSelect: 'none',
+        transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+      }}>i</span>
+
+      {/* Tooltip bubble */}
+      {visible && (
+        <span style={{
+          position: 'absolute',
+          bottom: 'calc(100% + 7px)',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'var(--surf3)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: '7px 11px',
+          fontSize: 11,
+          color: 'var(--text)',
+          lineHeight: 1.55,
+          width: 'max-content',
+          maxWidth: 260,
+          whiteSpace: 'normal',
+          boxShadow: '0 6px 20px rgba(0,0,0,0.32)',
+          zIndex: 300,
+          pointerEvents: 'none',
+        }}>
+          {/* Arrow */}
+          <span style={{
+            position: 'absolute', bottom: -5, left: '50%',
+            transform: 'translateX(-50%) rotate(45deg)',
+            width: 8, height: 8, background: 'var(--surf3)',
+            border: '1px solid var(--border)', borderTop: 'none', borderLeft: 'none',
+          }} />
+          {text}
+        </span>
+      )}
+    </span>
+  )
+}
 
 const SINK_TYPES = [
   { id: 'kafka', icon: '☕', name: 'Kafka',     sub: 'Streaming sink' },
@@ -77,7 +133,7 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets }) {
       <FormGroup label={
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           Output Topic
-          <span title="! Overrides the auto-generated topic name" style={{ cursor: 'help', color: 'var(--muted)', fontSize: 12, fontWeight: 700 }}>ℹ️</span>
+          <Hint text="Overrides the auto-generated topic name" />
         </span>
       } hint={hasCatalogOption ? 'Optional - system will auto-generate if empty' : 'Optional'}>
         <input value={sink.sinkKafkaTopic || ''} onChange={e => u('sinkKafkaTopic', e.target.value)} placeholder={hasCatalogOption ? 'Leave empty for auto-generation' : 'products.output'} />
@@ -152,7 +208,7 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets }) {
         <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
             <span>🦆 SAKNAY</span>
-            <span title="Enabled automatically because at least one target field is marked to send to Saknay in Field Mapping." style={{ cursor: 'help', color: 'var(--muted)', fontSize: 12, fontWeight: 700 }}>ℹ️</span>
+            <Hint text="Enabled automatically because at least one target field is marked to send to Saknay in Field Mapping." />
           </div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>
             Enabled automatically from Field Mapping target settings.
@@ -175,10 +231,10 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets }) {
                 onChange={e => u('shadow', e.target.checked)}
                 style={{ width: '16px', height: '16px', cursor: 'pointer' }}
               />
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                🌬️ SHADOW
-                <span title="Mirrors output data to a shadow topic for audit and validation purposes" style={{ cursor: 'help', color: 'var(--muted)', fontSize: 12, fontWeight: 700 }}>ℹ️</span>
-              </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  🌬️ SHADOW
+                  <Hint text="Mirrors output data to a shadow topic for audit and validation purposes" />
+                </span>
             </label>
             {sink.shadow && (
               <input
@@ -209,7 +265,7 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets }) {
             />
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               📊 ASG
-              <span title="Asgard data governance system for compliance and metadata management" style={{ cursor: 'help', color: 'var(--muted)', fontSize: 12, fontWeight: 700 }}>ℹ️</span>
+              <Hint text="Asgard data governance system for compliance and metadata management" />
             </span>
           </label>
         </div>
