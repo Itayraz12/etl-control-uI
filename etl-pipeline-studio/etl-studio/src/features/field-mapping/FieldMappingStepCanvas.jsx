@@ -2946,7 +2946,7 @@ export default function FieldMappingStep() {
                 maxHeight: '600px',
                 display: 'flex',
                 flexDirection: 'column',
-                animation: 'scaleIn 0.22s ease',
+                animation: 'modalIn 0.22s ease backwards',
                 transition: 'width 0.22s ease',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -3134,7 +3134,7 @@ export default function FieldMappingStep() {
               boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
               zIndex: 1100,
               overflow: 'hidden',
-              animation: 'scaleIn 0.22s ease',
+              animation: 'modalIn 0.22s ease backwards',
             }}
             onClick={(e) => e.stopPropagation()}
           >
