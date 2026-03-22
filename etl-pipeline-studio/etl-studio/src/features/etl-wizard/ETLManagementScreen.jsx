@@ -88,6 +88,7 @@ export default function ETLManagementScreen() {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [errorModal, setErrorModal] = useState(null);
   const [successInfo, setSuccessInfo] = useState(null);   // success overlay data
+  const [savedVersionHover, setSavedVersionHover] = useState(null); // dep.id with tooltip open
   const [successCopied, setSuccessCopied] = useState(false);
   const [activeDeployId, setActiveDeployId] = useState(null);
   const { actions, state } = useWizard();
@@ -775,29 +776,61 @@ export default function ETLManagementScreen() {
                       </td>
                       <td style={{ padding: 8, fontFamily: 'var(--mono)', fontSize: 13 }}>
                         {dep.savedVersion ? (
-                          <button
-                            onClick={() => handleViewSavedVersion(dep)}
-                            disabled={!!actionLoading[`${dep.id}_savedVersion`]}
-                            title={actionLoading[`${dep.id}_savedVersion`] ? 'Loading…' : 'Open saved version in new window'}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              padding: 0,
-                              cursor: actionLoading[`${dep.id}_savedVersion`] ? 'wait' : 'pointer',
-                              fontFamily: 'var(--mono)',
-                              fontSize: 13,
-                              color: 'var(--accent)',
-                              textDecoration: 'underline',
-                              textDecorationStyle: 'dashed',
-                              textUnderlineOffset: '3px',
-                              opacity: actionLoading[`${dep.id}_savedVersion`] ? 0.5 : 1,
-                              transition: 'opacity 0.15s',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.opacity = '0.75'; }}
-                            onMouseLeave={e => { e.currentTarget.style.opacity = actionLoading[`${dep.id}_savedVersion`] ? '0.5' : '1'; }}
-                          >
-                            {actionLoading[`${dep.id}_savedVersion`] ? '…' : dep.savedVersion}
-                          </button>
+                          <span style={{ position: 'relative', display: 'inline-block' }}>
+                            <button
+                              onClick={() => handleViewSavedVersion(dep)}
+                              disabled={!!actionLoading[`${dep.id}_savedVersion`]}
+                              onMouseEnter={e => { e.currentTarget.style.opacity = '0.75'; setSavedVersionHover(dep.id); }}
+                              onMouseLeave={e => { e.currentTarget.style.opacity = actionLoading[`${dep.id}_savedVersion`] ? '0.5' : '1'; setSavedVersionHover(null); }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                cursor: actionLoading[`${dep.id}_savedVersion`] ? 'wait' : 'pointer',
+                                fontFamily: 'var(--mono)',
+                                fontSize: 13,
+                                color: 'var(--accent)',
+                                textDecoration: 'underline',
+                                textDecorationStyle: 'dashed',
+                                textUnderlineOffset: '3px',
+                                opacity: actionLoading[`${dep.id}_savedVersion`] ? 0.5 : 1,
+                                transition: 'opacity 0.15s',
+                              }}
+                            >
+                              {actionLoading[`${dep.id}_savedVersion`] ? '…' : dep.savedVersion}
+                            </button>
+                            {savedVersionHover === dep.id && (
+                              <div style={{
+                                position: 'absolute',
+                                top: 'calc(100% + 7px)',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                background: 'var(--surf)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 7,
+                                padding: '6px 11px',
+                                fontSize: 12,
+                                color: 'var(--text)',
+                                whiteSpace: 'nowrap',
+                                zIndex: 200,
+                                boxShadow: '0 6px 20px rgba(0,0,0,0.22)',
+                                pointerEvents: 'none',
+                              }}>
+                                {/* Arrow pointing up */}
+                                <div style={{
+                                  position: 'absolute', top: -5, left: '50%',
+                                  transform: 'translateX(-50%) rotate(45deg)',
+                                  width: 8, height: 8,
+                                  background: 'var(--surf)',
+                                  borderTop: '1px solid var(--border)',
+                                  borderLeft: '1px solid var(--border)',
+                                }} />
+                                {actionLoading[`${dep.id}_savedVersion`]
+                                  ? '⏳ Loading configuration…'
+                                  : '👁 Open saved version in new window'}
+                              </div>
+                            )}
+                          </span>
                         ) : (
                           <span style={{ color: 'var(--muted)' }}>—</span>
                         )}
