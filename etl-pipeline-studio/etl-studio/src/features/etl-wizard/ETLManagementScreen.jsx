@@ -89,6 +89,7 @@ export default function ETLManagementScreen() {
   const [errorModal, setErrorModal] = useState(null);
   const [successInfo, setSuccessInfo] = useState(null);   // success overlay data
   const [savedVersionHover, setSavedVersionHover] = useState(null); // dep.id with tooltip open
+  const [deployedVersionHover, setDeployedVersionHover] = useState(null); // dep.id with tooltip open
   const [successCopied, setSuccessCopied] = useState(false);
   const [activeDeployId, setActiveDeployId] = useState(null);
   const { actions, state } = useWizard();
@@ -508,6 +509,63 @@ export default function ETLManagementScreen() {
     }
   };
 
+  /**
+   * Fetches the deployed YAML from /api/backend/configuration/yaml and
+   * opens a new read-only window with all configuration tabs pre-filled.
+   */
+  const handleViewDeployedVersion = async (dep) => {
+    setActionLoading(a => ({ ...a, [`${dep.id}_deployedVersion`]: true }));
+    setScreenError('');
+    setScreenNotice(null);
+
+    try {
+      const environment = dep.environment || state.metadata.environment || 'production';
+
+      const yamlText = await fetchDraftConfiguration({
+        productType: dep.productType,
+        source: dep.productSource,
+        team: teamName,
+        environment,
+      }, useMock);
+
+      if (!yamlText) {
+        setScreenError('No deployed YAML configuration found for this pipeline version.');
+        return;
+      }
+
+      const loadedState = hydrateWizardStateFromYaml(yamlText, {
+        productType: dep.productType,
+        source: dep.productSource,
+        teamName,
+        environment,
+      });
+
+      const draftKey = `etl-draft-preview:${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          wizardState: {
+            ...loadedState,
+            navigationMode: 'etl-config',
+            readOnly: true,
+            currentStep: 0,
+            completedSteps: [0, 1, 2, 3, 4, 5, 6],
+          },
+        }),
+      );
+
+      window.open(
+        `${window.location.origin}${window.location.pathname}?loadDraft=${encodeURIComponent(draftKey)}`,
+        '_blank',
+      );
+    } catch (error) {
+      console.error('[ETLManagementScreen] handleViewDeployedVersion failed:', error);
+      setScreenError(error?.message || 'Failed to load deployed configuration.');
+    } finally {
+      setActionLoading(a => ({ ...a, [`${dep.id}_deployedVersion`]: false }));
+    }
+  };
+
   // Handler for creating new configuration
   function handleCreateNewConfig() {
     actions.loadState({
@@ -835,14 +893,66 @@ export default function ETLManagementScreen() {
                           <span style={{ color: 'var(--muted)' }}>—</span>
                         )}
                       </td>
-                      <td style={{
-                        padding: 8,
-                        fontFamily: 'var(--mono)',
-                        fontSize: 13,
-                        color: hasVersionMismatch ? 'var(--warning)' : 'var(--accent)',
-                        fontWeight: hasVersionMismatch ? 600 : 400,
-                      }}>
-                        {dep.deployedVersion || '—'}
+                      <td style={{ padding: 8, fontFamily: 'var(--mono)', fontSize: 13 }}>
+                        {dep.deployedVersion ? (
+                          <span style={{ position: 'relative', display: 'inline-block' }}>
+                            <button
+                              onClick={() => handleViewDeployedVersion(dep)}
+                              disabled={!!actionLoading[`${dep.id}_deployedVersion`]}
+                              onMouseEnter={e => { e.currentTarget.style.opacity = '0.75'; setDeployedVersionHover(dep.id); }}
+                              onMouseLeave={e => { e.currentTarget.style.opacity = actionLoading[`${dep.id}_deployedVersion`] ? '0.5' : '1'; setDeployedVersionHover(null); }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                cursor: actionLoading[`${dep.id}_deployedVersion`] ? 'wait' : 'pointer',
+                                fontFamily: 'var(--mono)',
+                                fontSize: 13,
+                                color: hasVersionMismatch ? 'var(--warning)' : 'var(--accent)',
+                                fontWeight: hasVersionMismatch ? 600 : 400,
+                                textDecoration: 'underline',
+                                textDecorationStyle: 'dashed',
+                                textUnderlineOffset: '3px',
+                                opacity: actionLoading[`${dep.id}_deployedVersion`] ? 0.5 : 1,
+                                transition: 'opacity 0.15s',
+                              }}
+                            >
+                              {actionLoading[`${dep.id}_deployedVersion`] ? '…' : dep.deployedVersion}
+                            </button>
+                            {deployedVersionHover === dep.id && (
+                              <div style={{
+                                position: 'absolute',
+                                top: 'calc(100% + 7px)',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                background: 'var(--surf)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 7,
+                                padding: '6px 11px',
+                                fontSize: 12,
+                                color: 'var(--text)',
+                                whiteSpace: 'nowrap',
+                                zIndex: 200,
+                                boxShadow: '0 6px 20px rgba(0,0,0,0.22)',
+                                pointerEvents: 'none',
+                              }}>
+                                <div style={{
+                                  position: 'absolute', top: -5, left: '50%',
+                                  transform: 'translateX(-50%) rotate(45deg)',
+                                  width: 8, height: 8,
+                                  background: 'var(--surf)',
+                                  borderTop: '1px solid var(--border)',
+                                  borderLeft: '1px solid var(--border)',
+                                }} />
+                                {actionLoading[`${dep.id}_deployedVersion`]
+                                  ? '⏳ Loading configuration…'
+                                  : '👁 Open deployed version in new window'}
+                              </div>
+                            )}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--muted)' }}>—</span>
+                        )}
                       </td>
                       <td style={{ padding: 8 }}>{formatDateShort(dep.lastStatusChange)}</td>
                       <td style={{ padding: 8, textAlign: 'center', display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
