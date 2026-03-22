@@ -43,7 +43,7 @@ function normalizeSavedDraftRow(row = {}) {
     productSource: row.productSource || '',
     productType: row.productType || '',
     environment: row.environment || 'production',
-    deploymentStatus: 'draft',
+    deploymentStatus: row.deploymentStatus || 'draft',
     savedVersion: row.savedVersion || '1.0',
     deployedVersion: row.deployedVersion ?? null,
     lastStatusChange,
@@ -72,13 +72,16 @@ function mergeSavedDraftRows(deployments = [], teamName = 'default') {
   return [...localDraftRows, ...backendRows]
 }
 
-export function upsertSavedDraftDeployment({ teamName = 'default', productSource = '', productType = '', environment = 'production', savedVersion = '1.0' } = {}) {
+export function upsertSavedDraftDeployment({ teamName = 'default', productSource = '', productType = '', environment = 'production', savedVersion = '1.0', deploymentStatus = 'draft', deployedVersion = null, lastStatusChange } = {}) {
   const normalizedRow = normalizeSavedDraftRow({
     teamName: String(teamName ?? '').trim() || 'default',
     productSource,
     productType,
     environment,
     savedVersion,
+    deploymentStatus,
+    deployedVersion,
+    lastStatusChange,
   })
 
   const nextRows = readSavedDraftRows().filter(row => normalizeSavedDraftRow(row).identity !== normalizedRow.identity)

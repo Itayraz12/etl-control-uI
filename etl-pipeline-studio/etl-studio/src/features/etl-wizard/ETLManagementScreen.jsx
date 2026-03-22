@@ -16,7 +16,14 @@ const STATUS_COLORS = {
   draft: 'amber',
   running: 'green',
   stopped: 'red',
+  failed: 'red',
 };
+
+function formatDeploymentStatusLabel(status) {
+  const normalizedStatus = String(status || '').trim();
+  if (!normalizedStatus) return 'Unknown';
+  return normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+}
 
 // Add CSS for icon buttons and pulse animation
 const ICON_BUTTON_STYLE = {
@@ -136,6 +143,38 @@ export default function ETLManagementScreen() {
   // Use team name from user context
   const teamName = user?.teamName || 'default';
 
+  function updateDeploymentRowStatus(id, deploymentStatus) {
+    const statusTimestamp = Date.now();
+    let updatedRow = null;
+
+    setDeployments(prevDeployments => prevDeployments.map(deploymentRow => {
+      if (deploymentRow.id !== id) {
+        return deploymentRow;
+      }
+
+      updatedRow = {
+        ...deploymentRow,
+        deploymentStatus,
+        lastStatusChange: statusTimestamp,
+      };
+
+      return updatedRow;
+    }));
+
+    if (updatedRow?.isLocalDraft) {
+      deploymentsService.upsertSavedDraftDeployment({
+        teamName,
+        productSource: updatedRow.productSource,
+        productType: updatedRow.productType,
+        environment: updatedRow.environment,
+        savedVersion: updatedRow.savedVersion,
+        deploymentStatus,
+        deployedVersion: updatedRow.deployedVersion,
+        lastStatusChange: statusTimestamp,
+      });
+    }
+  }
+
   const deployment = useDeploymentProgress({
     autoAdvance: false,  // steps are driven by SSE events (or mock simulation)
     stepDuration: 700,
@@ -152,6 +191,7 @@ export default function ETLManagementScreen() {
     },
     onDeploymentError: (_stepIndex, error) => {
       if (activeDeployId) {
+        updateDeploymentRowStatus(activeDeployId, 'failed');
         setActionLoading(a => ({ ...a, [activeDeployId]: null }));
         setActiveDeployId(null);
       }
@@ -281,6 +321,7 @@ export default function ETLManagementScreen() {
     // mirroring the exact behaviour of SummaryStep's handleFailure.
     const showDeployError = (error) => {
       deployment.reset();                       // close progress modal
+      updateDeploymentRowStatus(id, 'failed');
       setErrorModal(createDeploymentErrorModal(error));
       setActionLoading(a => ({ ...a, [id]: null }));
       setActiveDeployId(null);
@@ -592,6 +633,10 @@ export default function ETLManagementScreen() {
             <span style={{ color: '#ef4444' }}>{deployments.filter(d => d.deploymentStatus === 'stopped').length} stopped</span>
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#dc2626' }}></span>
+            <span style={{ color: '#dc2626' }}>{deployments.filter(d => d.deploymentStatus === 'failed').length} failed</span>
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#f59e0b' }}></span>
             <span style={{ color: '#f59e0b' }}>{deployments.filter(d => d.deploymentStatus === 'draft').length} draft</span>
           </span>
@@ -754,7 +799,7 @@ export default function ETLManagementScreen() {
                             background: 'currentColor',
                             animation: isRunning ? 'pulse 2s ease-in-out infinite' : 'none',
                           }}></span>
-                          {dep.deploymentStatus}
+                          {formatDeploymentStatusLabel(dep.deploymentStatus)}
                         </Chip>
                       </td>
                       <td style={{ padding: 8, fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)' }}>{dep.savedVersion}</td>

@@ -179,6 +179,7 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByText('Deployment Failed')).toBeInTheDocument()
       expect(screen.getByText('Kafka broker was unavailable')).toBeInTheDocument()
       expect(screen.queryByText('Failure Reason')).not.toBeInTheDocument()
+      expect(screen.getByText('Failed')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
     })
   })
