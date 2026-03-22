@@ -64,6 +64,12 @@ describe('SourceConfigStep Kafka test connection', () => {
     testKafkaConnection.mockReset()
   })
 
+  it('does not render the Data Stream Info card in source config anymore', () => {
+    renderStep()
+
+    expect(screen.queryByText('📊 Data Stream Info')).not.toBeInTheDocument()
+  })
+
   it('calls the Kafka test endpoint and shows a success icon for the source config', async () => {
     const user = userEvent.setup()
     testKafkaConnection.mockResolvedValue({ success: true, message: 'Kafka source reachable' })
@@ -125,5 +131,6 @@ describe('SourceConfigStep Kafka test connection', () => {
     expect(screen.getByText('Topic and environment are required to test the Kafka connection.')).toBeInTheDocument()
   })
 })
+
 
 

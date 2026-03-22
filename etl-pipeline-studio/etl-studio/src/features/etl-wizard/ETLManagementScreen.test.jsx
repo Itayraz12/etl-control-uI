@@ -3,6 +3,27 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ETLManagementScreen from './ETLManagementScreen.jsx'
 
+const mockFetchDraftConfiguration = vi.fn(() => Promise.resolve('pipeline: yaml'))
+const mockFetchDeploymentSteps = vi.fn(() => Promise.resolve([
+  { id: 'validate', label: 'Validate' },
+  { id: 'deploy', label: 'Deploy' },
+]))
+const mockDeployFromYaml = vi.fn(() => Promise.resolve({ success: true, deploymentId: 'dep-run-1' }))
+const mockSubscribeToDeploymentProgress = vi.fn(() => vi.fn())
+const mockDeploymentProgress = {
+  isOpen: false,
+  steps: [],
+  currentStepIndex: 0,
+  isComplete: false,
+  isError: false,
+  errorMessage: '',
+  startDeployment: vi.fn(),
+  reset: vi.fn(),
+  setCurrentStepIndex: vi.fn(),
+  updateStep: vi.fn(),
+  setIsComplete: vi.fn(),
+}
+
 const mockActions = {
   loadState: vi.fn(),
   setNavigationMode: vi.fn(),
@@ -75,19 +96,33 @@ vi.mock('../../shared/services/deploymentsService.js', () => ({
   fetchDeployments: vi.fn(() => Promise.resolve(mockDeployments)),
   deployService: vi.fn(() => Promise.resolve()),
   deleteDeployment: vi.fn(() => Promise.resolve({ success: true })),
+  fetchDeploymentSteps: (...args) => mockFetchDeploymentSteps(...args),
+  subscribeToDeploymentProgress: (...args) => mockSubscribeToDeploymentProgress(...args),
+  deployFromYaml: (...args) => mockDeployFromYaml(...args),
 }))
 
 vi.mock('../../shared/services/configService.js', () => ({
-  fetchDraftConfiguration: vi.fn(() => Promise.resolve('')),
+  fetchDraftConfiguration: (...args) => mockFetchDraftConfiguration(...args),
 }))
 
 vi.mock('../../shared/services/configurationHydrator.js', () => ({
   hydrateWizardStateFromYaml: vi.fn(() => ({})),
 }))
 
+vi.mock('../../shared/hooks/useDeploymentProgress.js', () => ({
+  useDeploymentProgress: () => mockDeploymentProgress,
+}))
+
 describe('ETLManagementScreen table layout stability', () => {
   beforeEach(() => {
     Object.values(mockActions).forEach(fn => fn.mockReset())
+    mockFetchDraftConfiguration.mockClear()
+    mockFetchDeploymentSteps.mockClear()
+    mockDeployFromYaml.mockClear()
+    mockSubscribeToDeploymentProgress.mockClear()
+    Object.values(mockDeploymentProgress).forEach(value => {
+      if (typeof value === 'function') value.mockClear()
+    })
   })
 
   it('keeps stable sort indicator spacing and flexible table sizing', async () => {
@@ -126,6 +161,26 @@ describe('ETLManagementScreen table layout stability', () => {
 
     expect(pricingRow).toBeTruthy()
     expect(pricingRow.style.borderLeft).toBe('')
+  })
+
+  it('shows a deployment failure popup with a readable reason when deploy startup fails', async () => {
+    const user = userEvent.setup()
+    mockDeployFromYaml.mockResolvedValueOnce({ success: false, error: 'Kafka broker was unavailable' })
+
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Catalog')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByTitle('Deploy pipeline'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Deployment Failed')).toBeInTheDocument()
+      expect(screen.getByText('Kafka broker was unavailable')).toBeInTheDocument()
+      expect(screen.queryByText('Failure Reason')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
+    })
   })
 })
 

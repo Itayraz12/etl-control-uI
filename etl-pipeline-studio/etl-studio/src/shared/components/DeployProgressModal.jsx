@@ -121,7 +121,7 @@ const DeployProgressModal = ({
                 </div>
                 <div className="step-content">
                   <span className="step-label">{step.label}</span>
-                  {step.error && (
+                  {step.error && !isError && (
                     <span className="step-error">{step.error}</span>
                   )}
                 </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Btn, DraftBadge, ModalDialog } from '../../shared/components/index.jsx'
+import { Btn, ModalDialog } from '../../shared/components/index.jsx'
 import { STEPS } from '../../shared/types/index.js'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { getFieldMappingValidation, isWizardStepValid } from '../../shared/services/wizardValidation.js'
@@ -35,7 +35,6 @@ export default function WizardFooter() {
             ← Back
           </Btn>
         )}
-        <DraftBadge />
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 12, color: 'var(--muted)' }}>
           Step {currentStep + 1} of {STEPS.length} — {STEPS[currentStep].label}

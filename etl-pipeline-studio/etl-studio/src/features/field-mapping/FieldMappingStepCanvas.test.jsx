@@ -170,6 +170,16 @@ function renderWithPersistedMappings(mappings, uploadOverrides = {}, targetSchem
 }
 
 describe('FieldMappingStep zoom controls', () => {
+  it('does not render the Show Transformers button in the mapping toolbar', async () => {
+    renderWithPersistedState()
+
+    await waitFor(() => {
+      expect(screen.getByText('Lineage Canvas')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByRole('button', { name: /show transformers/i })).not.toBeInTheDocument()
+  })
+
   it('updates the canvas zoom and allows resetting back to 100%', async () => {
     const user = userEvent.setup()
 
@@ -436,6 +446,30 @@ describe('FieldMappingStep transformer modal regression', () => {
 
     expect(screen.getByTestId('target-list-name-product.code')).toHaveTextContent('product.code')
     expect(screen.queryByTestId('target-list-item-unitPrice')).not.toBeInTheDocument()
+  })
+
+  it('shows required markers only for target fields', async () => {
+    renderWithPersistedMappings([], {
+      schema: {
+        type: 'object',
+        required: ['customerId'],
+        properties: {
+          customerId: { type: 'string' },
+        },
+      },
+    }, {
+      type: 'object',
+      required: ['product.code'],
+      properties: {
+        'product.code': { type: 'string' },
+      },
+    })
+
+    const sourceItem = await screen.findByTestId('source-list-item-customerId')
+    const targetItem = await screen.findByTestId('target-list-item-product.code')
+
+    expect(within(sourceItem).queryByText('*')).not.toBeInTheDocument()
+    expect(within(targetItem).getByText('*')).toBeInTheDocument()
   })
 
   it('shows referenced array target fields from the selected entity schema', async () => {

@@ -1,6 +1,54 @@
 // Backend service for deployments data
 const API_BASE = 'http://localhost:8080/api'
 
+function getDeployHttpErrorPrefix(status) {
+  switch (status) {
+    case 400:
+      return 'The deployment request was rejected by the backend.'
+    case 401:
+    case 403:
+      return 'You are not authorized to deploy this pipeline.'
+    case 404:
+      return 'The deployment API endpoint was not found.'
+    case 409:
+      return 'The deployment could not start because of a backend conflict.'
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      return 'The deployment backend is currently unavailable.'
+    default:
+      return 'The deployment request failed.'
+  }
+}
+
+async function buildDeployHttpError(response) {
+  let backendDetail = ''
+
+  try {
+    const contentType = response.headers.get('Content-Type') || ''
+    if (contentType.includes('application/json')) {
+      const payload = await response.json()
+      backendDetail = payload?.error || payload?.message || payload?.detail || payload?.details || ''
+    } else {
+      backendDetail = (await response.text()).trim()
+    }
+  } catch {
+    backendDetail = ''
+  }
+
+  const prefix = getDeployHttpErrorPrefix(response.status)
+  const statusSuffix = response.status === 404
+    ? ' Verify that the backend server is running and that POST /api/backend/deployments/deploy is available.'
+    : ` HTTP ${response.status}.`
+
+  const detailSuffix = backendDetail
+    ? ` Backend response: ${backendDetail}`
+    : ''
+
+  return `${prefix}${statusSuffix}${detailSuffix}`.trim()
+}
+
 // ── Create + deploy from wizard YAML ─────────────────────────────────────
 
 /**
@@ -23,7 +71,9 @@ export async function deployFromYaml(yamlContent) {
       headers: { 'Content-Type': 'text/plain' },
       body: yamlContent,
     })
-    if (!response.ok) throw new Error(`Deploy failed: ${response.status}`)
+    if (!response.ok) {
+      throw new Error(await buildDeployHttpError(response))
+    }
     const data = await response.json()
     console.log('[deploymentsService] deployFromYaml result:', data)
     return data

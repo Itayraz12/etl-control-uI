@@ -1366,7 +1366,6 @@ export default function FieldMappingStep() {
                   </span>
                   <span style={{ fontSize: '10px', color: 'var(--muted)', contentVisibility: 'auto' }}>{field.type}</span>
                 </div>
-                {field.required && <span style={{ color: 'var(--danger)', fontSize: '10px', marginTop: '2px' }}>*</span>}
               </div>
             ))}
             {filteredSource.length === 0 && (
@@ -1482,30 +1481,6 @@ export default function FieldMappingStep() {
                 }}
               >
                 Align
-              </button>
-              <button
-                onClick={() => setTransformerModal(true)}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid var(--border)',
-                  background: 'transparent',
-                  color: 'var(--text)',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={(e) => { 
-                  e.target.style.borderColor = 'var(--accent)'
-                  e.target.style.color = 'var(--accent)' 
-                }}
-                onMouseLeave={(e) => { 
-                  e.target.style.borderColor = 'var(--border)'
-                  e.target.style.color = 'var(--text)' 
-                }}
-              >
-                ⚙ Show Transformers ({transformers.length})
               </button>
               <button
                 onClick={mapAllFields}
@@ -2002,9 +1977,7 @@ export default function FieldMappingStep() {
               return (
             <div style={{ position: 'absolute', top: 0, left: 0, width: stageWidth, height: stageHeight, pointerEvents: 'none' }}>
               {nodes.map((node) => {
-                const isRequired = node.type === 'source' 
-                  ? sourceSchema.find(f => f.id === node.fieldId)?.required
-                  : targetSchema.find(f => f.id === node.fieldId)?.required
+                const isRequired = targetSchema.find(f => f.id === node.fieldId)?.required
                 const isMissingRequiredTarget = node.type === 'target' && isRequired && !connectedTargetFieldIds.has(node.fieldId)
                 const rules = { hasOut: node.type === 'source', hasIn: node.type === 'target' }
 
@@ -2107,7 +2080,7 @@ export default function FieldMappingStep() {
                           lineHeight: 1.25,
                         }}>
                           {node.name}
-                          {isRequired && <span style={{ color: 'var(--danger)', marginLeft: '4px' }}>*</span>}
+                          {node.type === 'target' && isRequired && <span style={{ color: 'var(--danger)', marginLeft: '4px' }}>*</span>}
                         </div>
                         <div style={{
                           display: 'flex',

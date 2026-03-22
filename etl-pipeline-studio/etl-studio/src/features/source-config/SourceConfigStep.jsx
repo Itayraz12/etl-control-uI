@@ -260,31 +260,6 @@ export default function SourceConfigStep() {
         </Card>
 
         <Card>
-          <CardTitle>📊 Data Stream Info</CardTitle>
-          <FormRow>
-            <FormGroup label="Streaming Continuity" required>
-              <select value={src.streamingContinuity || 'continuous'} onChange={e => u('streamingContinuity', e.target.value)}>
-                <option value="once">Once</option>
-                <option value="every-hour">Every Hour</option>
-                <option value="every-few-hours">Every Few Hours</option>
-                <option value="every-day">Once a Day</option>
-                <option value="continuous">Continuous</option>
-              </select>
-            </FormGroup>
-            <FormGroup label="Avg Records Per Day" required>
-              <select value={src.recordsPerDay || 'millions'} onChange={e => u('recordsPerDay', e.target.value)}>
-                <option value="hundreds">Hundreds</option>
-                <option value="thousands">Thousands</option>
-                <option value="hun-thousands">Hundred of Thousands</option>
-                <option value="millions">A Few Millions</option>
-                <option value="tens-millions">Tens of Millions</option>
-                <option value="hundreds-millions">Hundreds of Millions</option>
-              </select>
-            </FormGroup>
-          </FormRow>
-        </Card>
-
-        <Card>
           <CardTitle>⚙️ Source Format</CardTitle>
           <FormGroup label="Message / File Format" required>
             <select value={src.format} onChange={e => u('format', e.target.value)}>

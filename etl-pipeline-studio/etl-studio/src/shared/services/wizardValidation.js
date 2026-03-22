@@ -60,13 +60,10 @@ export function isWizardStepValid(stepIndex, state, targetSchema = getResolvedTa
 }
 
 export function canNavigateToWizardStep(targetStep, state, targetSchema = getResolvedTargetSchema(state)) {
-  if (targetStep <= (state?.currentStep ?? 0)) return true
+  const currentStep = state?.currentStep ?? 0
 
-  for (let stepIndex = 0; stepIndex < targetStep; stepIndex += 1) {
-    if (!isWizardStepValid(stepIndex, state, targetSchema)) {
-      return false
-    }
-  }
+  if (targetStep <= currentStep) return true
+  if (targetStep !== currentStep + 1) return false
 
-  return true
+  return isWizardStepValid(currentStep, state, targetSchema)
 }

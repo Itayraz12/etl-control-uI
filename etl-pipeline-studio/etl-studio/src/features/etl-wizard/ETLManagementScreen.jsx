@@ -55,6 +55,45 @@ function formatDateShort(ts) {
   return `${day} ${month} ${year}, ${hours}:${mins}`;
 }
 
+function formatDeployFailureReason(error) {
+  if (!error) {
+    return 'No additional details were provided by the deployment service.';
+  }
+
+  if (typeof error === 'string') {
+    return error.trim() || 'No additional details were provided by the deployment service.';
+  }
+
+  if (error instanceof Error) {
+    return error.message || 'No additional details were provided by the deployment service.';
+  }
+
+  if (typeof error === 'object') {
+    const candidates = [error.error, error.message, error.reason, error.detail, error.details];
+    const match = candidates.find(value => typeof value === 'string' && value.trim());
+
+    if (match) {
+      return match.trim();
+    }
+
+    try {
+      return JSON.stringify(error, null, 2);
+    } catch {
+      return 'No additional details were provided by the deployment service.';
+    }
+  }
+
+  return String(error);
+}
+
+function createDeploymentErrorModal(reason) {
+  return {
+    icon: '❌',
+    title: 'Deployment Failed',
+    message: formatDeployFailureReason(reason),
+  };
+}
+
 const COLUMNS = [
   { key: 'productSource', label: 'Product Source' },
   { key: 'productType', label: 'Product Type' },
@@ -115,7 +154,8 @@ export default function ETLManagementScreen() {
         setActionLoading(a => ({ ...a, [activeDeployId]: null }));
         setActiveDeployId(null);
       }
-      setScreenError(error || 'Deployment failed.');
+      setScreenError('');
+      setErrorModal(createDeploymentErrorModal(error));
       setScreenNotice(null);
     },
   });
@@ -238,9 +278,9 @@ export default function ETLManagementScreen() {
 
     // Helper: close the progress modal and show the error popup,
     // mirroring the exact behaviour of SummaryStep's handleFailure.
-    const showDeployError = (msg) => {
+    const showDeployError = (error) => {
       deployment.reset();                       // close progress modal
-      setErrorModal({ icon: '❌', title: 'Deployment Failed', message: msg });
+      setErrorModal(createDeploymentErrorModal(error));
       setActionLoading(a => ({ ...a, [id]: null }));
       setActiveDeployId(null);
     };
@@ -849,7 +889,7 @@ export default function ETLManagementScreen() {
           message={errorModal?.message}
           icon={errorModal?.icon}
           tone="danger"
-          cancelLabel="Got it"
+          cancelLabel="Close"
           onCancel={() => setErrorModal(null)}
           disableBackdropClose={false}
         />

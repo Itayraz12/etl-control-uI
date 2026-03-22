@@ -13,10 +13,12 @@ export default function MetadataStep() {
   const { entities } = useConfig()
   const { useMock } = useMockMode()
   const { metadata } = state
+  const src = state.source
   const previousEntityRef = useRef(metadata.entityName)
   const [loadingSchema, setLoadingSchema] = useState(false)
   const [schemaError, setSchemaError] = useState('')
   const u = (k, v) => actions.updateMetadata({ [k]: v })
+  const updateSourceField = (k, v) => actions.updateSource({ [k]: v })
 
   // Sync team from user context when it changes
   useEffect(() => {
@@ -75,8 +77,8 @@ export default function MetadataStep() {
 
 
   return (
-    <div style={{ flex: 1, overflow: 'hidden' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 30px' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '24px 30px 40px' }}>
         <Card>
           <CardTitle>🏷️ Pipeline Metadata</CardTitle>
           <FormRow>
@@ -108,6 +110,31 @@ export default function MetadataStep() {
               </select>
               {loadingSchema && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>Loading entity schema…</div>}
               {!!schemaError && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>{schemaError}</div>}
+            </FormGroup>
+          </FormRow>
+        </Card>
+
+        <Card>
+          <CardTitle>📊 Data Stream Info</CardTitle>
+          <FormRow>
+            <FormGroup label="Streaming Continuity" required>
+              <select value={src.streamingContinuity || 'continuous'} onChange={e => updateSourceField('streamingContinuity', e.target.value)}>
+                <option value="once">Once</option>
+                <option value="every-hour">Every Hour</option>
+                <option value="every-few-hours">Every Few Hours</option>
+                <option value="every-day">Once a Day</option>
+                <option value="continuous">Continuous</option>
+              </select>
+            </FormGroup>
+            <FormGroup label="Avg Records Per Day" required>
+              <select value={src.recordsPerDay || 'millions'} onChange={e => updateSourceField('recordsPerDay', e.target.value)}>
+                <option value="hundreds">Hundreds</option>
+                <option value="thousands">Thousands</option>
+                <option value="hun-thousands">Hundred of Thousands</option>
+                <option value="millions">A Few Millions</option>
+                <option value="tens-millions">Tens of Millions</option>
+                <option value="hundreds-millions">Hundreds of Millions</option>
+              </select>
             </FormGroup>
           </FormRow>
         </Card>

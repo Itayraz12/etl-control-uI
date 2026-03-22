@@ -86,6 +86,26 @@ describe('MetadataStep entity target schema', () => {
     fetchEntitySchema.mockReset()
   })
 
+  it('renders Data Stream Info in metadata and persists its source settings', async () => {
+    const user = userEvent.setup()
+
+    renderStep()
+
+    expect(screen.getByText('📊 Data Stream Info')).toBeInTheDocument()
+
+    const streamContinuitySelect = screen.getByDisplayValue('Continuous')
+    const recordsPerDaySelect = screen.getByDisplayValue('A Few Millions')
+
+    await user.selectOptions(streamContinuitySelect, 'every-day')
+    await user.selectOptions(recordsPerDaySelect, 'thousands')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.source?.streamingContinuity).toBe('every-day')
+      expect(persisted.source?.recordsPerDay).toBe('thousands')
+    })
+  })
+
   it('fetches entity schema on selection and persists parsed target fields', async () => {
     const user = userEvent.setup()
     fetchEntitySchema.mockResolvedValue({
