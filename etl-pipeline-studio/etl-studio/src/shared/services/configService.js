@@ -1,4 +1,5 @@
 import { MOCK_SCHEMA, normalizeSourceSchema, TARGET_FIELDS } from '../types/index.js'
+import { upsertSavedDraftDeployment } from './deploymentsService.js'
 
 // ── Config Service ─────────────────────────────────────────────────────────
 // Loads transformers, filters and entities either from the backend API or
@@ -33,6 +34,11 @@ const API_BASE = 'http://localhost:8080/api'
 function asString(value, fallback = '') {
   if (value === undefined || value === null) return fallback
   return String(value)
+}
+
+function extractSchemaVersionFromYaml(yaml = '') {
+  const match = String(yaml ?? '').match(/^\s*schemaVersion\s*:\s*(.+)$/m)
+  return match?.[1]?.trim() || '1.0'
 }
 
 // ── Helper ────────────────────────────────────────────────────────────────
@@ -526,11 +532,23 @@ export async function saveDraftConfiguration({ productType, source, team, enviro
     throw new Error(message)
   }
 
+  const persistedDraft = {
+    teamName: team,
+    productSource: source,
+    productType,
+    environment,
+    savedVersion: extractSchemaVersionFromYaml(cleanYaml),
+  }
+
   const contentType = response.headers.get('content-type') || ''
   if (contentType.includes('application/json')) {
-    return response.json()
+    const payload = await response.json()
+    upsertSavedDraftDeployment(persistedDraft)
+    return payload
   }
 
   const text = await response.text()
+  upsertSavedDraftDeployment(persistedDraft)
+
   return { success: true, message: text }
 }

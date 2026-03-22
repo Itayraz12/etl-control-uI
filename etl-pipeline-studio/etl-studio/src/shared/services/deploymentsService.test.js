@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { deployFromYaml } from './deploymentsService.js'
+import { deleteDeployment, deployFromYaml, fetchDeployments, upsertSavedDraftDeployment } from './deploymentsService.js'
 
 describe('deploymentsService', () => {
   const fetchMock = vi.fn()
@@ -7,6 +7,7 @@ describe('deploymentsService', () => {
   beforeEach(() => {
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
+    localStorage.clear()
   })
 
   it('returns the backend payload when deployment starts successfully', async () => {
@@ -37,5 +38,55 @@ describe('deploymentsService', () => {
       success: false,
       error: 'The deployment API endpoint was not found. Verify that the backend server is running and that POST /api/backend/deployments/deploy is available. Backend response: No static resource api/backend/deployments/deploy.',
     })
+  })
+
+  it('includes a newly saved local draft in the management deployments list', async () => {
+    upsertSavedDraftDeployment({
+      teamName: 'data-platform',
+      productSource: 'ERP',
+      productType: 'Catalog',
+      environment: 'production',
+      savedVersion: '1.0',
+    })
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(fetchDeployments('data-platform', false)).resolves.toEqual([
+      expect.objectContaining({
+        id: 'local-draft:data-platform::erp::catalog::production',
+        productSource: 'ERP',
+        productType: 'Catalog',
+        environment: 'production',
+        deploymentStatus: 'draft',
+        savedVersion: '1.0',
+        isLocalDraft: true,
+      }),
+    ])
+  })
+
+  it('deletes a local-only draft row without calling the backend', async () => {
+    upsertSavedDraftDeployment({
+      teamName: 'data-platform',
+      productSource: 'ERP',
+      productType: 'Catalog',
+      environment: 'production',
+    })
+
+    await expect(deleteDeployment('local-draft:data-platform::erp::catalog::production', false)).resolves.toEqual({
+      success: true,
+      id: 'local-draft:data-platform::erp::catalog::production',
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(fetchDeployments('data-platform', false)).resolves.toEqual([])
   })
 })

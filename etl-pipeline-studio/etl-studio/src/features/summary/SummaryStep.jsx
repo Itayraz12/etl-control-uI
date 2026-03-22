@@ -92,6 +92,15 @@ export default function SummaryStep() {
   const [draftModal, setDraftModal] = useState(null)
   const [deployDisabled, setDeployDisabled] = useState(false)
 
+  const closeDraftModal = () => {
+    const shouldNavigateToManagement = Boolean(draftModal?.navigateToManagement)
+    setDraftModal(null)
+
+    if (shouldNavigateToManagement) {
+      actions.setNavigationMode('etl-management')
+    }
+  }
+
   // Deployment progress modal hook
   const deployment = useDeploymentProgress({
     autoAdvance: false,   // driven by real SSE events from the backend
@@ -123,6 +132,18 @@ export default function SummaryStep() {
       sseCleanupRef.current = null
     }
   }, [deployment.isOpen])
+
+  useEffect(() => {
+    if (!draftModal?.navigateToManagement) {
+      return undefined
+    }
+
+    const timeoutId = setTimeout(() => {
+      closeDraftModal()
+    }, 1800)
+
+    return () => clearTimeout(timeoutId)
+  }, [draftModal])
 
   useEffect(() => () => { sseCleanupRef.current?.() }, [])
 
@@ -547,6 +568,7 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
         icon: '💾',
         accent: 'var(--success)',
         message: 'The YAML draft was saved successfully.',
+        navigateToManagement: true,
       })
     } catch (error) {
       setDraftModal({
@@ -554,6 +576,7 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
         icon: '⚠️',
         accent: 'var(--danger)',
         message: error?.message || 'Failed to save the YAML draft.',
+        navigateToManagement: false,
       })
     } finally {
       setSavingDraft(false)
@@ -745,7 +768,7 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
               background: 'rgba(0,0,0,0.5)',
               zIndex: 999,
             }}
-            onClick={() => setDraftModal(null)}
+            onClick={closeDraftModal}
           />
           <div
             style={{
@@ -791,7 +814,7 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
               justifyContent: 'flex-end',
               background: 'var(--bg)',
             }}>
-              <Btn v="primary" onClick={() => setDraftModal(null)}>Close</Btn>
+              <Btn v="primary" onClick={closeDraftModal}>Close</Btn>
             </div>
           </div>
         </>

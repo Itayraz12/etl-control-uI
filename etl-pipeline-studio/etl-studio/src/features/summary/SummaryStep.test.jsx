@@ -1,6 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SummaryStep from './SummaryStep.jsx'
 
 const mockActions = {
@@ -76,22 +75,34 @@ vi.mock('../../shared/services/configService.js', () => ({
 
 describe('SummaryStep save draft behavior', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     mockActions.setNavigationMode.mockReset()
     mockActions.goTo.mockReset()
     mockSaveDraftConfiguration.mockClear()
   })
 
-  it('saves the draft and stays on the summary workflow', async () => {
-    const user = userEvent.setup()
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+  })
+
+  it('saves the draft and navigates to management after the success popup closes', async () => {
     render(<SummaryStep />)
 
-    await user.click(screen.getByRole('button', { name: /save draft/i }))
-
-    await waitFor(() => {
-      expect(mockSaveDraftConfiguration).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save draft/i }))
+      await Promise.resolve()
     })
 
-    expect(mockActions.setNavigationMode).not.toHaveBeenCalled()
+    expect(mockSaveDraftConfiguration).toHaveBeenCalledTimes(1)
+
     expect(screen.getByText('Draft Saved')).toBeInTheDocument()
+
+    await act(async () => {
+      vi.advanceTimersByTime(1800)
+      await Promise.resolve()
+    })
+
+    expect(mockActions.setNavigationMode).toHaveBeenCalledWith('etl-management')
   })
 })

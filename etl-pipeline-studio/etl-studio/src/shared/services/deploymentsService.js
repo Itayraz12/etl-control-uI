@@ -1,5 +1,107 @@
 // Backend service for deployments data
 const API_BASE = 'http://localhost:8080/api'
+const SAVED_DRAFTS_STORAGE_KEY = 'etl-studio-management-drafts'
+
+function normalizeDraftKeyPart(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+}
+
+function getDraftIdentity({ teamName = '', productSource = '', productType = '', environment = '' } = {}) {
+  return [teamName, productSource, productType, environment]
+    .map(normalizeDraftKeyPart)
+    .join('::')
+}
+
+function readSavedDraftRows() {
+  try {
+    const raw = localStorage.getItem(SAVED_DRAFTS_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function writeSavedDraftRows(rows) {
+  try {
+    localStorage.setItem(SAVED_DRAFTS_STORAGE_KEY, JSON.stringify(rows))
+  } catch {}
+}
+
+function normalizeSavedDraftRow(row = {}) {
+  const identity = getDraftIdentity(row)
+  const createdAt = row.createdAt || Date.now()
+  const lastStatusChange = row.lastStatusChange || createdAt
+
+  return {
+    id: row.id || `local-draft:${identity}`,
+    identity,
+    teamName: row.teamName || 'default',
+    productSource: row.productSource || '',
+    productType: row.productType || '',
+    environment: row.environment || 'production',
+    deploymentStatus: 'draft',
+    savedVersion: row.savedVersion || '1.0',
+    deployedVersion: row.deployedVersion ?? null,
+    lastStatusChange,
+    createdAt,
+    isLocalDraft: true,
+  }
+}
+
+function mergeSavedDraftRows(deployments = [], teamName = 'default') {
+  const normalizedTeamName = String(teamName ?? '').trim()
+  const backendRows = Array.isArray(deployments) ? deployments : []
+  const backendIdentities = new Set(
+    backendRows.map(row => getDraftIdentity({
+      teamName: normalizedTeamName,
+      productSource: row?.productSource,
+      productType: row?.productType,
+      environment: row?.environment,
+    }))
+  )
+
+  const localDraftRows = readSavedDraftRows()
+    .map(normalizeSavedDraftRow)
+    .filter(row => row.teamName === normalizedTeamName)
+    .filter(row => !backendIdentities.has(row.identity))
+
+  return [...localDraftRows, ...backendRows]
+}
+
+export function upsertSavedDraftDeployment({ teamName = 'default', productSource = '', productType = '', environment = 'production', savedVersion = '1.0' } = {}) {
+  const normalizedRow = normalizeSavedDraftRow({
+    teamName: String(teamName ?? '').trim() || 'default',
+    productSource,
+    productType,
+    environment,
+    savedVersion,
+  })
+
+  const nextRows = readSavedDraftRows().filter(row => normalizeSavedDraftRow(row).identity !== normalizedRow.identity)
+  nextRows.unshift(normalizedRow)
+  writeSavedDraftRows(nextRows)
+
+  return normalizedRow
+}
+
+export function removeSavedDraftDeployment(identifier) {
+  const currentRows = readSavedDraftRows()
+  const nextRows = currentRows.filter(row => {
+    const normalizedRow = normalizeSavedDraftRow(row)
+    return normalizedRow.id !== identifier && normalizedRow.identity !== identifier
+  })
+
+  if (nextRows.length !== currentRows.length) {
+    writeSavedDraftRows(nextRows)
+    return true
+  }
+
+  return false
+}
 
 function getDeployHttpErrorPrefix(status) {
   switch (status) {
@@ -437,7 +539,7 @@ export async function fetchDeployments(teamName = 'default', useMock = false) {
   if (useMock) {
     // Simulate network delay
     await new Promise(r => setTimeout(r, 300));
-    return cloneMockDeployments();
+    return mergeSavedDraftRows(cloneMockDeployments(), teamName);
   } else {
     try {
       const url = `${API_BASE}/backend/deployments?teamName=${encodeURIComponent(teamName)}`;
@@ -467,17 +569,17 @@ export async function fetchDeployments(teamName = 'default', useMock = false) {
       // Ensure data is an array
       if (!Array.isArray(data)) {
         console.warn('⚠️ Response is not an array, wrapping it:', data);
-        return Array.isArray(data) ? data : [];
+        return mergeSavedDraftRows(Array.isArray(data) ? data : [], teamName);
       }
 
       console.log('✅ Deployments fetched successfully!');
-      return data;
+      return mergeSavedDraftRows(data, teamName);
     } catch (error) {
       console.error('❌ Failed to fetch deployments:', error);
       console.error('   Error message:', error.message);
       console.error('   Error stack:', error.stack);
-      // Return empty array on error
-      return [];
+      // Return local draft rows on error so recently saved drafts remain visible
+      return mergeSavedDraftRows([], teamName);
     }
   }
 }
@@ -559,6 +661,10 @@ export async function stopDeployment(id, useMock = false) {
 }
 
 export async function deleteDeployment(id, useMock = false) {
+  if (removeSavedDraftDeployment(id)) {
+    return { success: true, id }
+  }
+
   if (useMock) {
     await new Promise(r => setTimeout(r, 200));
     mockDeploymentsStore = mockDeploymentsStore.filter(item => item.id !== id)
