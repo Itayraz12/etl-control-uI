@@ -10,7 +10,6 @@ import { fetchDeploymentSteps, deployFromYaml, subscribeToDeploymentProgress }
 import { formatTransformationYamlItem, quoteYamlDoubleQuoted, formatKeyValueYamlSection } from '../../shared/services/configurationYaml.js'
 import { formatInputFieldsYamlSection } from '../../shared/services/configurationYaml.js'
 import { formatFilterYamlItem } from '../../shared/services/configurationYaml.js'
-import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js'
 
 function FlinkFlow({ sourceType, mappings, filters, sink }) {
   const nodes = []
@@ -89,24 +88,9 @@ export default function SummaryStep() {
   const [copying, setCopying] = useState(false)
   const [copiedDash, setCopiedDash] = useState(false)
   const [errorModal, setErrorModal] = useState(null)
-  const [noChangesModalOpen, setNoChangesModalOpen] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
   const [draftModal, setDraftModal] = useState(null)
   const [deployDisabled, setDeployDisabled] = useState(false)
-
-  const closeDraftModal = () => {
-    const shouldNavigateToManagement = Boolean(draftModal?.navigateToManagement)
-    setDraftModal(null)
-
-    if (shouldNavigateToManagement) {
-      actions.setNavigationMode('etl-management')
-    }
-  }
-
-  const acknowledgeNoChanges = () => {
-    setNoChangesModalOpen(false)
-    actions.setNavigationMode('etl-management')
-  }
 
   // Deployment progress modal hook
   const deployment = useDeploymentProgress({
@@ -139,18 +123,6 @@ export default function SummaryStep() {
       sseCleanupRef.current = null
     }
   }, [deployment.isOpen])
-
-  useEffect(() => {
-    if (!draftModal?.navigateToManagement) {
-      return undefined
-    }
-
-    const timeoutId = setTimeout(() => {
-      closeDraftModal()
-    }, 1800)
-
-    return () => clearTimeout(timeoutId)
-  }, [draftModal])
 
   useEffect(() => () => { sseCleanupRef.current?.() }, [])
 
@@ -397,8 +369,6 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
   }
 
   const yaml = generateYaml()
-  const hasChangesComparedToOriginalDraft = !state.originalDraftSignature
-    || state.originalDraftSignature !== buildPipelineChangeSignature(state)
 
   const validations = [
     { type: unmappedRequired.length === 0 ? 'ok' : 'err',  text: `Required fields mapped (${reqMapped}/${requiredTargetFieldIds.length || 0})` },
@@ -447,11 +417,6 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
         message: 'Please define at least one field mapping and try again.',
         showNavigate: true,
       })
-      return
-    }
-
-    if (!hasChangesComparedToOriginalDraft) {
-      setNoChangesModalOpen(true)
       return
     }
     
@@ -582,7 +547,6 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
         icon: '💾',
         accent: 'var(--success)',
         message: 'The YAML draft was saved successfully.',
-        navigateToManagement: true,
       })
     } catch (error) {
       setDraftModal({
@@ -590,7 +554,6 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
         icon: '⚠️',
         accent: 'var(--danger)',
         message: error?.message || 'Failed to save the YAML draft.',
-        navigateToManagement: false,
       })
     } finally {
       setSavingDraft(false)
@@ -756,19 +719,21 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
         </Card>
       </div>
 
-      {/* Sticky footer buttons */}
-      <div style={{
-        borderTop: '1px solid var(--border)',
-        background: 'var(--surf)',
-        padding: '16px 30px',
-        display: 'flex',
-        justifyContent: 'flex-end',
-        gap: 12,
-        flexShrink: 0,
-      }}>
-        <Btn v="secondary" onClick={handleSaveDraft} disabled={savingDraft || deployDisabled}>{savingDraft ? 'Saving…' : '💾 Save Draft'}</Btn>
-        <Btn v="success" onClick={handleCreatePipeline} disabled={deployDisabled}>{deployDisabled ? 'Saving & Deploying...' : 'Save & Deploy'}</Btn>
-      </div>
+      {/* Sticky footer buttons — hidden in read-only / view-only mode */}
+      {!state.readOnly && (
+        <div style={{
+          borderTop: '1px solid var(--border)',
+          background: 'var(--surf)',
+          padding: '16px 30px',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 12,
+          flexShrink: 0,
+        }}>
+          <Btn v="secondary" onClick={handleSaveDraft} disabled={savingDraft || deployDisabled}>{savingDraft ? 'Saving…' : '💾 Save Draft'}</Btn>
+          <Btn v="success" onClick={handleCreatePipeline} disabled={deployDisabled}>{deployDisabled ? '🚀 Deploying...' : '🚀 Deploy'}</Btn>
+        </div>
+      )}
 
       {draftModal && (
         <>
@@ -782,7 +747,7 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
               background: 'rgba(0,0,0,0.5)',
               zIndex: 999,
             }}
-            onClick={closeDraftModal}
+            onClick={() => setDraftModal(null)}
           />
           <div
             style={{
@@ -828,7 +793,7 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
               justifyContent: 'flex-end',
               background: 'var(--bg)',
             }}>
-              <Btn v="primary" onClick={closeDraftModal}>Close</Btn>
+              <Btn v="primary" onClick={() => setDraftModal(null)}>Close</Btn>
             </div>
           </div>
         </>
@@ -935,68 +900,6 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
         </>
       )}
 
-      {noChangesModalOpen && (
-        <>
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0,0,0,0.5)',
-              zIndex: 999,
-            }}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: 'var(--surf)',
-              border: '1px solid var(--border)',
-              borderRadius: '12px',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-              zIndex: 1000,
-              minWidth: '380px',
-              maxWidth: '500px',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{
-              background: 'var(--danger)',
-              padding: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-            }}>
-              <div style={{ fontSize: '32px' }}>ℹ️</div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff' }}>No Changes Detected</h3>
-              </div>
-            </div>
-            <div style={{
-              padding: '20px',
-              color: 'var(--text)',
-              fontSize: '14px',
-              lineHeight: '1.6',
-              whiteSpace: 'pre-wrap',
-            }}>
-              No changes were detected compared to the existing pipeline YAML. The system will not deploy anything.
-            </div>
-            <div style={{
-              padding: '16px 20px',
-              borderTop: '1px solid var(--border)',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              background: 'var(--bg)',
-            }}>
-              <Btn v="primary" onClick={acknowledgeNoChanges}>OK</Btn>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* Deployment Progress Modal */}
       <DeployProgressModal

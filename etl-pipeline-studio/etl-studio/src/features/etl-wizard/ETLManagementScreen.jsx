@@ -4,9 +4,9 @@ import { Btn, Card, Chip, DeployProgressModal, ModalDialog } from '../../shared/
 import * as deploymentsService from '../../shared/services/deploymentsService.js';
 import { fetchDeploymentSteps, subscribeToDeploymentProgress, deployFromYaml }
   from '../../shared/services/deploymentsService.js';
-import { fetchDraftConfiguration } from '../../shared/services/configService.js';
+import { fetchDraftConfiguration, fetchSavedDraftYaml } from '../../shared/services/configService.js';
 import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js';
-import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js';
+import { serializeWizardState } from '../../shared/store/wizardPersistence.js';
 import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js';
 import { useWizard } from '../../shared/store/wizardStore.jsx';
 import { useMockMode } from '../../shared/store/mockModeContext.jsx';
@@ -16,14 +16,7 @@ const STATUS_COLORS = {
   draft: 'amber',
   running: 'green',
   stopped: 'red',
-  failed: 'red',
 };
-
-function formatDeploymentStatusLabel(status) {
-  const normalizedStatus = String(status || '').trim();
-  if (!normalizedStatus) return 'Unknown';
-  return normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
-}
 
 // Add CSS for icon buttons and pulse animation
 const ICON_BUTTON_STYLE = {
@@ -61,45 +54,6 @@ function formatDateShort(ts) {
   const hours = String(d.getHours()).padStart(2, '0');
   const mins = String(d.getMinutes()).padStart(2, '0');
   return `${day} ${month} ${year}, ${hours}:${mins}`;
-}
-
-function formatDeployFailureReason(error) {
-  if (!error) {
-    return 'No additional details were provided by the deployment service.';
-  }
-
-  if (typeof error === 'string') {
-    return error.trim() || 'No additional details were provided by the deployment service.';
-  }
-
-  if (error instanceof Error) {
-    return error.message || 'No additional details were provided by the deployment service.';
-  }
-
-  if (typeof error === 'object') {
-    const candidates = [error.error, error.message, error.reason, error.detail, error.details];
-    const match = candidates.find(value => typeof value === 'string' && value.trim());
-
-    if (match) {
-      return match.trim();
-    }
-
-    try {
-      return JSON.stringify(error, null, 2);
-    } catch {
-      return 'No additional details were provided by the deployment service.';
-    }
-  }
-
-  return String(error);
-}
-
-function createDeploymentErrorModal(reason) {
-  return {
-    icon: '❌',
-    title: 'Deployment Failed',
-    message: formatDeployFailureReason(reason),
-  };
 }
 
 const COLUMNS = [
@@ -143,38 +97,6 @@ export default function ETLManagementScreen() {
   // Use team name from user context
   const teamName = user?.teamName || 'default';
 
-  function updateDeploymentRowStatus(id, deploymentStatus) {
-    const statusTimestamp = Date.now();
-    let updatedRow = null;
-
-    setDeployments(prevDeployments => prevDeployments.map(deploymentRow => {
-      if (deploymentRow.id !== id) {
-        return deploymentRow;
-      }
-
-      updatedRow = {
-        ...deploymentRow,
-        deploymentStatus,
-        lastStatusChange: statusTimestamp,
-      };
-
-      return updatedRow;
-    }));
-
-    if (updatedRow?.isLocalDraft) {
-      deploymentsService.upsertSavedDraftDeployment({
-        teamName,
-        productSource: updatedRow.productSource,
-        productType: updatedRow.productType,
-        environment: updatedRow.environment,
-        savedVersion: updatedRow.savedVersion,
-        deploymentStatus,
-        deployedVersion: updatedRow.deployedVersion,
-        lastStatusChange: statusTimestamp,
-      });
-    }
-  }
-
   const deployment = useDeploymentProgress({
     autoAdvance: false,  // steps are driven by SSE events (or mock simulation)
     stepDuration: 700,
@@ -191,12 +113,10 @@ export default function ETLManagementScreen() {
     },
     onDeploymentError: (_stepIndex, error) => {
       if (activeDeployId) {
-        updateDeploymentRowStatus(activeDeployId, 'failed');
         setActionLoading(a => ({ ...a, [activeDeployId]: null }));
         setActiveDeployId(null);
       }
-      setScreenError('');
-      setErrorModal(createDeploymentErrorModal(error));
+      setScreenError(error || 'Deployment failed.');
       setScreenNotice(null);
     },
   });
@@ -319,10 +239,9 @@ export default function ETLManagementScreen() {
 
     // Helper: close the progress modal and show the error popup,
     // mirroring the exact behaviour of SummaryStep's handleFailure.
-    const showDeployError = (error) => {
+    const showDeployError = (msg) => {
       deployment.reset();                       // close progress modal
-      updateDeploymentRowStatus(id, 'failed');
-      setErrorModal(createDeploymentErrorModal(error));
+      setErrorModal({ icon: '❌', title: 'Deployment Failed', message: msg });
       setActionLoading(a => ({ ...a, [id]: null }));
       setActiveDeployId(null);
     };
@@ -518,8 +437,6 @@ export default function ETLManagementScreen() {
         ...loadedState,
         navigationMode: 'etl-config',
         currentStep: 0,
-        originalDraftYaml: yamlText,
-        originalDraftSignature: buildPipelineChangeSignature(loadedState),
         completedSteps: [0, 1, 2, 3, 4, 5, 6],
       });
     } catch (error) {
@@ -530,13 +447,71 @@ export default function ETLManagementScreen() {
     }
   };
 
+  /**
+   * Fetches the saved-draft YAML from /api/backend/configuration/draft/yaml and
+   * opens a new browser window pre-loaded with all the configuration tabs
+   * filled in from that YAML (read-only / editable view).
+   */
+  const handleViewSavedVersion = async (dep) => {
+    setActionLoading(a => ({ ...a, [`${dep.id}_savedVersion`]: true }));
+    setScreenError('');
+    setScreenNotice(null);
+
+    try {
+      const environment = dep.environment || state.metadata.environment || 'production';
+
+      const yamlText = await fetchSavedDraftYaml({
+        productType: dep.productType,
+        source: dep.productSource,
+        team: teamName,
+        environment,
+      }, useMock);
+
+      if (!yamlText) {
+        setScreenError('No saved YAML configuration found for this pipeline version.');
+        return;
+      }
+
+      const loadedState = hydrateWizardStateFromYaml(yamlText, {
+        productType: dep.productType,
+        source: dep.productSource,
+        teamName,
+        environment,
+      });
+
+      // Stash wizard state into localStorage under a one-shot key.
+      // WizardProvider reads and removes it when the new window boots.
+      const draftKey = `etl-draft-preview:${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          wizardState: {
+            ...loadedState,
+            navigationMode: 'etl-config',
+            readOnly: true,
+            currentStep: 0,
+            completedSteps: [0, 1, 2, 3, 4, 5, 6],
+          },
+        }),
+      );
+
+      window.open(
+        `${window.location.origin}${window.location.pathname}?loadDraft=${encodeURIComponent(draftKey)}`,
+        '_blank',
+      );
+    } catch (error) {
+      console.error('[ETLManagementScreen] handleViewSavedVersion failed:', error);
+      setScreenError(error?.message || 'Failed to load saved draft configuration.');
+    } finally {
+      setActionLoading(a => ({ ...a, [`${dep.id}_savedVersion`]: false }));
+    }
+  };
+
   // Handler for creating new configuration
   function handleCreateNewConfig() {
     actions.loadState({
       navigationMode: 'etl-config',
       currentStep: 0,
-      originalDraftYaml: '',
-      originalDraftSignature: '',
       completedSteps: new Set(),
       metadata: {
         team: teamName,
@@ -631,10 +606,6 @@ export default function ETLManagementScreen() {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#ef4444' }}></span>
             <span style={{ color: '#ef4444' }}>{deployments.filter(d => d.deploymentStatus === 'stopped').length} stopped</span>
-          </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#dc2626' }}></span>
-            <span style={{ color: '#dc2626' }}>{deployments.filter(d => d.deploymentStatus === 'failed').length} failed</span>
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#f59e0b' }}></span>
@@ -799,10 +770,38 @@ export default function ETLManagementScreen() {
                             background: 'currentColor',
                             animation: isRunning ? 'pulse 2s ease-in-out infinite' : 'none',
                           }}></span>
-                          {formatDeploymentStatusLabel(dep.deploymentStatus)}
+                          {dep.deploymentStatus}
                         </Chip>
                       </td>
-                      <td style={{ padding: 8, fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)' }}>{dep.savedVersion}</td>
+                      <td style={{ padding: 8, fontFamily: 'var(--mono)', fontSize: 13 }}>
+                        {dep.savedVersion ? (
+                          <button
+                            onClick={() => handleViewSavedVersion(dep)}
+                            disabled={!!actionLoading[`${dep.id}_savedVersion`]}
+                            title={actionLoading[`${dep.id}_savedVersion`] ? 'Loading…' : 'Open saved version in new window'}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              cursor: actionLoading[`${dep.id}_savedVersion`] ? 'wait' : 'pointer',
+                              fontFamily: 'var(--mono)',
+                              fontSize: 13,
+                              color: 'var(--accent)',
+                              textDecoration: 'underline',
+                              textDecorationStyle: 'dashed',
+                              textUnderlineOffset: '3px',
+                              opacity: actionLoading[`${dep.id}_savedVersion`] ? 0.5 : 1,
+                              transition: 'opacity 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.opacity = '0.75'; }}
+                            onMouseLeave={e => { e.currentTarget.style.opacity = actionLoading[`${dep.id}_savedVersion`] ? '0.5' : '1'; }}
+                          >
+                            {actionLoading[`${dep.id}_savedVersion`] ? '…' : dep.savedVersion}
+                          </button>
+                        ) : (
+                          <span style={{ color: 'var(--muted)' }}>—</span>
+                        )}
+                      </td>
                       <td style={{
                         padding: 8,
                         fontFamily: 'var(--mono)',
@@ -939,7 +938,7 @@ export default function ETLManagementScreen() {
           message={errorModal?.message}
           icon={errorModal?.icon}
           tone="danger"
-          cancelLabel="Close"
+          cancelLabel="Got it"
           onCancel={() => setErrorModal(null)}
           disableBackdropClose={false}
         />

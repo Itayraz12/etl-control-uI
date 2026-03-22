@@ -6,8 +6,9 @@ import { getFieldMappingValidation, isWizardStepValid } from '../../shared/servi
 
 export default function WizardFooter() {
   const { state, actions } = useWizard()
-  const { currentStep } = state
+  const { currentStep, readOnly } = state
   const [mappingValidationModal, setMappingValidationModal] = useState(false)
+  const isFirst = currentStep === 0
   const isLast = currentStep === STEPS.length - 1
   const canContinue = isWizardStepValid(currentStep, state)
   const fieldMappingValidation = getFieldMappingValidation(state)
@@ -17,12 +18,53 @@ export default function WizardFooter() {
       setMappingValidationModal(true)
       return
     }
-
     if (canContinue) {
       actions.goNext(currentStep)
     }
   }
 
+  // ── Read-only footer: simple Prev / Next navigation + close ─────────────
+  if (readOnly) {
+    return (
+      <div style={{
+        background: 'var(--surf)', borderTop: '1px solid var(--border)',
+        padding: '14px 30px', display: 'flex', alignItems: 'center',
+        gap: 12, flexShrink: 0,
+      }}>
+        <Btn v="secondary" onClick={() => actions.goBack(currentStep)} disabled={isFirst}>
+          ← Previous
+        </Btn>
+        <div style={{ flex: 1 }} />
+        <span style={{
+          fontSize: 11,
+          fontWeight: 600,
+          padding: '3px 10px',
+          borderRadius: 99,
+          background: 'rgba(245,158,11,0.15)',
+          border: '1px solid rgba(245,158,11,0.4)',
+          color: '#b45309',
+          letterSpacing: '0.04em',
+        }}>
+          👁 VIEW ONLY
+        </span>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+          Step {currentStep + 1} of {STEPS.length} — {STEPS[currentStep].label}
+        </span>
+        {!isLast && (
+          <Btn v="secondary" onClick={() => actions.setStep(currentStep + 1)}>
+            Next →
+          </Btn>
+        )}
+        {isLast && (
+          <Btn v="secondary" onClick={() => window.close()}>
+            Close
+          </Btn>
+        )}
+      </div>
+    )
+  }
+
+  // ── Normal footer ────────────────────────────────────────────────────────
   return (
     <>
       <div style={{

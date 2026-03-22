@@ -1399,6 +1399,7 @@ export default function FieldMappingStep() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--surf2)' }}>
                 <button
                   type="button"
+                  data-etl-ro-allow
                   aria-label="Zoom out"
                   onClick={handleZoomOut}
                   disabled={zoom <= MIN_ZOOM}
@@ -1419,6 +1420,7 @@ export default function FieldMappingStep() {
                 </button>
                 <button
                   type="button"
+                  data-etl-ro-allow
                   aria-label="Reset zoom"
                   data-testid="field-mapping-zoom-reset"
                   onClick={handleZoomReset}
@@ -1439,6 +1441,7 @@ export default function FieldMappingStep() {
                 </button>
                 <button
                   type="button"
+                  data-etl-ro-allow
                   aria-label="Zoom in"
                   onClick={handleZoomIn}
                   disabled={zoom >= MAX_ZOOM}
@@ -1852,6 +1855,8 @@ export default function FieldMappingStep() {
 
                     {/* Insertion points for transformer chaining */}
                     {chain.length > 0 && Array.from({ length: chain.length + 1 }).map((_, slotIndex) => {
+                      // Never show add-transformer controls in read-only / view-only mode
+                      if (state.readOnly) return null
                       // Hide the + before a NONE-input transformer — nothing may precede it
                       if (findTransformer(transformers, chain[slotIndex]?.id)?.inputType === 'NONE') return null
 
@@ -1900,7 +1905,7 @@ export default function FieldMappingStep() {
                     })}
 
                     {/* Click area for empty transformer (to add one) */}
-                    {chain.length === 0 && (
+                    {chain.length === 0 && !state.readOnly && (
                       <g
                         data-testid={`add-transformer-trigger-${idx}`}
                         onClick={(e) => {
@@ -2932,11 +2937,13 @@ export default function FieldMappingStep() {
                 </span>
                 {selectedTf && (
                   <button
+                    data-etl-ro-allow
                     onClick={() => { setSelectedTf(null); setTfPropValues({}) }}
                     style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', marginRight: '4px' }}
                   >← Back</button>
                 )}
                 <button
+                  data-etl-ro-allow
                   onClick={resetTransformerModal}
                   style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', width: '26px', height: '26px', cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >×</button>
@@ -3070,7 +3077,7 @@ export default function FieldMappingStep() {
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={resetTransformerModal} style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>
+                  <button data-etl-ro-allow onClick={resetTransformerModal} style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>
                     Cancel
                   </button>
                   {selectedTf && (

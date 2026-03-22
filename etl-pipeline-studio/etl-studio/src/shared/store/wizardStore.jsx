@@ -13,6 +13,8 @@ const initialState = {
   completedSteps: new Set(),
   originalDraftYaml: '',
   originalDraftSignature: '',
+  // When true, all wizard inputs/buttons are locked (opened from saved-version preview)
+  readOnly: false,
   // Theme preference
   theme: 'dark',
 
@@ -94,6 +96,7 @@ function wizardReducer(state, action) {
         ...payload,
         theme: state.theme,
         navigationMode: payload.navigationMode ?? initialState.navigationMode,
+        readOnly: payload.readOnly === true,
         currentStep: Number.isInteger(payload.currentStep) ? payload.currentStep : 0,
         originalDraftYaml: typeof payload.originalDraftYaml === 'string' ? payload.originalDraftYaml : '',
         originalDraftSignature: typeof payload.originalDraftSignature === 'string' ? payload.originalDraftSignature : '',
@@ -145,6 +148,36 @@ const WizardContext = createContext(null)
 
 export function WizardProvider({ children, user = null }) {
   const [state, dispatch] = useReducer(wizardReducer, initialState, (baseState) => {
+    // If this window was opened via the saved-version click (?loadDraft=key),
+    // peek at the stashed wizard state and use it as the very first render
+    // state — so we start in etl-config mode immediately, with no flash of
+    // the management table.  The cleanup (URL reset + localStorage removal)
+    // is still handled by the useEffect below.
+    if (user?.userId) {
+      try {
+        const params   = new URLSearchParams(window.location.search)
+        const draftKey = params.get('loadDraft')
+        if (draftKey) {
+          const raw = localStorage.getItem(draftKey)
+          if (raw) {
+            const { wizardState } = JSON.parse(raw)
+            if (wizardState) {
+              return {
+                ...initialState,
+                ...wizardState,
+                theme: 'dark',
+                completedSteps: new Set(
+                  Array.isArray(wizardState.completedSteps) ? wizardState.completedSteps : []
+                ),
+              }
+            }
+          }
+        }
+      } catch {
+        // fall through to normal persisted-state load
+      }
+    }
+
     const persistedState = loadPersistedWizardStateForUser(user?.userId)
     return buildStateFromPersisted(
       buildDefaultWizardStateForUser(baseState, user),
@@ -159,6 +192,35 @@ export function WizardProvider({ children, user = null }) {
   }, [state.theme])
 
   useEffect(() => {
+    // When a new window is opened from the management table's saved-version
+    // cell, a pre-processed wizard state is stashed in localStorage under the
+    // key carried by ?loadDraft=<key>.
+    //
+    // GUARD: only consume the key when user?.userId is set.
+    // WizardProvider first mounts with user=null (key prop = null-based key).
+    // At that point userId is undefined — if we consumed the key here the entry
+    // would be gone when the provider remounts with the real user, and we would
+    // fall back to the persisted etl-management state.
+    const params   = new URLSearchParams(window.location.search)
+    const draftKey = params.get('loadDraft')
+
+    if (draftKey && user?.userId) {
+      window.history.replaceState({}, '', window.location.pathname)
+      const raw = localStorage.getItem(draftKey)
+      localStorage.removeItem(draftKey)   // one-shot
+      if (raw) {
+        try {
+          const { wizardState } = JSON.parse(raw)
+          if (wizardState) {
+            dispatch({ type: 'LOAD_STATE', payload: wizardState })
+            return
+          }
+        } catch (e) {
+          console.error('[WizardProvider] failed to load pending draft:', e)
+        }
+      }
+    }
+
     const persistedState = loadPersistedWizardStateForUser(user?.userId)
     dispatch({
       type: 'LOAD_STATE',

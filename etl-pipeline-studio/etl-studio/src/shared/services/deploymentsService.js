@@ -1,160 +1,58 @@
 // Backend service for deployments data
 const API_BASE = 'http://localhost:8080/api'
-const SAVED_DRAFTS_STORAGE_KEY = 'etl-studio-management-drafts'
 
-function normalizeDraftKeyPart(value) {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '-')
+// ── Local-draft store (localStorage) ─────────────────────────────────────
+// Deployments that have been saved locally (via the wizard's Save action) but
+// may not yet exist on the backend are persisted here so the management table
+// can always show them.
+
+const LOCAL_DRAFTS_KEY = 'etl-local-drafts'
+
+function buildLocalDraftId({ teamName, productSource, productType, environment }) {
+  return `local-draft:${teamName}::${(productSource || '').toLowerCase()}::${(productType || '').toLowerCase()}::${environment}`
 }
 
-function getDraftIdentity({ teamName = '', productSource = '', productType = '', environment = '' } = {}) {
-  return [teamName, productSource, productType, environment]
-    .map(normalizeDraftKeyPart)
-    .join('::')
-}
-
-function readSavedDraftRows() {
+function readLocalDrafts() {
   try {
-    const raw = localStorage.getItem(SAVED_DRAFTS_STORAGE_KEY)
-    const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed : []
+    return JSON.parse(localStorage.getItem(LOCAL_DRAFTS_KEY) || '{}')
   } catch {
-    return []
+    return {}
   }
 }
 
-function writeSavedDraftRows(rows) {
+function writeLocalDrafts(drafts) {
   try {
-    localStorage.setItem(SAVED_DRAFTS_STORAGE_KEY, JSON.stringify(rows))
+    localStorage.setItem(LOCAL_DRAFTS_KEY, JSON.stringify(drafts))
   } catch {}
 }
 
-function normalizeSavedDraftRow(row = {}) {
-  const identity = getDraftIdentity(row)
-  const createdAt = row.createdAt || Date.now()
-  const lastStatusChange = row.lastStatusChange || createdAt
-
-  return {
-    id: row.id || `local-draft:${identity}`,
-    identity,
-    teamName: row.teamName || 'default',
-    productSource: row.productSource || '',
-    productType: row.productType || '',
-    environment: row.environment || 'production',
-    deploymentStatus: row.deploymentStatus || 'draft',
-    savedVersion: row.savedVersion || '1.0',
-    deployedVersion: row.deployedVersion ?? null,
-    lastStatusChange,
-    createdAt,
-    isLocalDraft: true,
-  }
-}
-
-function mergeSavedDraftRows(deployments = [], teamName = 'default') {
-  const normalizedTeamName = String(teamName ?? '').trim()
-  const backendRows = Array.isArray(deployments) ? deployments : []
-  const backendIdentities = new Set(
-    backendRows.map(row => getDraftIdentity({
-      teamName: normalizedTeamName,
-      productSource: row?.productSource,
-      productType: row?.productType,
-      environment: row?.environment,
-    }))
-  )
-
-  const localDraftRows = readSavedDraftRows()
-    .map(normalizeSavedDraftRow)
-    .filter(row => row.teamName === normalizedTeamName)
-    .filter(row => !backendIdentities.has(row.identity))
-
-  return [...localDraftRows, ...backendRows]
-}
-
-export function upsertSavedDraftDeployment({ teamName = 'default', productSource = '', productType = '', environment = 'production', savedVersion = '1.0', deploymentStatus = 'draft', deployedVersion = null, lastStatusChange } = {}) {
-  const normalizedRow = normalizeSavedDraftRow({
-    teamName: String(teamName ?? '').trim() || 'default',
+/**
+ * Creates or updates a local-only draft deployment entry that is merged into
+ * the management table until the backend returns a matching record.
+ *
+ * Called by configService.saveDraftConfiguration after a successful save.
+ */
+export function upsertSavedDraftDeployment({ teamName, productSource, productType, environment, savedVersion }) {
+  const id     = buildLocalDraftId({ teamName, productSource, productType, environment })
+  const drafts = readLocalDrafts()
+  drafts[id] = {
+    ...drafts[id],
+    id,
+    teamName,
     productSource,
     productType,
     environment,
-    savedVersion,
-    deploymentStatus,
-    deployedVersion,
-    lastStatusChange,
-  })
-
-  const nextRows = readSavedDraftRows().filter(row => normalizeSavedDraftRow(row).identity !== normalizedRow.identity)
-  nextRows.unshift(normalizedRow)
-  writeSavedDraftRows(nextRows)
-
-  return normalizedRow
-}
-
-export function removeSavedDraftDeployment(identifier) {
-  const currentRows = readSavedDraftRows()
-  const nextRows = currentRows.filter(row => {
-    const normalizedRow = normalizeSavedDraftRow(row)
-    return normalizedRow.id !== identifier && normalizedRow.identity !== identifier
-  })
-
-  if (nextRows.length !== currentRows.length) {
-    writeSavedDraftRows(nextRows)
-    return true
+    deploymentStatus: 'draft',
+    savedVersion:     savedVersion ?? drafts[id]?.savedVersion ?? null,
+    deployedVersion:  drafts[id]?.deployedVersion ?? null,
+    lastStatusChange: Date.now(),
+    createdAt:        drafts[id]?.createdAt ?? Date.now(),
+    isLocalDraft:     true,
   }
-
-  return false
+  writeLocalDrafts(drafts)
 }
 
-function getDeployHttpErrorPrefix(status) {
-  switch (status) {
-    case 400:
-      return 'The deployment request was rejected by the backend.'
-    case 401:
-    case 403:
-      return 'You are not authorized to deploy this pipeline.'
-    case 404:
-      return 'The deployment API endpoint was not found.'
-    case 409:
-      return 'The deployment could not start because of a backend conflict.'
-    case 500:
-    case 502:
-    case 503:
-    case 504:
-      return 'The deployment backend is currently unavailable.'
-    default:
-      return 'The deployment request failed.'
-  }
-}
 
-async function buildDeployHttpError(response) {
-  let backendDetail = ''
-
-  try {
-    const contentType = response.headers.get('Content-Type') || ''
-    if (contentType.includes('application/json')) {
-      const payload = await response.json()
-      backendDetail = payload?.error || payload?.message || payload?.detail || payload?.details || ''
-    } else {
-      backendDetail = (await response.text()).trim()
-    }
-  } catch {
-    backendDetail = ''
-  }
-
-  const prefix = getDeployHttpErrorPrefix(response.status)
-  const statusSuffix = response.status === 404
-    ? ' Verify that the backend server is running and that POST /api/backend/deployments/deploy is available.'
-    : ` HTTP ${response.status}.`
-
-  const detailSuffix = backendDetail
-    ? ` Backend response: ${backendDetail}`
-    : ''
-
-  return `${prefix}${statusSuffix}${detailSuffix}`.trim()
-}
-
-// ── Create + deploy from wizard YAML ─────────────────────────────────────
 
 /**
  * POSTs the generated YAML to the backend to create and immediately start a
@@ -176,9 +74,7 @@ export async function deployFromYaml(yamlContent) {
       headers: { 'Content-Type': 'text/plain' },
       body: yamlContent,
     })
-    if (!response.ok) {
-      throw new Error(await buildDeployHttpError(response))
-    }
+    if (!response.ok) throw new Error(`Deploy failed: ${response.status}`)
     const data = await response.json()
     console.log('[deploymentsService] deployFromYaml result:', data)
     return data
@@ -539,10 +435,31 @@ function cloneMockDeployments() {
 }
 
 export async function fetchDeployments(teamName = 'default', useMock = false) {
+  // Helper: merge local drafts with the backend / mock list.
+  // A local draft is suppressed when the backend already has a row whose
+  // productSource + productType + environment matches (backend is source of truth).
+  function mergeWithLocalDrafts(backendRows) {
+    const drafts = readLocalDrafts()
+    const dominated = new Set(
+      backendRows.map(r =>
+        buildLocalDraftId({
+          teamName: r.teamName || teamName,
+          productSource: r.productSource,
+          productType:   r.productType,
+          environment:   r.environment,
+        })
+      )
+    )
+    const extra = Object.values(drafts).filter(
+      d => d.teamName === teamName && !dominated.has(d.id)
+    )
+    return [...backendRows, ...extra]
+  }
+
   if (useMock) {
     // Simulate network delay
     await new Promise(r => setTimeout(r, 300));
-    return mergeSavedDraftRows(cloneMockDeployments(), teamName);
+    return mergeWithLocalDrafts(cloneMockDeployments());
   } else {
     try {
       const url = `${API_BASE}/backend/deployments?teamName=${encodeURIComponent(teamName)}`;
@@ -572,17 +489,17 @@ export async function fetchDeployments(teamName = 'default', useMock = false) {
       // Ensure data is an array
       if (!Array.isArray(data)) {
         console.warn('⚠️ Response is not an array, wrapping it:', data);
-        return mergeSavedDraftRows(Array.isArray(data) ? data : [], teamName);
+        return mergeWithLocalDrafts([]);
       }
 
       console.log('✅ Deployments fetched successfully!');
-      return mergeSavedDraftRows(data, teamName);
+      return mergeWithLocalDrafts(data);
     } catch (error) {
       console.error('❌ Failed to fetch deployments:', error);
       console.error('   Error message:', error.message);
       console.error('   Error stack:', error.stack);
-      // Return local draft rows on error so recently saved drafts remain visible
-      return mergeSavedDraftRows([], teamName);
+      // Return empty array on error
+      return mergeWithLocalDrafts([]);
     }
   }
 }
@@ -664,7 +581,11 @@ export async function stopDeployment(id, useMock = false) {
 }
 
 export async function deleteDeployment(id, useMock = false) {
-  if (removeSavedDraftDeployment(id)) {
+  // Local-only draft rows are never on the backend — just remove from localStorage.
+  if (String(id).startsWith('local-draft:')) {
+    const drafts = readLocalDrafts()
+    delete drafts[id]
+    writeLocalDrafts(drafts)
     return { success: true, id }
   }
 

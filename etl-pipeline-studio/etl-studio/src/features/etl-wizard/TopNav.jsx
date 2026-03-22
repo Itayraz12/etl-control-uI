@@ -5,9 +5,11 @@ import { useUser } from '../../shared/store/userContext.jsx'
 export default function TopNav() {
   const { state, actions } = useWizard()
   const { logout } = useUser()
+  const { readOnly } = state
   const appVersion = `v${__APP_VERSION__}`
 
   function handleBrandClick() {
+    if (readOnly) return
     actions.setNavigationMode('etl-management')
   }
 
@@ -33,9 +35,9 @@ export default function TopNav() {
           border: 'none',
           padding: 0,
           margin: 0,
-          cursor: 'pointer',
+          cursor: readOnly ? 'default' : 'pointer',
         }}
-        aria-label="Go to ETL management"
+        aria-label={readOnly ? 'ETL Management (view only)' : 'Go to ETL management'}
       >
         ETL<span style={{ color: 'var(--text)' }}>Management</span>
       </button>
@@ -43,6 +45,11 @@ export default function TopNav() {
       <span style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
         {appVersion}
       </span>
+      {readOnly && (
+        <Chip c="amber" style={{ fontWeight: 700, letterSpacing: '0.04em' }}>
+          👁 VIEW ONLY
+        </Chip>
+      )}
       <div style={{ flex: 1 }} />
       <Btn
         v="ghost" sm
@@ -50,7 +57,9 @@ export default function TopNav() {
       >
         {state.theme === 'dark' ? '🌞 Light' : '🌙 Dark'}
       </Btn>
-      <Btn v="danger" sm onClick={handleLogout}>Logout</Btn>
+      {!readOnly && (
+        <Btn v="danger" sm onClick={handleLogout}>Logout</Btn>
+      )}
     </div>
   )
 }
