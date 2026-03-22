@@ -1,6 +1,44 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SummaryStep from './SummaryStep.jsx'
+import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js'
+
+const mockWizardState = {
+  metadata: {
+    entityName: 'product',
+    productSource: 'ERP',
+    productType: 'Catalog',
+    environment: 'production',
+    team: 'data-platform',
+  },
+  source: {
+    sourceType: 'kafka',
+    kafkaTopic: 'catalog-topic',
+    format: 'JSON',
+    streamingContinuity: 'continuous',
+    recordsPerDay: 'millions',
+  },
+  upload: {
+    done: true,
+    schema: [
+      { id: 'sku', name: 'sku', path: 'sku', type: 'string', nullable: false },
+    ],
+  },
+  targetSchema: [
+    { id: 'sku', name: 'sku', path: 'sku', type: 'string', required: true },
+  ],
+  mappings: [
+    { src: 'sku', tgt: 'sku', transformer: 'none' },
+  ],
+  filters: [],
+  sink: {
+    sinkType: 'kafka',
+    sinkKafkaTopic: 'catalog-sink',
+    sinkKafkaAdditionalProperties: [],
+  },
+  originalDraftYaml: '',
+  originalDraftSignature: '',
+}
 
 const mockActions = {
   setNavigationMode: vi.fn(),
@@ -8,43 +46,13 @@ const mockActions = {
 }
 
 const mockSaveDraftConfiguration = vi.fn(() => Promise.resolve({ success: true }))
+const mockFetchDeploymentSteps = vi.fn(() => Promise.resolve([{ id: 'validate', label: 'Validate' }]))
+const mockDeployFromYaml = vi.fn(() => Promise.resolve({ success: true, deploymentId: 'dep-1' }))
+const mockSubscribeToDeploymentProgress = vi.fn(() => vi.fn())
 
 vi.mock('../../shared/store/wizardStore.jsx', () => ({
   useWizard: () => ({
-    state: {
-      metadata: {
-        entityName: 'product',
-        productSource: 'ERP',
-        productType: 'Catalog',
-        environment: 'production',
-        team: 'data-platform',
-      },
-      source: {
-        sourceType: 'kafka',
-        kafkaTopic: 'catalog-topic',
-        format: 'JSON',
-        streamingContinuity: 'continuous',
-        recordsPerDay: 'millions',
-      },
-      upload: {
-        done: true,
-        schema: [
-          { id: 'sku', name: 'sku', path: 'sku', type: 'string', nullable: false },
-        ],
-      },
-      targetSchema: [
-        { id: 'sku', name: 'sku', path: 'sku', type: 'string', required: true },
-      ],
-      mappings: [
-        { src: 'sku', tgt: 'sku', transformer: 'none' },
-      ],
-      filters: [],
-      sink: {
-        sinkType: 'kafka',
-        sinkKafkaTopic: 'catalog-sink',
-        sinkKafkaAdditionalProperties: [],
-      },
-    },
+    state: mockWizardState,
     actions: mockActions,
   }),
 }))
@@ -73,12 +81,22 @@ vi.mock('../../shared/services/configService.js', () => ({
   saveDraftConfiguration: (...args) => mockSaveDraftConfiguration(...args),
 }))
 
+vi.mock('../../shared/services/deploymentsService.js', () => ({
+  fetchDeploymentSteps: (...args) => mockFetchDeploymentSteps(...args),
+  deployFromYaml: (...args) => mockDeployFromYaml(...args),
+  subscribeToDeploymentProgress: (...args) => mockSubscribeToDeploymentProgress(...args),
+}))
+
 describe('SummaryStep save draft behavior', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    mockWizardState.originalDraftYaml = ''
     mockActions.setNavigationMode.mockReset()
     mockActions.goTo.mockReset()
     mockSaveDraftConfiguration.mockClear()
+    mockFetchDeploymentSteps.mockClear()
+    mockDeployFromYaml.mockClear()
+    mockSubscribeToDeploymentProgress.mockClear()
   })
 
   afterEach(() => {
@@ -100,6 +118,29 @@ describe('SummaryStep save draft behavior', () => {
 
     await act(async () => {
       vi.advanceTimersByTime(1800)
+      await Promise.resolve()
+    })
+
+    expect(mockActions.setNavigationMode).toHaveBeenCalledWith('etl-management')
+  })
+
+  it('shows a no-change popup and skips deployment when the edited YAML is unchanged', async () => {
+    mockWizardState.originalDraftSignature = buildPipelineChangeSignature(mockWizardState)
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save & deploy/i }))
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText('No Changes Detected')).toBeInTheDocument()
+    expect(screen.getByText('No changes were detected compared to the existing pipeline YAML. The system will not deploy anything.')).toBeInTheDocument()
+    expect(mockFetchDeploymentSteps).not.toHaveBeenCalled()
+    expect(mockDeployFromYaml).not.toHaveBeenCalled()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }))
       await Promise.resolve()
     })
 

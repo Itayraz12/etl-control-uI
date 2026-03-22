@@ -61,8 +61,12 @@ export function isWizardStepValid(stepIndex, state, targetSchema = getResolvedTa
 
 export function canNavigateToWizardStep(targetStep, state, targetSchema = getResolvedTargetSchema(state)) {
   const currentStep = state?.currentStep ?? 0
+  const completedSteps = state?.completedSteps instanceof Set
+    ? state.completedSteps
+    : new Set(Array.isArray(state?.completedSteps) ? state.completedSteps : [])
 
   if (targetStep <= currentStep) return true
+  if (completedSteps.has(targetStep)) return true
   if (targetStep !== currentStep + 1) return false
 
   return isWizardStepValid(currentStep, state, targetSchema)

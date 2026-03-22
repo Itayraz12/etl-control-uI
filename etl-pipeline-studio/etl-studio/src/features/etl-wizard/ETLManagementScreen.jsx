@@ -6,6 +6,7 @@ import { fetchDeploymentSteps, subscribeToDeploymentProgress, deployFromYaml }
   from '../../shared/services/deploymentsService.js';
 import { fetchDraftConfiguration } from '../../shared/services/configService.js';
 import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js';
+import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js';
 import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js';
 import { useWizard } from '../../shared/store/wizardStore.jsx';
 import { useMockMode } from '../../shared/store/mockModeContext.jsx';
@@ -476,6 +477,8 @@ export default function ETLManagementScreen() {
         ...loadedState,
         navigationMode: 'etl-config',
         currentStep: 0,
+        originalDraftYaml: yamlText,
+        originalDraftSignature: buildPipelineChangeSignature(loadedState),
         completedSteps: [0, 1, 2, 3, 4, 5, 6],
       });
     } catch (error) {
@@ -491,6 +494,8 @@ export default function ETLManagementScreen() {
     actions.loadState({
       navigationMode: 'etl-config',
       currentStep: 0,
+      originalDraftYaml: '',
+      originalDraftSignature: '',
       completedSteps: new Set(),
       metadata: {
         team: teamName,

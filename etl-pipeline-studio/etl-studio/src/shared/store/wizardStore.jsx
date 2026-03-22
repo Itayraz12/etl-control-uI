@@ -11,6 +11,8 @@ const initialState = {
   navigationMode: 'menu', // 'menu' | 'etl-config' | 'etl-management'
   currentStep: 0,
   completedSteps: new Set(),
+  originalDraftYaml: '',
+  originalDraftSignature: '',
   // Theme preference
   theme: 'dark',
 
@@ -93,6 +95,8 @@ function wizardReducer(state, action) {
         theme: state.theme,
         navigationMode: payload.navigationMode ?? initialState.navigationMode,
         currentStep: Number.isInteger(payload.currentStep) ? payload.currentStep : 0,
+        originalDraftYaml: typeof payload.originalDraftYaml === 'string' ? payload.originalDraftYaml : '',
+        originalDraftSignature: typeof payload.originalDraftSignature === 'string' ? payload.originalDraftSignature : '',
         completedSteps: new Set(
           payload.completedSteps instanceof Set
             ? Array.from(payload.completedSteps)

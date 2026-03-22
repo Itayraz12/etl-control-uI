@@ -4,6 +4,7 @@ import { canNavigateToWizardStep } from './wizardValidation.js'
 function buildState(overrides = {}) {
   return {
     currentStep: 1,
+    completedSteps: new Set(),
     metadata: {
       productSource: 'ERP',
       productType: 'Inventory',
@@ -52,5 +53,16 @@ describe('canNavigateToWizardStep', () => {
     })
 
     expect(canNavigateToWizardStep(2, state)).toBe(false)
+  })
+
+  it('allows completed future steps to remain clickable after loading an edited deployment', () => {
+    const state = buildState({
+      currentStep: 0,
+      completedSteps: new Set([0, 1, 2, 3, 4, 5, 6]),
+    })
+
+    expect(canNavigateToWizardStep(1, state)).toBe(true)
+    expect(canNavigateToWizardStep(4, state)).toBe(true)
+    expect(canNavigateToWizardStep(6, state)).toBe(true)
   })
 })
