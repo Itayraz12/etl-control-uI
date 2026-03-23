@@ -17,8 +17,11 @@ export function parsePersistedWizardState(raw) {
 
   try {
     const parsed = JSON.parse(raw)
+    const { readOnly: _ignoredReadOnly, ...persistedState } = parsed || {}
+
     return {
-      ...parsed,
+      ...persistedState,
+      readOnly: false,
       currentStep: Number.isInteger(parsed.currentStep) ? parsed.currentStep : 0,
       completedSteps: new Set(Array.isArray(parsed.completedSteps) ? parsed.completedSteps : []),
       mappings: Array.isArray(parsed.mappings) ? parsed.mappings : [],
@@ -37,9 +40,11 @@ export function parsePersistedWizardState(raw) {
 }
 
 export function serializeWizardState(state) {
+  const { readOnly: _ignoredReadOnly, ...persistedState } = state || {}
+
   return JSON.stringify({
-    ...state,
-    completedSteps: Array.from(state.completedSteps || []),
+    ...persistedState,
+    completedSteps: Array.from(state?.completedSteps || []),
   })
 }
 

@@ -76,6 +76,20 @@ const SORT_INDICATOR_STYLE = {
   lineHeight: 1,
 };
 
+function buildPreviewStorageKey(deploymentId, previewSource) {
+  return `etl-deployment-preview:${deploymentId}:${previewSource}`;
+}
+
+function buildPreviewUrl(deploymentId, previewSource) {
+  const params = new URLSearchParams({
+    preview: 'true',
+    deploymentId,
+    previewSource,
+  });
+
+  return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+}
+
 export default function ETLManagementScreen() {
   const [deployments, setDeployments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -452,7 +466,7 @@ export default function ETLManagementScreen() {
   /**
    * Fetches the saved-draft YAML from /api/backend/configuration/draft/yaml and
    * opens a new browser window pre-loaded with all the configuration tabs
-   * filled in from that YAML (read-only / editable view).
+   * filled in from that YAML as a read-only preview for this deployment.
    */
   const handleViewSavedVersion = async (dep) => {
     setActionLoading(a => ({ ...a, [`${dep.id}_savedVersion`]: true }));
@@ -481,9 +495,7 @@ export default function ETLManagementScreen() {
         environment,
       });
 
-      // Stash wizard state into localStorage under a one-shot key.
-      // WizardProvider reads and removes it when the new window boots.
-      const draftKey = `etl-draft-preview:${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const draftKey = buildPreviewStorageKey(dep.id, 'saved');
       localStorage.setItem(
         draftKey,
         JSON.stringify({
@@ -498,7 +510,7 @@ export default function ETLManagementScreen() {
       );
 
       window.open(
-        `${window.location.origin}${window.location.pathname}?loadDraft=${encodeURIComponent(draftKey)}`,
+        buildPreviewUrl(dep.id, 'saved'),
         '_blank',
       );
     } catch (error) {
@@ -540,7 +552,7 @@ export default function ETLManagementScreen() {
         environment,
       });
 
-      const draftKey = `etl-draft-preview:${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const draftKey = buildPreviewStorageKey(dep.id, 'deployed');
       localStorage.setItem(
         draftKey,
         JSON.stringify({
@@ -555,7 +567,7 @@ export default function ETLManagementScreen() {
       );
 
       window.open(
-        `${window.location.origin}${window.location.pathname}?loadDraft=${encodeURIComponent(draftKey)}`,
+        buildPreviewUrl(dep.id, 'deployed'),
         '_blank',
       );
     } catch (error) {

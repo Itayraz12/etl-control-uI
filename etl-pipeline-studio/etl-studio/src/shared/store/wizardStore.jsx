@@ -6,6 +6,19 @@ import {
   serializeWizardState,
 } from './wizardPersistence.js'
 
+function getPreviewStateStorageKey(search = window.location.search) {
+  const params = new URLSearchParams(search)
+  const isPreview = params.get('preview') === 'true'
+  const deploymentId = params.get('deploymentId')
+  const previewSource = params.get('previewSource')
+
+  if (!isPreview || !deploymentId || !['saved', 'deployed'].includes(previewSource)) {
+    return null
+  }
+
+  return `etl-deployment-preview:${deploymentId}:${previewSource}`
+}
+
 const initialState = {
   // Global navigation mode
   navigationMode: 'menu', // 'menu' | 'etl-config' | 'etl-management'
@@ -148,15 +161,12 @@ const WizardContext = createContext(null)
 
 export function WizardProvider({ children, user = null }) {
   const [state, dispatch] = useReducer(wizardReducer, initialState, (baseState) => {
-    // If this window was opened via the saved-version click (?loadDraft=key),
-    // peek at the stashed wizard state and use it as the very first render
-    // state — so we start in etl-config mode immediately, with no flash of
-    // the management table.  The cleanup (URL reset + localStorage removal)
-    // is still handled by the useEffect below.
+    // If this window was opened from a management preview URL, peek at the
+    // stashed wizard state and use it as the very first render state so we
+    // start in read-only etl-config mode immediately.
     if (user?.userId) {
       try {
-        const params   = new URLSearchParams(window.location.search)
-        const draftKey = params.get('loadDraft')
+        const draftKey = getPreviewStateStorageKey()
         if (draftKey) {
           const raw = localStorage.getItem(draftKey)
           if (raw) {
@@ -165,6 +175,7 @@ export function WizardProvider({ children, user = null }) {
               return {
                 ...initialState,
                 ...wizardState,
+                readOnly: true,
                 theme: 'dark',
                 completedSteps: new Set(
                   Array.isArray(wizardState.completedSteps) ? wizardState.completedSteps : []
@@ -192,27 +203,24 @@ export function WizardProvider({ children, user = null }) {
   }, [state.theme])
 
   useEffect(() => {
-    // When a new window is opened from the management table's saved-version
-    // cell, a pre-processed wizard state is stashed in localStorage under the
-    // key carried by ?loadDraft=<key>.
-    //
-    // GUARD: only consume the key when user?.userId is set.
-    // WizardProvider first mounts with user=null (key prop = null-based key).
-    // At that point userId is undefined — if we consumed the key here the entry
-    // would be gone when the provider remounts with the real user, and we would
-    // fall back to the persisted etl-management state.
-    const params   = new URLSearchParams(window.location.search)
-    const draftKey = params.get('loadDraft')
+    // Preview windows are bootstrapped from a deployment-id URL plus a
+    // preview-specific localStorage entry. Normal localhost:5173 loads do not
+    // carry these params and therefore stay editable.
+    const draftKey = getPreviewStateStorageKey()
 
     if (draftKey && user?.userId) {
-      window.history.replaceState({}, '', window.location.pathname)
       const raw = localStorage.getItem(draftKey)
-      localStorage.removeItem(draftKey)   // one-shot
       if (raw) {
         try {
           const { wizardState } = JSON.parse(raw)
           if (wizardState) {
-            dispatch({ type: 'LOAD_STATE', payload: wizardState })
+            dispatch({
+              type: 'LOAD_STATE',
+              payload: {
+                ...wizardState,
+                readOnly: true,
+              },
+            })
             return
           }
         } catch (e) {

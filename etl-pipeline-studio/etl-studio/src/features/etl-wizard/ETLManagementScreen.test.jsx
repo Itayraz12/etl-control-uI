@@ -4,12 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ETLManagementScreen from './ETLManagementScreen.jsx'
 
 const mockFetchDraftConfiguration = vi.fn(() => Promise.resolve('pipeline: yaml'))
+const mockFetchSavedDraftYaml = vi.fn(() => Promise.resolve('saved: yaml'))
 const mockFetchDeploymentSteps = vi.fn(() => Promise.resolve([
   { id: 'validate', label: 'Validate' },
   { id: 'deploy', label: 'Deploy' },
 ]))
 const mockDeployFromYaml = vi.fn(() => Promise.resolve({ success: true, deploymentId: 'dep-run-1' }))
 const mockSubscribeToDeploymentProgress = vi.fn(() => vi.fn())
+const mockHydrateWizardStateFromYaml = vi.fn(() => ({ metadata: { productType: 'Inventory' } }))
 const mockDeploymentProgress = {
   isOpen: false,
   steps: [],
@@ -103,10 +105,11 @@ vi.mock('../../shared/services/deploymentsService.js', () => ({
 
 vi.mock('../../shared/services/configService.js', () => ({
   fetchDraftConfiguration: (...args) => mockFetchDraftConfiguration(...args),
+  fetchSavedDraftYaml: (...args) => mockFetchSavedDraftYaml(...args),
 }))
 
 vi.mock('../../shared/services/configurationHydrator.js', () => ({
-  hydrateWizardStateFromYaml: vi.fn(() => ({})),
+  hydrateWizardStateFromYaml: (...args) => mockHydrateWizardStateFromYaml(...args),
 }))
 
 vi.mock('../../shared/hooks/useDeploymentProgress.js', () => ({
@@ -117,9 +120,13 @@ describe('ETLManagementScreen table layout stability', () => {
   beforeEach(() => {
     Object.values(mockActions).forEach(fn => fn.mockReset())
     mockFetchDraftConfiguration.mockClear()
+    mockFetchSavedDraftYaml.mockClear()
     mockFetchDeploymentSteps.mockClear()
     mockDeployFromYaml.mockClear()
     mockSubscribeToDeploymentProgress.mockClear()
+    mockHydrateWizardStateFromYaml.mockClear()
+    localStorage.clear()
+    window.open = vi.fn()
     Object.values(mockDeploymentProgress).forEach(value => {
       if (typeof value === 'function') value.mockClear()
     })
@@ -179,8 +186,67 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByText('Deployment Failed')).toBeInTheDocument()
       expect(screen.getByText('Kafka broker was unavailable')).toBeInTheDocument()
       expect(screen.queryByText('Failure Reason')).not.toBeInTheDocument()
-      expect(screen.getByText('Failed')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Got it' })).toBeInTheDocument()
+    })
+  })
+
+  it('opens saved versions in a read-only preview window that carries the deployment id in the URL', async () => {
+    const user = userEvent.setup()
+
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Catalog')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: '2.0.0' }))
+
+    await waitFor(() => {
+      expect(mockFetchSavedDraftYaml).toHaveBeenCalledTimes(1)
+      expect(mockHydrateWizardStateFromYaml).toHaveBeenCalledTimes(1)
+      expect(window.open).toHaveBeenCalledWith(
+        `${window.location.origin}/?preview=true&deploymentId=dep-2&previewSource=saved`,
+        '_blank',
+      )
+    })
+
+    const savedDraft = JSON.parse(localStorage.getItem('etl-deployment-preview:dep-2:saved'))
+
+    expect(savedDraft.wizardState).toMatchObject({
+      navigationMode: 'etl-config',
+      readOnly: true,
+      currentStep: 0,
+      completedSteps: [0, 1, 2, 3, 4, 5, 6],
+    })
+  })
+
+  it('opens deployed versions in a read-only preview window that carries the deployment id in the URL', async () => {
+    const user = userEvent.setup()
+
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Pricing')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: '3.0.0' }))
+
+    await waitFor(() => {
+      expect(mockFetchDraftConfiguration).toHaveBeenCalledTimes(1)
+      expect(mockHydrateWizardStateFromYaml).toHaveBeenCalledTimes(1)
+      expect(window.open).toHaveBeenCalledWith(
+        `${window.location.origin}/?preview=true&deploymentId=dep-3&previewSource=deployed`,
+        '_blank',
+      )
+    })
+
+    const deployedDraft = JSON.parse(localStorage.getItem('etl-deployment-preview:dep-3:deployed'))
+
+    expect(deployedDraft.wizardState).toMatchObject({
+      navigationMode: 'etl-config',
+      readOnly: true,
+      currentStep: 0,
+      completedSteps: [0, 1, 2, 3, 4, 5, 6],
     })
   })
 })
