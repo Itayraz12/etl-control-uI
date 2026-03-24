@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { CircleArrowUp, Rocket, SquarePen, Trash2 } from 'lucide-react';
-import { Btn, Card, Chip, DeployProgressModal, ModalDialog } from '../../shared/components/index.jsx';
+import { Btn, Card, Chip, DeployProgressModal, ModalDialog, Tooltip } from '../../shared/components/index.jsx';
 import * as deploymentsService from '../../shared/services/deploymentsService.js';
 import { fetchDeploymentSteps, subscribeToDeploymentProgress, deployFromYaml }
   from '../../shared/services/deploymentsService.js';
@@ -897,7 +897,7 @@ export default function ETLManagementScreen() {
                                 }} />
                                 {actionLoading[`${dep.id}_savedVersion`]
                                   ? '⏳ Loading configuration…'
-                                  : '👁 Open saved version in new window'}
+                                  : '👁 Open saved version preview'}
                               </div>
                             )}
                           </span>
@@ -958,7 +958,7 @@ export default function ETLManagementScreen() {
                                 }} />
                                 {actionLoading[`${dep.id}_deployedVersion`]
                                   ? '⏳ Loading configuration…'
-                                  : '👁 Open deployed version in new window'}
+                                  : '👁 Open deployed version preview'}
                               </div>
                             )}
                           </span>
@@ -969,102 +969,118 @@ export default function ETLManagementScreen() {
                       <td style={{ padding: 8 }}>{formatDateShort(dep.lastStatusChange)}</td>
                       <td style={{ padding: 8, textAlign: 'center', display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
                         {/* Deploy/Play Button */}
-                        <button
-                          onClick={() => handleDeploy(dep)}
-                          disabled={dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy'}
-                          title={dep.deploymentStatus === 'running' ? 'Already running' : actionLoading[dep.id] === 'deploy' ? 'Deploying pipeline' : 'Deploy pipeline'}
-                          style={{
-                            ...ICON_BUTTON_STYLE,
-                            borderColor: '#22c55e',
-                            color: '#22c55e',
-                            opacity: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy') ? 0.4 : 1,
-                            cursor: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy') ? 'not-allowed' : 'pointer',
-                          }}
-                          onMouseEnter={e => {
-                            if (dep.deploymentStatus !== 'running' && actionLoading[dep.id] !== 'deploy') {
-                              e.currentTarget.style.background = 'rgba(34,197,94,0.15)';
-                            }
-                          }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.background = 'var(--bg)';
-                          }}
-                        >
-                          <Rocket size={16} strokeWidth={2.1} />
-                        </button>
+                        <Tooltip content={dep.deploymentStatus === 'running' ? 'Already running' : actionLoading[dep.id] === 'deploy' ? 'Deploying pipeline' : 'Deploy pipeline'}>
+                          <span style={{ display: 'inline-flex' }}>
+                            <button
+                              aria-label="Deploy pipeline"
+                              onClick={() => handleDeploy(dep)}
+                              disabled={dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy'}
+                              style={{
+                                ...ICON_BUTTON_STYLE,
+                                borderColor: '#22c55e',
+                                color: '#22c55e',
+                                opacity: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy') ? 0.4 : 1,
+                                cursor: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy') ? 'not-allowed' : 'pointer',
+                              }}
+                              onMouseEnter={e => {
+                                if (dep.deploymentStatus !== 'running' && actionLoading[dep.id] !== 'deploy') {
+                                  e.currentTarget.style.background = 'rgba(34,197,94,0.15)';
+                                }
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = 'var(--bg)';
+                              }}
+                            >
+                              <Rocket size={16} strokeWidth={2.1} />
+                            </button>
+                          </span>
+                        </Tooltip>
 
                         {/* Delete Button */}
-                        <button
-                          onClick={() => requestDelete(dep)}
-                          disabled={dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete'}
-                          title={dep.deploymentStatus === 'running' ? 'Cannot delete a running pipeline' : actionLoading[dep.id] === 'delete' ? 'Deleting pipeline' : 'Delete pipeline'}
-                          style={{
-                            ...ICON_BUTTON_STYLE,
-                            borderColor: '#ef4444',
-                            color: '#ef4444',
-                            opacity: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete') ? 0.4 : 1,
-                            cursor: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete') ? 'not-allowed' : 'pointer',
-                          }}
-                          onMouseEnter={e => {
-                            if (dep.deploymentStatus !== 'running' && actionLoading[dep.id] !== 'delete') {
-                              e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
-                            }
-                          }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.background = 'var(--bg)';
-                          }}
-                        >
-                          <Trash2 size={16} strokeWidth={2.1} />
-                        </button>
+                        <Tooltip content={dep.deploymentStatus === 'running' ? 'Cannot delete a running pipeline' : actionLoading[dep.id] === 'delete' ? 'Deleting pipeline' : 'Delete pipeline'}>
+                          <span style={{ display: 'inline-flex' }}>
+                            <button
+                              aria-label="Delete pipeline"
+                              onClick={() => requestDelete(dep)}
+                              disabled={dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete'}
+                              style={{
+                                ...ICON_BUTTON_STYLE,
+                                borderColor: '#ef4444',
+                                color: '#ef4444',
+                                opacity: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete') ? 0.4 : 1,
+                                cursor: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete') ? 'not-allowed' : 'pointer',
+                              }}
+                              onMouseEnter={e => {
+                                if (dep.deploymentStatus !== 'running' && actionLoading[dep.id] !== 'delete') {
+                                  e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
+                                }
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = 'var(--bg)';
+                              }}
+                            >
+                              <Trash2 size={16} strokeWidth={2.1} />
+                            </button>
+                          </span>
+                        </Tooltip>
 
                         {/* Upgrade Button */}
-                        <button
-                          onClick={() => handleUpgrade(dep.id)}
-                          disabled={!canUpgrade || actionLoading[dep.id] === 'upgrade'}
-                          title={!canUpgrade && hasVersionMismatch ? 'Pipeline must be running' : !canUpgrade ? 'No update available' : actionLoading[dep.id] === 'upgrade' ? 'Upgrading deployment' : 'Upgrade to latest version'}
-                          style={{
-                            ...ICON_BUTTON_STYLE,
-                            borderColor: 'var(--warning)',
-                            color: 'var(--warning)',
-                            opacity: (!canUpgrade || actionLoading[dep.id] === 'upgrade') ? 0.4 : 1,
-                            cursor: (!canUpgrade || actionLoading[dep.id] === 'upgrade') ? 'not-allowed' : 'pointer',
-                          }}
-                          onMouseEnter={e => {
-                            if (canUpgrade && actionLoading[dep.id] !== 'upgrade') {
-                              e.currentTarget.style.background = 'rgba(245,158,11,0.15)';
-                            }
-                          }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.background = 'var(--bg)';
-                          }}
-                        >
-                          <CircleArrowUp size={15} strokeWidth={2.1} />
-                        </button>
+                        <Tooltip content={!canUpgrade && hasVersionMismatch ? 'Pipeline must be running' : !canUpgrade ? 'No update available' : actionLoading[dep.id] === 'upgrade' ? 'Upgrading deployment' : 'Upgrade to latest version'}>
+                          <span style={{ display: 'inline-flex' }}>
+                            <button
+                              aria-label="Upgrade deployment"
+                              onClick={() => handleUpgrade(dep.id)}
+                              disabled={!canUpgrade || actionLoading[dep.id] === 'upgrade'}
+                              style={{
+                                ...ICON_BUTTON_STYLE,
+                                borderColor: 'var(--warning)',
+                                color: 'var(--warning)',
+                                opacity: (!canUpgrade || actionLoading[dep.id] === 'upgrade') ? 0.4 : 1,
+                                cursor: (!canUpgrade || actionLoading[dep.id] === 'upgrade') ? 'not-allowed' : 'pointer',
+                              }}
+                              onMouseEnter={e => {
+                                if (canUpgrade && actionLoading[dep.id] !== 'upgrade') {
+                                  e.currentTarget.style.background = 'rgba(245,158,11,0.15)';
+                                }
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = 'var(--bg)';
+                              }}
+                            >
+                              <CircleArrowUp size={15} strokeWidth={2.1} />
+                            </button>
+                          </span>
+                        </Tooltip>
 
                         {/* Edit Button */}
-                        <button
-                          onClick={() => requestEdit(dep)}
-                          title={actionLoading[dep.id] === 'edit' ? 'Opening deployment editor' : 'Edit configuration'}
-                          disabled={actionLoading[dep.id] === 'edit'}
-                          style={{
-                            ...ICON_BUTTON_STYLE,
-                            opacity: actionLoading[dep.id] === 'edit' ? 0.4 : 1,
-                            cursor: actionLoading[dep.id] === 'edit' ? 'not-allowed' : 'pointer',
-                          }}
-                          onMouseEnter={e => {
-                            if (actionLoading[dep.id] !== 'edit') {
-                              e.currentTarget.style.background = 'rgba(79,110,247,0.15)';
-                              e.currentTarget.style.borderColor = 'var(--accent)';
-                              e.currentTarget.style.color = 'var(--accent)';
-                            }
-                          }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.background = 'var(--bg)';
-                            e.currentTarget.style.borderColor = 'var(--border)';
-                            e.currentTarget.style.color = 'var(--text)';
-                          }}
-                        >
-                          <SquarePen size={15} strokeWidth={2.1} />
-                        </button>
+                        <Tooltip content={actionLoading[dep.id] === 'edit' ? 'Opening deployment editor' : 'Edit configuration'}>
+                          <span style={{ display: 'inline-flex' }}>
+                            <button
+                              aria-label="Edit configuration"
+                              onClick={() => requestEdit(dep)}
+                              disabled={actionLoading[dep.id] === 'edit'}
+                              style={{
+                                ...ICON_BUTTON_STYLE,
+                                opacity: actionLoading[dep.id] === 'edit' ? 0.4 : 1,
+                                cursor: actionLoading[dep.id] === 'edit' ? 'not-allowed' : 'pointer',
+                              }}
+                              onMouseEnter={e => {
+                                if (actionLoading[dep.id] !== 'edit') {
+                                  e.currentTarget.style.background = 'rgba(79,110,247,0.15)';
+                                  e.currentTarget.style.borderColor = 'var(--accent)';
+                                  e.currentTarget.style.color = 'var(--accent)';
+                                }
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = 'var(--bg)';
+                                e.currentTarget.style.borderColor = 'var(--border)';
+                                e.currentTarget.style.color = 'var(--text)';
+                              }}
+                            >
+                              <SquarePen size={15} strokeWidth={2.1} />
+                            </button>
+                          </span>
+                        </Tooltip>
                       </td>
                     </tr>
                   );

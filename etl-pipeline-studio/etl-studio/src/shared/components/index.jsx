@@ -108,6 +108,110 @@ export function FormRow({ children }) {
   )
 }
 
+export function Tooltip({ children, content, placement = 'top', maxWidth = 260, triggerStyle = {}, bubbleStyle = {} }) {
+  const [visible, setVisible] = useState(false)
+
+  if (!content) return children
+
+  const isTop = placement === 'top'
+
+  return (
+    <span
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', ...triggerStyle }}
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={() => setVisible(false)}
+      onFocus={() => setVisible(true)}
+      onBlur={() => setVisible(false)}
+    >
+      {children}
+      {visible && (
+        <span
+          role="tooltip"
+          style={{
+            position: 'absolute',
+            [isTop ? 'bottom' : 'top']: 'calc(100% + 8px)',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'linear-gradient(180deg, rgba(24,31,51,0.98), rgba(17,24,39,0.98))',
+            border: '1px solid rgba(99,102,241,0.22)',
+            borderRadius: 10,
+            padding: '8px 11px',
+            fontSize: 11,
+            lineHeight: 1.55,
+            color: 'var(--text)',
+            whiteSpace: 'normal',
+            width: 'max-content',
+            maxWidth,
+            boxShadow: '0 14px 36px rgba(0,0,0,0.35)',
+            zIndex: 500,
+            pointerEvents: 'none',
+            backdropFilter: 'blur(10px)',
+            ...bubbleStyle,
+          }}
+        >
+          {content}
+          <span style={{
+            position: 'absolute',
+            [isTop ? 'bottom' : 'top']: -5,
+            left: '50%',
+            transform: 'translateX(-50%) rotate(45deg)',
+            width: 9,
+            height: 9,
+            background: 'rgba(17,24,39,0.98)',
+            border: '1px solid rgba(99,102,241,0.22)',
+            borderTop: isTop ? 'none' : undefined,
+            borderLeft: isTop ? 'none' : undefined,
+            borderBottom: isTop ? undefined : 'none',
+            borderRight: isTop ? undefined : 'none',
+          }} />
+        </span>
+      )}
+    </span>
+  )
+}
+
+export function InfoHint({ text }) {
+  return (
+    <Tooltip content={text}>
+      <span style={{
+        width: 16,
+        height: 16,
+        borderRadius: '50%',
+        background: 'rgba(79,110,247,.12)',
+        border: '1px solid rgba(79,110,247,.28)',
+        color: 'var(--accent)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 9,
+        fontWeight: 900,
+        lineHeight: 1,
+        cursor: 'help',
+        userSelect: 'none',
+        flexShrink: 0,
+      }}>i</span>
+    </Tooltip>
+  )
+}
+
+export function FormHint({ children, style = {} }) {
+  return (
+    <div style={{
+      marginTop: 6,
+      padding: '7px 10px',
+      borderRadius: 8,
+      border: '1px solid rgba(148,163,184,.15)',
+      background: 'rgba(15,23,42,.35)',
+      color: 'var(--muted)',
+      fontSize: 11,
+      lineHeight: 1.5,
+      ...style,
+    }}>
+      {children}
+    </div>
+  )
+}
+
 export function FormGroup({ label, required, hint, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -117,7 +221,7 @@ export function FormGroup({ label, required, hint, children }) {
         </label>
       )}
       {children}
-      {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>{hint}</div>}
+      {hint && <FormHint>{hint}</FormHint>}
     </div>
   )
 }

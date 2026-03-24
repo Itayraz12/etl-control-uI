@@ -180,7 +180,11 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByText('Catalog')).toBeInTheDocument()
     })
 
-    await user.click(screen.getByTitle('Deploy pipeline'))
+    const deployButton = screen.getAllByRole('button', { name: 'Deploy pipeline' }).find(button => !button.disabled)
+
+    expect(deployButton).toBeTruthy()
+
+    await user.click(deployButton)
 
     await waitFor(() => {
       expect(screen.getByText('Deployment Failed')).toBeInTheDocument()

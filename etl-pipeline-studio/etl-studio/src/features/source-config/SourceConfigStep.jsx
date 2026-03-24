@@ -1,20 +1,20 @@
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useEffect, useState } from 'react'
-import { Card, CardTitle, FormRow, FormGroup, CfgPanel, Btn } from '../../shared/components/index.jsx'
+import { Card, CardTitle, FormRow, FormGroup, CfgPanel, Btn, Tooltip } from '../../shared/components/index.jsx'
 import { SOURCE_TYPES, ENVIRONMENTS } from '../../shared/types/index.js'
 import { testKafkaConnection } from '../../shared/services/kafkaService.js'
 
 function KafkaConnectionStatus({ status, message }) {
   if (status === 'loading') {
-    return <span aria-label="Kafka connection test in progress" title={message || 'Testing Kafka connection...'} style={{ fontSize: 18 }}>⏳</span>
+    return <Tooltip content={message || 'Testing Kafka connection...'}><span aria-label="Kafka connection test in progress" style={{ fontSize: 18 }}>⏳</span></Tooltip>
   }
 
   if (status === 'success') {
-    return <span aria-label="Kafka connection test succeeded" title={message || 'Kafka connection succeeded.'} style={{ fontSize: 18 }}>✅</span>
+    return <Tooltip content={message || 'Kafka connection succeeded.'}><span aria-label="Kafka connection test succeeded" style={{ fontSize: 18 }}>✅</span></Tooltip>
   }
 
   if (status === 'error') {
-    return <span aria-label="Kafka connection test failed" title={message || 'Kafka connection test failed.'} style={{ fontSize: 18 }}>❌</span>
+    return <Tooltip content={message || 'Kafka connection test failed.'}><span aria-label="Kafka connection test failed" style={{ fontSize: 18 }}>❌</span></Tooltip>
   }
 
   return null
@@ -223,36 +223,42 @@ export default function SourceConfigStep() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
             {SOURCE_TYPES.map(t => {
               const isEnabled = ['kafka', 'rabbitmq'].includes(t.id);
+              const sourceTypeCard = (
+                <div
+                  key={t.id}
+                  onClick={() => isEnabled && u('sourceType', t.id)}
+                  aria-disabled={!isEnabled}
+                  style={{
+                    background: src.sourceType === t.id ? 'rgba(79,110,247,.12)' : 'var(--surf2)',
+                    border: `2px solid ${src.sourceType === t.id ? 'var(--accent)' : 'var(--border)'}`,
+                    borderRadius: 10, padding: '16px 12px', textAlign: 'center',
+                    cursor: isEnabled ? 'pointer' : 'not-allowed', 
+                    transition: 'all .18s',
+                    opacity: isEnabled ? 1 : 0.5,
+                  }}
+                  onMouseEnter={e => { 
+                    if (isEnabled && src.sourceType !== t.id) { 
+                      e.currentTarget.style.borderColor = 'var(--accent)'; 
+                      e.currentTarget.style.background = 'rgba(79,110,247,.07)' 
+                    }
+                  }}
+                  onMouseLeave={e => { 
+                    if (isEnabled && src.sourceType !== t.id) { 
+                      e.currentTarget.style.borderColor = 'var(--border)'; 
+                      e.currentTarget.style.background = 'var(--surf2)' 
+                    }
+                  }}
+                >
+                  <div style={{ fontSize: 28, marginBottom: 6 }}>{t.icon}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{t.name}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{t.sub}</div>
+                </div>
+              )
+
               return (
-              <div
-                key={t.id}
-                onClick={() => isEnabled && u('sourceType', t.id)}
-                title={isEnabled ? '' : 'Future feature'}
-                style={{
-                  background: src.sourceType === t.id ? 'rgba(79,110,247,.12)' : 'var(--surf2)',
-                  border: `2px solid ${src.sourceType === t.id ? 'var(--accent)' : 'var(--border)'}`,
-                  borderRadius: 10, padding: '16px 12px', textAlign: 'center',
-                  cursor: isEnabled ? 'pointer' : 'not-allowed', 
-                  transition: 'all .18s',
-                  opacity: isEnabled ? 1 : 0.5,
-                }}
-                onMouseEnter={e => { 
-                  if (isEnabled && src.sourceType !== t.id) { 
-                    e.currentTarget.style.borderColor = 'var(--accent)'; 
-                    e.currentTarget.style.background = 'rgba(79,110,247,.07)' 
-                  }
-                }}
-                onMouseLeave={e => { 
-                  if (isEnabled && src.sourceType !== t.id) { 
-                    e.currentTarget.style.borderColor = 'var(--border)'; 
-                    e.currentTarget.style.background = 'var(--surf2)' 
-                  }
-                }}
-              >
-                <div style={{ fontSize: 28, marginBottom: 6 }}>{t.icon}</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{t.name}</div>
-                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{t.sub}</div>
-              </div>
+                <Tooltip key={t.id} content={isEnabled ? '' : 'Planned for a future ETL Studio release.'} triggerStyle={{ display: 'block' }}>
+                  {sourceTypeCard}
+                </Tooltip>
             );
             })}
           </div>

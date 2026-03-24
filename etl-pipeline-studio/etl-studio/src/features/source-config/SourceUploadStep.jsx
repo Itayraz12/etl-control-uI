@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
-import { Card, CardTitle, ValidationItem, Btn, Spinner, TypeBadge } from '../../shared/components/index.jsx'
+import { Card, CardTitle, Btn, Spinner, TypeBadge, Tooltip } from '../../shared/components/index.jsx'
 import { normalizeSourceSchema, resolveSourceSchema } from '../../shared/types/index.js'
 import { extractSchemaNameFromExamplePayload, fetchSchemaByExample } from '../../shared/services/configService.js'
 import { useMockMode } from '../../shared/store/mockModeContext.jsx'
@@ -161,23 +161,23 @@ function DropZone({ phase, sampleMode, onBrowse, onFileSelected, detectedFieldCo
             {['JSON', 'CSV'].map(f => {
               const isEnabled = ['JSON', 'CSV'].includes(f);
               return (
-                <span 
-                  key={f} 
-                  title={isEnabled ? '' : 'Future feature'}
-                  style={{ 
-                    background: 'var(--surf)', 
-                    border: `1px solid ${isEnabled ? 'var(--border)' : 'var(--border)'}`, 
-                    borderRadius: 5, 
-                    padding: '3px 10px', 
-                    fontSize: 11, 
-                    fontWeight: 600, 
-                    color: isEnabled ? 'var(--accent)' : 'var(--muted)',
-                    opacity: isEnabled ? 1 : 0.5,
-                    cursor: isEnabled ? 'default' : 'not-allowed',
-                  }}
-                >
-                  {f}
-                </span>
+                <Tooltip key={f} content={isEnabled ? '' : 'Planned for a future ETL Studio release.'}>
+                  <span 
+                    style={{ 
+                      background: 'var(--surf)', 
+                      border: `1px solid ${isEnabled ? 'var(--border)' : 'var(--border)'}`, 
+                      borderRadius: 5, 
+                      padding: '3px 10px', 
+                      fontSize: 11, 
+                      fontWeight: 600, 
+                      color: isEnabled ? 'var(--accent)' : 'var(--muted)',
+                      opacity: isEnabled ? 1 : 0.5,
+                      cursor: isEnabled ? 'default' : 'not-allowed',
+                    }}
+                  >
+                    {f}
+                  </span>
+                </Tooltip>
               );
             })}
           </div>
