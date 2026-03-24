@@ -70,6 +70,7 @@ export function buildPipelineChangeSignature(state = {}) {
     metadata: {
       productSource: state?.metadata?.productSource || '',
       productType: state?.metadata?.productType || '',
+      productCode: state?.metadata?.productCode || '',
       team: state?.metadata?.team || '',
       environment: state?.metadata?.environment || '',
       entityName: state?.metadata?.entityName || '',

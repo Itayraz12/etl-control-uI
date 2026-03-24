@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { deleteDeployment, deployFromYaml, fetchDeployments, upsertSavedDraftDeployment } from './deploymentsService.js'
+import { deleteDeployment, deployFromYaml, fetchDeployments, setDeploymentStatus, upsertSavedDraftDeployment } from './deploymentsService.js'
 
 describe('deploymentsService', () => {
   const fetchMock = vi.fn()
@@ -88,5 +88,39 @@ describe('deploymentsService', () => {
     }))
 
     await expect(fetchDeployments('data-platform', false)).resolves.toEqual([])
+  })
+
+  it('applies persisted failed status overrides to matching backend rows', async () => {
+    setDeploymentStatus({
+      teamName: 'data-platform',
+      productSource: 'ERP',
+      productType: 'Catalog',
+      environment: 'production',
+      deploymentStatus: 'failed',
+    })
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([
+      {
+        id: 'dep-1',
+        teamName: 'data-platform',
+        productSource: 'ERP',
+        productType: 'Catalog',
+        environment: 'production',
+        deploymentStatus: 'running',
+        savedVersion: '1.0',
+        deployedVersion: '1.0',
+        lastStatusChange: 100,
+      },
+    ]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(fetchDeployments('data-platform', false)).resolves.toEqual([
+      expect.objectContaining({
+        id: 'dep-1',
+        deploymentStatus: 'failed',
+      }),
+    ])
   })
 })

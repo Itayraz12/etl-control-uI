@@ -7,9 +7,14 @@ const API_BASE = 'http://localhost:8080/api'
 // can always show them.
 
 const LOCAL_DRAFTS_KEY = 'etl-local-drafts'
+const DEPLOYMENT_STATUS_OVERRIDES_KEY = 'etl-deployment-status-overrides'
 
 function buildLocalDraftId({ teamName, productSource, productType, environment }) {
   return `local-draft:${teamName}::${(productSource || '').toLowerCase()}::${(productType || '').toLowerCase()}::${environment}`
+}
+
+function buildDeploymentStatusOverrideKey({ teamName, productSource, productType, environment }) {
+  return `${teamName}::${(productSource || '').toLowerCase()}::${(productType || '').toLowerCase()}::${environment || ''}`
 }
 
 function readLocalDrafts() {
@@ -26,13 +31,27 @@ function writeLocalDrafts(drafts) {
   } catch {}
 }
 
+function readDeploymentStatusOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(DEPLOYMENT_STATUS_OVERRIDES_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function writeDeploymentStatusOverrides(overrides) {
+  try {
+    localStorage.setItem(DEPLOYMENT_STATUS_OVERRIDES_KEY, JSON.stringify(overrides))
+  } catch {}
+}
+
 /**
  * Creates or updates a local-only draft deployment entry that is merged into
  * the management table until the backend returns a matching record.
  *
  * Called by configService.saveDraftConfiguration after a successful save.
  */
-export function upsertSavedDraftDeployment({ teamName, productSource, productType, environment, savedVersion }) {
+export function upsertSavedDraftDeployment({ teamName, productSource, productType, environment, savedVersion, deployedVersion, deploymentStatus }) {
   const id     = buildLocalDraftId({ teamName, productSource, productType, environment })
   const drafts = readLocalDrafts()
   drafts[id] = {
@@ -42,14 +61,69 @@ export function upsertSavedDraftDeployment({ teamName, productSource, productTyp
     productSource,
     productType,
     environment,
-    deploymentStatus: 'draft',
+    deploymentStatus: deploymentStatus ?? drafts[id]?.deploymentStatus ?? 'draft',
     savedVersion:     savedVersion ?? drafts[id]?.savedVersion ?? null,
-    deployedVersion:  drafts[id]?.deployedVersion ?? null,
+    deployedVersion:  deployedVersion ?? drafts[id]?.deployedVersion ?? null,
     lastStatusChange: Date.now(),
     createdAt:        drafts[id]?.createdAt ?? Date.now(),
     isLocalDraft:     true,
   }
   writeLocalDrafts(drafts)
+}
+
+export function setDeploymentStatus({ teamName, productSource, productType, environment, deploymentStatus, savedVersion, deployedVersion, clearOverride = false }) {
+  const overrideKey = buildDeploymentStatusOverrideKey({ teamName, productSource, productType, environment })
+  const overrides = readDeploymentStatusOverrides()
+
+  if (clearOverride) {
+    delete overrides[overrideKey]
+    writeDeploymentStatusOverrides(overrides)
+  } else {
+    overrides[overrideKey] = {
+      deploymentStatus,
+      savedVersion: savedVersion ?? null,
+      deployedVersion: deployedVersion ?? null,
+      lastStatusChange: Date.now(),
+    }
+    writeDeploymentStatusOverrides(overrides)
+  }
+
+  const drafts = readLocalDrafts()
+  const draftId = buildLocalDraftId({ teamName, productSource, productType, environment })
+  if (drafts[draftId]) {
+    drafts[draftId] = {
+      ...drafts[draftId],
+      deploymentStatus: clearOverride ? (drafts[draftId].deploymentStatus || 'draft') : deploymentStatus,
+      savedVersion: savedVersion ?? drafts[draftId].savedVersion ?? null,
+      deployedVersion: deployedVersion ?? drafts[draftId].deployedVersion ?? null,
+      lastStatusChange: Date.now(),
+    }
+    writeLocalDrafts(drafts)
+  }
+}
+
+function applyDeploymentStatusOverrides(rows, teamName) {
+  const overrides = readDeploymentStatusOverrides()
+
+  return rows.map(row => {
+    const overrideKey = buildDeploymentStatusOverrideKey({
+      teamName: row.teamName || teamName,
+      productSource: row.productSource,
+      productType: row.productType,
+      environment: row.environment,
+    })
+    const override = overrides[overrideKey]
+
+    if (!override) return row
+
+    return {
+      ...row,
+      deploymentStatus: override.deploymentStatus ?? row.deploymentStatus,
+      savedVersion: override.savedVersion ?? row.savedVersion,
+      deployedVersion: override.deployedVersion ?? row.deployedVersion,
+      lastStatusChange: override.lastStatusChange ?? row.lastStatusChange,
+    }
+  })
 }
 
 
@@ -74,7 +148,32 @@ export async function deployFromYaml(yamlContent) {
       headers: { 'Content-Type': 'text/plain' },
       body: yamlContent,
     })
-    if (!response.ok) throw new Error(`Deploy failed: ${response.status}`)
+
+    if (!response.ok) {
+      let backendMessage = ''
+      try {
+        const contentType = response.headers.get('Content-Type') || ''
+        if (contentType.includes('application/json')) {
+          const payload = await response.json()
+          backendMessage = payload?.message || payload?.error || payload?.detail || ''
+        } else {
+          backendMessage = await response.text()
+        }
+      } catch {}
+
+      if (response.status === 404) {
+        throw new Error(
+          'The deployment API endpoint was not found. Verify that the backend server is running and that POST /api/backend/deployments/deploy is available.'
+          + (backendMessage ? ` Backend response: ${backendMessage}` : '')
+        )
+      }
+
+      throw new Error(
+        `Deploy failed with status: ${response.status}`
+        + (backendMessage ? `. Backend response: ${backendMessage}` : '')
+      )
+    }
+
     const data = await response.json()
     console.log('[deploymentsService] deployFromYaml result:', data)
     return data
@@ -453,7 +552,7 @@ export async function fetchDeployments(teamName = 'default', useMock = false) {
     const extra = Object.values(drafts).filter(
       d => d.teamName === teamName && !dominated.has(d.id)
     )
-    return [...backendRows, ...extra]
+    return applyDeploymentStatusOverrides([...backendRows, ...extra], teamName)
   }
 
   if (useMock) {
@@ -584,14 +683,34 @@ export async function deleteDeployment(id, useMock = false) {
   // Local-only draft rows are never on the backend — just remove from localStorage.
   if (String(id).startsWith('local-draft:')) {
     const drafts = readLocalDrafts()
-    delete drafts[id]
+    if (drafts[id]) {
+      drafts[id] = {
+        ...drafts[id],
+        previousDeploymentStatus: drafts[id].deploymentStatus === 'deleted'
+          ? (drafts[id].previousDeploymentStatus || inferRestoredStatus(drafts[id]))
+          : (drafts[id].deploymentStatus || inferRestoredStatus(drafts[id])),
+        deploymentStatus: 'deleted',
+        lastStatusChange: Date.now(),
+      }
+    }
     writeLocalDrafts(drafts)
     return { success: true, id }
   }
 
   if (useMock) {
     await new Promise(r => setTimeout(r, 200));
-    mockDeploymentsStore = mockDeploymentsStore.filter(item => item.id !== id)
+    mockDeploymentsStore = mockDeploymentsStore.map(item => (
+      item.id === id
+        ? {
+            ...item,
+            previousDeploymentStatus: item.deploymentStatus === 'deleted'
+              ? (item.previousDeploymentStatus || inferRestoredStatus(item))
+              : (item.deploymentStatus || inferRestoredStatus(item)),
+            deploymentStatus: 'deleted',
+            lastStatusChange: Date.now(),
+          }
+        : item
+    ))
     return { success: true, id };
   } else {
     try {
@@ -618,6 +737,74 @@ export async function deleteDeployment(id, useMock = false) {
       return { success: false, error: error.message };
     }
   }
+}
+
+function inferRestoredStatus(item) {
+  if (item?.previousDeploymentStatus && item.previousDeploymentStatus !== 'deleted') {
+    return item.previousDeploymentStatus
+  }
+
+  if (item?.deployedVersion) return 'running'
+  return 'draft'
+}
+
+export async function restoreDeployment(id, useMock = false) {
+  if (String(id).startsWith('local-draft:')) {
+    const drafts = readLocalDrafts()
+    if (drafts[id]) {
+      const restoredStatus = inferRestoredStatus(drafts[id])
+      drafts[id] = {
+        ...drafts[id],
+        deploymentStatus: restoredStatus,
+        previousDeploymentStatus: restoredStatus,
+        lastStatusChange: Date.now(),
+      }
+      writeLocalDrafts(drafts)
+    }
+    return { success: true, id }
+  }
+
+  if (useMock) {
+    await new Promise(r => setTimeout(r, 200))
+    mockDeploymentsStore = mockDeploymentsStore.map(item => (
+      item.id === id
+        ? {
+            ...item,
+            deploymentStatus: inferRestoredStatus(item),
+            previousDeploymentStatus: inferRestoredStatus(item),
+            lastStatusChange: Date.now(),
+          }
+        : item
+    ))
+    return { success: true, id }
+  }
+
+  try {
+    const url = `${API_BASE}/backend/deployments/${id}/restore`
+    const response = await fetch(url, { method: 'POST' })
+
+    if (!response.ok) {
+      throw new Error(`Restore failed with status: ${response.status}`)
+    }
+
+    return await response.json().catch(() => ({ success: true, id }))
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function permanentlyDeleteDeployment(id, useMock = false) {
+  if (String(id).startsWith('local-draft:')) {
+    return deleteDeployment(id, useMock)
+  }
+
+  if (useMock) {
+    await new Promise(r => setTimeout(r, 200))
+    mockDeploymentsStore = mockDeploymentsStore.filter(item => item.id !== id)
+    return { success: true, id }
+  }
+
+  return deleteDeployment(id, useMock)
 }
 
 export async function fetchDeploymentConfig(id, useMock = false) {

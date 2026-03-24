@@ -41,6 +41,7 @@ function renderStep(initialState = {}) {
       metadata: {
         productSource: 'ERP',
         productType: 'Inventory',
+        productCode: '',
         team: 'platform',
         environment: 'production',
         entityName: '',
@@ -103,6 +104,22 @@ describe('MetadataStep entity target schema', () => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
       expect(persisted.source?.streamingContinuity).toBe('every-day')
       expect(persisted.source?.recordsPerDay).toBe('thousands')
+    })
+  })
+
+  it('accepts only numeric characters in the product code field', async () => {
+    const user = userEvent.setup()
+
+    renderStep()
+
+    const productCodeInput = screen.getByPlaceholderText('Numbers only')
+    await user.type(productCodeInput, 'ab12-34x')
+
+    expect(productCodeInput).toHaveValue('1234')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.metadata?.productCode).toBe('1234')
     })
   })
 

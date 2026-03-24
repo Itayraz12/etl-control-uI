@@ -35,6 +35,7 @@ const initialState = {
   metadata: {
     productSource:  'ERP-System-v2',
     productType:    'Inventory',
+    productCode:    '',
     team:           'data-platform',
     environment:    '',
     entityName:     '',

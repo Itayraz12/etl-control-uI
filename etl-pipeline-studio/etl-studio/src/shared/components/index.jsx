@@ -99,6 +99,62 @@ export function CardTitle({ children, style = {} }) {
   )
 }
 
+export function FilterTabs({ tabs = [], activeTab, onChange, style = {} }) {
+  return (
+    <div style={{ overflowX: 'auto', marginBottom: 14, ...style }}>
+      <div style={{
+        display: 'inline-flex',
+        minWidth: '100%',
+        borderBottom: '1px solid var(--border)',
+        gap: 4,
+      }}>
+        {tabs.map(tab => {
+          const isActive = tab.id === activeTab
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onChange?.(tab.id)}
+              aria-pressed={isActive}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 14px 11px',
+                border: 'none',
+                borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+                background: isActive ? 'rgba(79,110,247,.08)' : 'transparent',
+                color: isActive ? 'var(--text)' : 'var(--muted)',
+                borderTopLeftRadius: 10,
+                borderTopRightRadius: 10,
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: isActive ? 700 : 600,
+                whiteSpace: 'nowrap',
+                transition: 'all .15s ease',
+              }}
+            >
+              <span>{tab.label}</span>
+              <span style={{
+                minWidth: 20,
+                padding: '1px 7px',
+                borderRadius: 999,
+                background: isActive ? 'rgba(79,110,247,.18)' : 'var(--surf2)',
+                color: isActive ? 'var(--accent)' : 'var(--muted)',
+                fontSize: 11,
+                fontWeight: 700,
+                textAlign: 'center',
+              }}>
+                {tab.count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Form ──────────────────────────────────────────────────────────────────
 export function FormRow({ children }) {
   return (

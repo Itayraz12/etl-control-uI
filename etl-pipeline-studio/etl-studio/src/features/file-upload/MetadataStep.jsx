@@ -19,6 +19,9 @@ export default function MetadataStep() {
   const [schemaError, setSchemaError] = useState('')
   const u = (k, v) => actions.updateMetadata({ [k]: v })
   const updateSourceField = (k, v) => actions.updateSource({ [k]: v })
+  const handleProductCodeChange = (value) => {
+    u('productCode', String(value ?? '').replace(/\D+/g, ''))
+  }
 
   // Sync team from user context when it changes
   useEffect(() => {
@@ -90,17 +93,26 @@ export default function MetadataStep() {
             </FormGroup>
           </FormRow>
           <FormRow>
+            <FormGroup label="Product Code">
+              <input
+                value={metadata.productCode || ''}
+                onChange={e => handleProductCodeChange(e.target.value)}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="Numbers only"
+              />
+            </FormGroup>
             <FormGroup label="Team" required>
               <input value={user?.teamName || metadata.team || ''} disabled style={{ opacity: 0.6, cursor: 'not-allowed' }} />
             </FormGroup>
+          </FormRow>
+          <FormRow>
             <FormGroup label="Environment" required>
               <select value={metadata.environment} onChange={e => u('environment', e.target.value)}>
                 <option value="">select an environment...</option>
                 {ENVIRONMENTS.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </FormGroup>
-          </FormRow>
-          <FormRow>
             <FormGroup label="Entity Name" required>
               <select value={metadata.entityName} onChange={e => u('entityName', e.target.value)}>
                 <option value="">Select an entity...</option>

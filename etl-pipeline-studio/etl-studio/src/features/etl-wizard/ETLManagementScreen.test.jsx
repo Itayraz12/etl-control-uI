@@ -11,6 +11,10 @@ const mockFetchDeploymentSteps = vi.fn(() => Promise.resolve([
 ]))
 const mockDeployFromYaml = vi.fn(() => Promise.resolve({ success: true, deploymentId: 'dep-run-1' }))
 const mockSubscribeToDeploymentProgress = vi.fn(() => vi.fn())
+const mockSetDeploymentStatus = vi.fn()
+const mockDeleteDeployment = vi.fn()
+const mockPermanentlyDeleteDeployment = vi.fn()
+const mockRestoreDeployment = vi.fn()
 const mockHydrateWizardStateFromYaml = vi.fn(() => ({ metadata: { productType: 'Inventory' } }))
 const mockDeploymentProgress = {
   isOpen: false,
@@ -38,7 +42,7 @@ const mockActions = {
   updateSink: vi.fn(),
 }
 
-const mockDeployments = [
+const baseMockDeployments = [
   {
     id: 'dep-1',
     productType: 'Inventory',
@@ -72,7 +76,21 @@ const mockDeployments = [
     lastStatusChange: '2026-03-16T10:00:00.000Z',
     createdAt: '2026-03-15T09:00:00.000Z',
   },
+  {
+    id: 'dep-4',
+    productType: 'Legacy',
+    productSource: 'Archive',
+    environment: 'production',
+    deploymentStatus: 'deleted',
+    previousDeploymentStatus: 'running',
+    savedVersion: '0.9.0',
+    deployedVersion: '0.9.0',
+    lastStatusChange: '2026-03-10T10:00:00.000Z',
+    createdAt: '2026-03-09T09:00:00.000Z',
+  },
 ]
+
+let mockDeployments = []
 
 vi.mock('../../shared/store/wizardStore.jsx', () => ({
   useWizard: () => ({
@@ -97,10 +115,13 @@ vi.mock('../../shared/store/userContext.jsx', () => ({
 vi.mock('../../shared/services/deploymentsService.js', () => ({
   fetchDeployments: vi.fn(() => Promise.resolve(mockDeployments)),
   deployService: vi.fn(() => Promise.resolve()),
-  deleteDeployment: vi.fn(() => Promise.resolve({ success: true })),
+  deleteDeployment: (...args) => mockDeleteDeployment(...args),
+  permanentlyDeleteDeployment: (...args) => mockPermanentlyDeleteDeployment(...args),
+  restoreDeployment: (...args) => mockRestoreDeployment(...args),
   fetchDeploymentSteps: (...args) => mockFetchDeploymentSteps(...args),
   subscribeToDeploymentProgress: (...args) => mockSubscribeToDeploymentProgress(...args),
   deployFromYaml: (...args) => mockDeployFromYaml(...args),
+  setDeploymentStatus: (...args) => mockSetDeploymentStatus(...args),
 }))
 
 vi.mock('../../shared/services/configService.js', () => ({
@@ -118,12 +139,41 @@ vi.mock('../../shared/hooks/useDeploymentProgress.js', () => ({
 
 describe('ETLManagementScreen table layout stability', () => {
   beforeEach(() => {
+    mockDeployments = structuredClone(baseMockDeployments)
     Object.values(mockActions).forEach(fn => fn.mockReset())
     mockFetchDraftConfiguration.mockClear()
     mockFetchSavedDraftYaml.mockClear()
     mockFetchDeploymentSteps.mockClear()
     mockDeployFromYaml.mockClear()
     mockSubscribeToDeploymentProgress.mockClear()
+    mockSetDeploymentStatus.mockClear()
+    mockDeleteDeployment.mockReset()
+    mockDeleteDeployment.mockImplementation(async (id) => {
+      mockDeployments = mockDeployments.map(deployment => (
+        deployment.id === id
+          ? { ...deployment, previousDeploymentStatus: deployment.deploymentStatus, deploymentStatus: 'deleted' }
+          : deployment
+      ))
+      return { success: true }
+    })
+    mockPermanentlyDeleteDeployment.mockReset()
+    mockPermanentlyDeleteDeployment.mockImplementation(async (id) => {
+      mockDeployments = mockDeployments.filter(deployment => deployment.id !== id)
+      return { success: true }
+    })
+    mockRestoreDeployment.mockReset()
+    mockRestoreDeployment.mockImplementation(async (id) => {
+      mockDeployments = mockDeployments.map(deployment => (
+        deployment.id === id
+          ? {
+              ...deployment,
+              deploymentStatus: deployment.previousDeploymentStatus || 'draft',
+              previousDeploymentStatus: deployment.previousDeploymentStatus || 'draft',
+            }
+          : deployment
+      ))
+      return { success: true }
+    })
     mockHydrateWizardStateFromYaml.mockClear()
     localStorage.clear()
     window.open = vi.fn()
@@ -170,6 +220,140 @@ describe('ETLManagementScreen table layout stability', () => {
     expect(pricingRow.style.borderLeft).toBe('')
   })
 
+  it('defaults to the All tab and filters rows by environment and deleted status tabs', async () => {
+    const user = userEvent.setup()
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Inventory')).toBeInTheDocument()
+      expect(screen.getByText('Catalog')).toBeInTheDocument()
+      expect(screen.getByText('Pricing')).toBeInTheDocument()
+      expect(screen.getByText('Legacy')).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: /All/i })).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(screen.getByRole('button', { name: /Stage/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Catalog')).toBeInTheDocument()
+      expect(screen.queryByText('Inventory')).not.toBeInTheDocument()
+      expect(screen.queryByText('Pricing')).not.toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Prod/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Inventory')).toBeInTheDocument()
+      expect(screen.getByText('Pricing')).toBeInTheDocument()
+      expect(screen.queryByText('Catalog')).not.toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Deleted/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Legacy')).toBeInTheDocument()
+      expect(screen.queryByText('Inventory')).not.toBeInTheDocument()
+      expect(screen.queryByText('Catalog')).not.toBeInTheDocument()
+    })
+  })
+
+  it('reloads the management table after delete and moves the pipeline into the Deleted tab', async () => {
+    const user = userEvent.setup()
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Catalog')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getAllByRole('button', { name: 'Delete pipeline' })[0])
+
+    await waitFor(() => {
+      expect(screen.getByText('Delete deployment?')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => {
+      expect(mockDeleteDeployment).toHaveBeenCalledWith('dep-2', true)
+      expect(screen.getByText('Pipeline deleted. You can find it under the Deleted tab.')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Deleted/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Catalog')).toBeInTheDocument()
+    })
+  })
+
+  it('permanently deletes rows from the Deleted tab using mocked data', async () => {
+    const user = userEvent.setup()
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Legacy')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Deleted/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Legacy')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Delete permanently' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Restore pipeline' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Deploy pipeline' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Upgrade deployment' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Edit configuration' })).not.toBeInTheDocument()
+    })
+
+    await user.click(screen.getAllByRole('button', { name: 'Delete permanently' })[0])
+
+    await waitFor(() => {
+      expect(screen.getByText('Delete permanently?')).toBeInTheDocument()
+      expect(screen.getByText('This will delete this pipeline permantly , are you sure you want to continue?')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getAllByRole('button', { name: 'Delete permanently' })[1])
+
+    await waitFor(() => {
+      expect(mockPermanentlyDeleteDeployment).toHaveBeenCalledWith('dep-4', true)
+      expect(screen.queryByText('Legacy')).not.toBeInTheDocument()
+      expect(screen.getByText('Pipeline permanently deleted.')).toBeInTheDocument()
+    })
+  })
+
+  it('restores deleted rows back to their original environment tab', async () => {
+    const user = userEvent.setup()
+    render(<ETLManagementScreen />)
+
+    await user.click(screen.getByRole('button', { name: /Deleted/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Legacy')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Restore pipeline' })).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Restore pipeline' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Restore pipeline?')).toBeInTheDocument()
+      expect(screen.getByText('Are you sure you want to restore this pipline ?')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Yes' }))
+
+    await waitFor(() => {
+      expect(mockRestoreDeployment).toHaveBeenCalledWith('dep-4', true)
+      expect(screen.queryByText('Legacy')).not.toBeInTheDocument()
+      expect(screen.getByText('Pipeline restored successfully.')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Prod/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Legacy')).toBeInTheDocument()
+    })
+  })
+
   it('shows a deployment failure popup with a readable reason when deploy startup fails', async () => {
     const user = userEvent.setup()
     mockDeployFromYaml.mockResolvedValueOnce({ success: false, error: 'Kafka broker was unavailable' })
@@ -187,8 +371,8 @@ describe('ETLManagementScreen table layout stability', () => {
     await user.click(deployButton)
 
     await waitFor(() => {
-      expect(screen.getByText('Deployment Failed')).toBeInTheDocument()
       expect(screen.getByText('Kafka broker was unavailable')).toBeInTheDocument()
+      expect(screen.getByText('1 failed')).toBeInTheDocument()
       expect(screen.queryByText('Failure Reason')).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Got it' })).toBeInTheDocument()
     })
@@ -251,6 +435,34 @@ describe('ETLManagementScreen table layout stability', () => {
       readOnly: true,
       currentStep: 0,
       completedSteps: [0, 1, 2, 3, 4, 5, 6],
+    })
+  })
+
+  it('loads the original deployed YAML into wizard state when editing a running deployment', async () => {
+    const user = userEvent.setup()
+
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Inventory')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getAllByRole('button', { name: 'Edit configuration' })[0])
+
+    await waitFor(() => {
+      expect(screen.getByText('Open deployment for editing?')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => {
+      expect(mockFetchDraftConfiguration).toHaveBeenCalledTimes(1)
+      expect(mockActions.loadState).toHaveBeenCalledWith(expect.objectContaining({
+        navigationMode: 'etl-config',
+        currentStep: 0,
+        originalDraftYaml: 'pipeline: yaml',
+        completedSteps: [0, 1, 2, 3, 4, 5, 6],
+      }))
     })
   })
 })
