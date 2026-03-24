@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleArrowUp, Rocket, SquarePen, Trash2 } from 'lucide-react';
+import { CircleArrowUp, Hand, Rocket, SquarePen, Trash2 } from 'lucide-react';
 import { Btn, Card, Chip, DeployProgressModal, FilterTabs, ModalDialog, Tooltip } from '../../shared/components/index.jsx';
 import * as deploymentsService from '../../shared/services/deploymentsService.js';
 import { fetchDeploymentSteps, subscribeToDeploymentProgress, deployFromYaml }
@@ -511,6 +511,28 @@ export default function ETLManagementScreen() {
       });
     } else {
       setScreenError(result?.error || 'Failed to restore the selected pipeline.');
+    }
+
+    setActionLoading(a => ({ ...a, [id]: null }));
+  };
+
+  const handleStop = async (deploymentRow) => {
+    const id = deploymentRow.id;
+    setScreenError('');
+    setScreenNotice(null);
+    setActionLoading(a => ({ ...a, [id]: 'stop' }));
+
+    const result = await deploymentsService.stopDeployment(id, useMock);
+
+    if (result?.success !== false) {
+      updateDeploymentRowStatus(deploymentRow, 'stopped');
+      await refreshDeployments();
+      setScreenNotice({
+        tone: 'success',
+        message: 'Pipeline stopped successfully.',
+      });
+    } else {
+      setScreenError(result?.error || 'Failed to stop the selected pipeline.');
     }
 
     setActionLoading(a => ({ ...a, [id]: null }));
@@ -1211,6 +1233,34 @@ export default function ETLManagementScreen() {
                                   }}
                                 >
                                   <Rocket size={16} strokeWidth={2.1} />
+                                </button>
+                              </span>
+                            </Tooltip>
+
+                            {/* Stop Button */}
+                            <Tooltip content={!isRunning ? 'Pipeline is not running' : actionLoading[dep.id] === 'stop' ? 'Stopping pipeline' : 'Stop pipeline'}>
+                              <span style={{ display: 'inline-flex' }}>
+                                <button
+                                  aria-label="Stop pipeline"
+                                  onClick={() => handleStop(dep)}
+                                  disabled={!isRunning || actionLoading[dep.id] === 'stop'}
+                                  style={{
+                                    ...ICON_BUTTON_STYLE,
+                                    borderColor: '#ef4444',
+                                    color: '#ef4444',
+                                    opacity: (!isRunning || actionLoading[dep.id] === 'stop') ? 0.4 : 1,
+                                    cursor: (!isRunning || actionLoading[dep.id] === 'stop') ? 'not-allowed' : 'pointer',
+                                  }}
+                                  onMouseEnter={e => {
+                                    if (isRunning && actionLoading[dep.id] !== 'stop') {
+                                      e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
+                                    }
+                                  }}
+                                  onMouseLeave={e => {
+                                    e.currentTarget.style.background = 'var(--bg)';
+                                  }}
+                                >
+                                  <Hand size={15} strokeWidth={2.1} />
                                 </button>
                               </span>
                             </Tooltip>

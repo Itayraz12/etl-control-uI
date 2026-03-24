@@ -15,6 +15,7 @@ const mockSetDeploymentStatus = vi.fn()
 const mockDeleteDeployment = vi.fn()
 const mockPermanentlyDeleteDeployment = vi.fn()
 const mockRestoreDeployment = vi.fn()
+const mockStopDeployment = vi.fn()
 const mockHydrateWizardStateFromYaml = vi.fn(() => ({ metadata: { productType: 'Inventory' } }))
 const mockDeploymentProgress = {
   isOpen: false,
@@ -118,6 +119,7 @@ vi.mock('../../shared/services/deploymentsService.js', () => ({
   deleteDeployment: (...args) => mockDeleteDeployment(...args),
   permanentlyDeleteDeployment: (...args) => mockPermanentlyDeleteDeployment(...args),
   restoreDeployment: (...args) => mockRestoreDeployment(...args),
+  stopDeployment: (...args) => mockStopDeployment(...args),
   fetchDeploymentSteps: (...args) => mockFetchDeploymentSteps(...args),
   subscribeToDeploymentProgress: (...args) => mockSubscribeToDeploymentProgress(...args),
   deployFromYaml: (...args) => mockDeployFromYaml(...args),
@@ -169,6 +171,18 @@ describe('ETLManagementScreen table layout stability', () => {
               ...deployment,
               deploymentStatus: deployment.previousDeploymentStatus || 'draft',
               previousDeploymentStatus: deployment.previousDeploymentStatus || 'draft',
+            }
+          : deployment
+      ))
+      return { success: true }
+    })
+    mockStopDeployment.mockReset()
+    mockStopDeployment.mockImplementation(async (id) => {
+      mockDeployments = mockDeployments.map(deployment => (
+        deployment.id === id
+          ? {
+              ...deployment,
+              deploymentStatus: 'stopped',
             }
           : deployment
       ))
@@ -283,6 +297,28 @@ describe('ETLManagementScreen table layout stability', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Catalog')).toBeInTheDocument()
+    })
+  })
+
+  it('stops a running pipeline from the management table', async () => {
+    const user = userEvent.setup()
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Inventory')).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: 'Stop pipeline' }).length).toBeGreaterThan(0)
+    })
+
+    const enabledStopButton = screen.getAllByRole('button', { name: 'Stop pipeline' }).find(button => !button.disabled)
+
+    expect(enabledStopButton).toBeTruthy()
+
+    await user.click(enabledStopButton)
+
+    await waitFor(() => {
+      expect(mockStopDeployment).toHaveBeenCalledWith('dep-1', true)
+      expect(screen.getByText('Pipeline stopped successfully.')).toBeInTheDocument()
+      expect(screen.getByText('1 stopped')).toBeInTheDocument()
     })
   })
 

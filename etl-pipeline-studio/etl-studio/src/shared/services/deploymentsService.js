@@ -647,9 +647,31 @@ export async function deployService(id, useMock = false) {
 }
 
 export async function stopDeployment(id, useMock = false) {
+  if (String(id).startsWith('local-draft:')) {
+    const drafts = readLocalDrafts()
+    if (drafts[id]) {
+      drafts[id] = {
+        ...drafts[id],
+        deploymentStatus: 'stopped',
+        lastStatusChange: Date.now(),
+      }
+      writeLocalDrafts(drafts)
+    }
+    return { success: true, id }
+  }
+
   if (useMock) {
     // Simulate network delay
     await new Promise(r => setTimeout(r, 200));
+    mockDeploymentsStore = mockDeploymentsStore.map(item => (
+      item.id === id
+        ? {
+            ...item,
+            deploymentStatus: 'stopped',
+            lastStatusChange: Date.now(),
+          }
+        : item
+    ))
     return { success: true };
   } else {
     try {
