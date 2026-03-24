@@ -188,6 +188,89 @@ function dereferenceJsonSchema(schema, rootSchema, seenRefs = new Set()) {
   }
 }
 
+function mergeJsonSchemaSchemas(baseSchema = {}, nextSchema = {}) {
+  const baseRequired = Array.isArray(baseSchema.required) ? baseSchema.required : []
+  const nextRequired = Array.isArray(nextSchema.required) ? nextSchema.required : []
+
+  return {
+    ...baseSchema,
+    ...nextSchema,
+    properties: {
+      ...(baseSchema.properties && typeof baseSchema.properties === 'object' ? baseSchema.properties : {}),
+      ...(nextSchema.properties && typeof nextSchema.properties === 'object' ? nextSchema.properties : {}),
+    },
+    required: [...new Set([...baseRequired, ...nextRequired])],
+    oneOf: undefined,
+    anyOf: undefined,
+    allOf: undefined,
+  }
+}
+
+function expandJsonSchemaVariants(schema, rootSchema = null) {
+  const resolvedSchema = dereferenceJsonSchema(schema, rootSchema || schema)
+  if (!resolvedSchema || typeof resolvedSchema !== 'object' || Array.isArray(resolvedSchema)) return []
+
+  const { oneOf, anyOf, allOf, ...baseSchema } = resolvedSchema
+
+  if (Array.isArray(allOf) && allOf.length > 0) {
+    const mergedAllOfSchema = allOf.reduce((acc, branch) => {
+      const resolvedBranch = dereferenceJsonSchema(branch, rootSchema || resolvedSchema)
+      return mergeJsonSchemaSchemas(
+        acc,
+        resolvedBranch && typeof resolvedBranch === 'object' && !Array.isArray(resolvedBranch) ? resolvedBranch : {},
+      )
+    }, baseSchema)
+
+    return expandJsonSchemaVariants(mergedAllOfSchema, rootSchema || resolvedSchema)
+  }
+
+  const variantBranches = Array.isArray(oneOf) && oneOf.length > 0
+    ? oneOf
+    : Array.isArray(anyOf) && anyOf.length > 0
+      ? anyOf
+      : []
+
+  if (variantBranches.length > 0) {
+    return variantBranches.flatMap(branch => {
+      const resolvedBranch = dereferenceJsonSchema(branch, rootSchema || resolvedSchema)
+      if (!resolvedBranch || typeof resolvedBranch !== 'object' || Array.isArray(resolvedBranch)) return []
+
+      return expandJsonSchemaVariants(
+        mergeJsonSchemaSchemas(baseSchema, resolvedBranch),
+        rootSchema || resolvedSchema,
+      )
+    })
+  }
+
+  return [baseSchema]
+}
+
+function dedupeSchemaFields(fields = []) {
+  const deduped = new Map()
+
+  fields.forEach(field => {
+    if (!field || typeof field !== 'object' || !field.id) return
+
+    const existing = deduped.get(field.id)
+    if (!existing) {
+      deduped.set(field.id, field)
+      return
+    }
+
+    deduped.set(field.id, {
+      ...existing,
+      ...field,
+      required: Boolean(existing.required || field.required),
+      nullable: Boolean(existing.nullable && field.nullable),
+      description: existing.description ?? field.description,
+      inferredFormat: existing.inferredFormat ?? field.inferredFormat,
+      arrayItemType: existing.arrayItemType ?? field.arrayItemType,
+    })
+  })
+
+  return Array.from(deduped.values())
+}
+
 function normalizeJsonSchemaField(path, schema = {}, required = false, rootSchema = null) {
   const resolvedSchema = dereferenceJsonSchema(schema, rootSchema || schema)
   const type = normalizeFieldType(resolvedSchema.type, resolvedSchema.properties ? 'object' : resolvedSchema.items ? 'array' : 'string')
@@ -216,12 +299,14 @@ function normalizeJsonSchemaField(path, schema = {}, required = false, rootSchem
 function flattenJsonSchemaProperties(properties = {}, requiredFields = [], basePath = '', rootSchema = null) {
   const requiredSet = new Set(Array.isArray(requiredFields) ? requiredFields : [])
 
-  return Object.entries(properties).flatMap(([key, value]) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+  return dedupeSchemaFields(
+    Object.entries(properties).flatMap(([key, value]) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return []
 
-    const path = basePath ? `${basePath}.${key}` : key
-    return flattenJsonSchemaNode(path, value, requiredSet.has(key), rootSchema)
-  })
+      const path = basePath ? `${basePath}.${key}` : key
+      return flattenJsonSchemaNode(path, value, requiredSet.has(key), rootSchema)
+    })
+  )
 }
 
 function singularizeSchemaSegment(segment = '') {
@@ -252,6 +337,10 @@ function getJsonSchemaArrayItemSchemas(schema = {}, rootSchema = null) {
 
   return [...directItem, ...tupleItems, ...prefixedItems]
     .filter(item => item && typeof item === 'object' && !Array.isArray(item))
+    .flatMap(item => {
+      const expanded = expandJsonSchemaVariants(item, rootSchema || resolvedSchema)
+      return expanded.length > 0 ? expanded : [item]
+    })
 }
 
 function flattenJsonSchemaArrayItems(path, itemsSchema, required = false, rootSchema = null) {
@@ -266,16 +355,18 @@ function flattenJsonSchemaArrayItems(path, itemsSchema, required = false, rootSc
   )
 
   if (itemType === 'object' && resolvedItemsSchema.properties && typeof resolvedItemsSchema.properties === 'object') {
-    return flattenJsonSchemaProperties(resolvedItemsSchema.properties, resolvedItemsSchema.required, arrayPath, rootSchema)
+    return dedupeSchemaFields(
+      flattenJsonSchemaProperties(resolvedItemsSchema.properties, resolvedItemsSchema.required, arrayPath, rootSchema)
+    )
   }
 
   if (itemType === 'array' && getJsonSchemaArrayItemSchemas(resolvedItemsSchema, rootSchema).length > 0) {
-    return [
+    return dedupeSchemaFields([
       normalizeJsonSchemaField(arrayPath, resolvedItemsSchema, required, rootSchema),
       ...getJsonSchemaArrayItemSchemas(resolvedItemsSchema, rootSchema).flatMap(itemSchema => (
         flattenJsonSchemaArrayItems(arrayPath, itemSchema, false, rootSchema)
       )),
-    ]
+    ])
   }
 
   return [normalizeJsonSchemaField(arrayPath, resolvedItemsSchema, required, rootSchema)]
@@ -296,10 +387,15 @@ function flattenJsonSchemaNode(path, schema = {}, required = false, rootSchema =
   if (type === 'array') {
     const itemSchemas = getJsonSchemaArrayItemSchemas(resolvedSchema, rootSchema || resolvedSchema)
     if (itemSchemas.length > 0) {
-      return [
-        field,
-        ...itemSchemas.flatMap(itemSchema => flattenJsonSchemaArrayItems(path, itemSchema, required, rootSchema || resolvedSchema)),
-      ]
+      const flattenedItems = dedupeSchemaFields(
+        itemSchemas.flatMap(itemSchema => flattenJsonSchemaArrayItems(path, itemSchema, required, rootSchema || resolvedSchema))
+      )
+
+      if (path) {
+        return flattenedItems
+      }
+
+      return [field, ...flattenedItems]
     }
   }
 
@@ -317,9 +413,15 @@ function normalizeSourceSchemaFromJsonSchema(schema) {
 
   if (rootType === 'array') {
     const itemSchemas = getJsonSchemaArrayItemSchemas(schema, schema)
+    const rootArrayField = normalizeJsonSchemaField('items', schema, false, schema)
     if (itemSchemas.length > 0) {
-      return itemSchemas.flatMap(itemSchema => flattenJsonSchemaArrayItems('items', itemSchema, false, schema))
+      return [
+        rootArrayField,
+        ...dedupeSchemaFields(itemSchemas.flatMap(itemSchema => flattenJsonSchemaArrayItems('items', itemSchema, false, schema))),
+      ]
     }
+
+    return [rootArrayField]
   }
 
   return flattenJsonSchemaNode('value', schema, false, schema)

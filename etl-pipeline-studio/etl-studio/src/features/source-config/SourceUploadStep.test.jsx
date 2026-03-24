@@ -158,9 +158,7 @@ describe('SourceUploadStep', () => {
 
     await screen.findByText('Detected Schema')
 
-    expect(screen.getByText('orders')).toBeInTheDocument()
     expect(screen.getByText('order.*.id')).toBeInTheDocument()
-    expect(screen.getByText('order.*.lines')).toBeInTheDocument()
     expect(screen.getByText('order.*.line.*.sku')).toBeInTheDocument()
     expect(screen.getByText('order.*.line.*.quantity')).toBeInTheDocument()
     expect(screen.queryByText('order.*.line.*.*')).not.toBeInTheDocument()
@@ -169,9 +167,7 @@ describe('SourceUploadStep', () => {
       const persisted = JSON.parse(localStorage.getItem('etl-studio-wizard-draft') || '{}')
       expect(persisted.upload.schema).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ id: 'orders', type: 'array' }),
           expect.objectContaining({ id: 'order.*.id', type: 'string', required: true }),
-          expect.objectContaining({ id: 'order.*.lines', type: 'array' }),
           expect.objectContaining({ id: 'order.*.line.*.sku', type: 'string' }),
           expect.objectContaining({ id: 'order.*.line.*.quantity', type: 'number' }),
         ])
@@ -207,7 +203,6 @@ describe('SourceUploadStep', () => {
 
     await screen.findByText('Detected Schema')
 
-    expect(screen.getByText('batches')).toBeInTheDocument()
     expect(screen.getByText('batch.*.batchId')).toBeInTheDocument()
     expect(screen.getByText('batch.*.createdAt')).toBeInTheDocument()
 
@@ -215,7 +210,6 @@ describe('SourceUploadStep', () => {
       const persisted = JSON.parse(localStorage.getItem('etl-studio-wizard-draft') || '{}')
       expect(persisted.upload.schema).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ id: 'batches', type: 'array' }),
           expect.objectContaining({ id: 'batch.*.batchId', type: 'string' }),
           expect.objectContaining({ id: 'batch.*.createdAt', type: 'string', inferredFormat: 'date-time' }),
         ])
@@ -256,7 +250,6 @@ describe('SourceUploadStep', () => {
 
     await screen.findByText('Detected Schema')
 
-    expect(screen.getByText('persons')).toBeInTheDocument()
     expect(screen.getByText('person.*.firstName')).toBeInTheDocument()
     expect(screen.getByText('person.*.lastName')).toBeInTheDocument()
     expect(screen.queryByText('persons[]')).not.toBeInTheDocument()
@@ -265,7 +258,6 @@ describe('SourceUploadStep', () => {
       const persisted = JSON.parse(localStorage.getItem('etl-studio-wizard-draft') || '{}')
       expect(persisted.upload.schema).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ id: 'persons', type: 'array', required: true }),
           expect.objectContaining({ id: 'person.*.firstName', type: 'string', required: true }),
           expect.objectContaining({ id: 'person.*.lastName', type: 'string' }),
         ])
