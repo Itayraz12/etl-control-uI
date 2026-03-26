@@ -6,12 +6,23 @@ import { WizardProvider } from '../../shared/store/wizardStore.jsx'
 
 const testKafkaConnection = vi.fn()
 const WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
+const PREVIEW_USER = { userId: 'alice', teamName: 'platform' }
 
 vi.mock('../../shared/services/kafkaService.js', () => ({
   testKafkaConnection: (...args) => testKafkaConnection(...args),
 }))
 
-function renderStep(initialSource = {}, initialMetadata = {}) {
+function seedPreviewState(wizardState) {
+  window.history.pushState({}, '', '/?preview=true&deploymentId=dep-1&previewSource=saved')
+  localStorage.setItem(
+    'etl-deployment-preview:dep-1:saved',
+    JSON.stringify({ wizardState })
+  )
+}
+
+function renderStep(initialSource = {}, initialMetadata = {}, options = {}) {
+  const { user = null } = options
+
   localStorage.setItem(
     WIZARD_STORAGE_KEY,
     JSON.stringify({
@@ -52,7 +63,7 @@ function renderStep(initialSource = {}, initialMetadata = {}) {
   )
 
   return render(
-    <WizardProvider>
+    <WizardProvider user={user}>
       <SourceConfigStep />
     </WizardProvider>
   )
@@ -62,6 +73,7 @@ describe('SourceConfigStep Kafka test connection', () => {
   beforeEach(() => {
     localStorage.clear()
     testKafkaConnection.mockReset()
+    window.history.pushState({}, '', '/')
   })
 
   it('does not render the Data Stream Info card in source config anymore', () => {
@@ -87,6 +99,43 @@ describe('SourceConfigStep Kafka test connection', () => {
 
     expect(await screen.findByLabelText('Kafka connection test succeeded')).toBeInTheDocument()
     expect(screen.getByText('Kafka source reachable')).toBeInTheDocument()
+  })
+
+  it('disables test connection in preview mode', async () => {
+    const user = userEvent.setup()
+
+    seedPreviewState({
+      navigationMode: 'etl-config',
+      currentStep: 1,
+      completedSteps: [0],
+      metadata: {
+        productSource: 'ERP',
+        productType: 'Inventory',
+        team: 'platform',
+        environment: 'production',
+        entityName: 'Product',
+        tags: '',
+      },
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: 'source_products_raw',
+        kafkaKeys: '',
+        format: 'JSON',
+        jsonSplit: '',
+        streamingContinuity: 'continuous',
+        recordsPerDay: 'millions',
+      },
+    })
+
+    renderStep({}, {}, { user: PREVIEW_USER })
+
+    const testConnectionButton = screen.getByRole('button', { name: /test connection/i })
+    expect(testConnectionButton).toBeDisabled()
+
+    await user.click(testConnectionButton)
+
+    expect(testKafkaConnection).not.toHaveBeenCalled()
   })
 
   it('clears the previous source connection result when Kafka inputs change', async () => {

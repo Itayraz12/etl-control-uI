@@ -20,11 +20,11 @@ function KafkaConnectionStatus({ status, message }) {
   return null
 }
 
-function SourceConfigPanel({ type, state, u, metadata }) {
+function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
   const [keyFilterOpen, setKeyFilterOpen] = useState(false)
   const [kafkaTestState, setKafkaTestState] = useState({ status: 'idle', message: '' })
   const TestBtn = () => (
-    <Btn v="primary" sm onClick={() => alert('Connection test simulated!')}>
+    <Btn v="primary" sm onClick={() => alert('Connection test simulated!')} disabled={readOnly}>
       🔌 Test Connection
     </Btn>
   )
@@ -39,6 +39,8 @@ function SourceConfigPanel({ type, state, u, metadata }) {
   }, [type, state.kafkaTopic, state.kafkaEnv, metadata?.environment])
 
   const handleKafkaConnectionTest = async () => {
+    if (readOnly) return
+
     const topic = String(state.kafkaTopic || '').trim()
     const environment = String(state.kafkaEnv || metadata?.environment || '').trim()
 
@@ -77,7 +79,7 @@ function SourceConfigPanel({ type, state, u, metadata }) {
         </FormGroup>
       </FormRow>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <Btn v="primary" sm onClick={handleKafkaConnectionTest} disabled={kafkaTestState.status === 'loading'}>
+        <Btn v="primary" sm onClick={handleKafkaConnectionTest} disabled={readOnly || kafkaTestState.status === 'loading'}>
           {kafkaTestState.status === 'loading' ? '⏳ Testing…' : '🔌 Test Connection'}
         </Btn>
         <KafkaConnectionStatus status={kafkaTestState.status} message={kafkaTestState.message} />
@@ -262,7 +264,7 @@ export default function SourceConfigStep() {
             );
             })}
           </div>
-          {src.sourceType && <SourceConfigPanel type={src.sourceType} state={src} u={u} metadata={state.metadata} />}
+          {src.sourceType && <SourceConfigPanel type={src.sourceType} state={src} u={u} metadata={state.metadata} readOnly={state.readOnly} />}
         </Card>
 
         <Card>

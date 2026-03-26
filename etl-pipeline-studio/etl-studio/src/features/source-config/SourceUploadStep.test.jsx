@@ -5,6 +5,7 @@ import SourceUploadStep from './SourceUploadStep.jsx'
 import { WizardProvider } from '../../shared/store/wizardStore.jsx'
 
 const fetchSchemaByExample = vi.fn()
+const PREVIEW_USER = { userId: 'alice', teamName: 'platform' }
 
 vi.mock('../../shared/services/configService.js', () => ({
   fetchSchemaByExample: (...args) => fetchSchemaByExample(...args),
@@ -15,9 +16,17 @@ vi.mock('../../shared/store/mockModeContext.jsx', () => ({
   useMockMode: () => ({ useMock: false, setUseMock: vi.fn() }),
 }))
 
-function renderStep() {
+function seedPreviewState(wizardState) {
+  window.history.pushState({}, '', '/?preview=true&deploymentId=dep-1&previewSource=saved')
+  localStorage.setItem(
+    'etl-deployment-preview:dep-1:saved',
+    JSON.stringify({ wizardState })
+  )
+}
+
+function renderStep({ user = null } = {}) {
   return render(
-    <WizardProvider>
+    <WizardProvider user={user}>
       <SourceUploadStep />
     </WizardProvider>
   )
@@ -25,7 +34,9 @@ function renderStep() {
 
 describe('SourceUploadStep', () => {
   beforeEach(() => {
+    localStorage.clear()
     fetchSchemaByExample.mockReset()
+    window.history.pushState({}, '', '/')
   })
 
   it('opens the native file picker when clicking Upload sample', async () => {
@@ -37,6 +48,36 @@ describe('SourceUploadStep', () => {
     await user.click(screen.getByRole('button', { name: 'Upload sample' }))
 
     expect(clickSpy).toHaveBeenCalledTimes(1)
+    clickSpy.mockRestore()
+  })
+
+  it('disables sample upload in preview mode', async () => {
+    const user = userEvent.setup()
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+
+    seedPreviewState({
+      navigationMode: 'etl-config',
+      currentStep: 2,
+      completedSteps: [0, 1],
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: 'source_products_raw',
+        format: 'JSON',
+      },
+      upload: { done: false, schema: [], fileName: '', fileType: '', fileSize: 0 },
+    })
+
+    renderStep({ user: PREVIEW_USER })
+
+    const uploadButton = screen.getByRole('button', { name: 'Upload sample' })
+    expect(uploadButton).toBeDisabled()
+
+    await user.click(uploadButton)
+
+    expect(clickSpy).not.toHaveBeenCalled()
+    expect(fetchSchemaByExample).not.toHaveBeenCalled()
+    clickSpy.mockRestore()
   })
 
   it('parses a JSON Schema response and persists the inferred source fields', async () => {

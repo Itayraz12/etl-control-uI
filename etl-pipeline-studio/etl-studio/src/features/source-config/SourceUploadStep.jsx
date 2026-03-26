@@ -13,18 +13,19 @@ export default function SourceUploadStep() {
   const [phase, setPhase] = useState(state.upload.done ? 'done' : 'idle')
   const [error, setError] = useState('')
   const sourceSchema = resolveSourceSchema(state.upload)
+  const isReadOnly = state.readOnly === true
 
   useEffect(() => {
     setPhase(state.upload.done ? 'done' : 'idle')
   }, [state.upload.done])
 
   const openFilePicker = () => {
-    if (phase === 'parsing') return
+    if (isReadOnly || phase === 'parsing') return
     fileInputRef.current?.click()
   }
 
   const inferSchemaFromFile = async (file) => {
-    if (!file || phase === 'parsing') return
+    if (isReadOnly || !file || phase === 'parsing') return
 
     const previousPhase = phase
     if (phase === 'parsing') return
@@ -63,6 +64,7 @@ export default function SourceUploadStep() {
   }
 
   const handleUploadButtonClick = () => {
+    if (isReadOnly) return
     setSampleMode('local')
     openFilePicker()
   }
@@ -82,8 +84,8 @@ export default function SourceUploadStep() {
           {/* Mode toggle */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>Sample origin:</span>
-            <Btn sm v={sampleMode === 'local' ? 'primary' : 'ghost'} onClick={handleUploadButtonClick}>Upload sample</Btn>
-            <Btn sm v={sampleMode === 'source' ? 'primary' : 'ghost'} onClick={() => setSampleMode('source')}>Pull from source config</Btn>
+            <Btn sm v={sampleMode === 'local' ? 'primary' : 'ghost'} onClick={handleUploadButtonClick} disabled={isReadOnly}>Upload sample</Btn>
+            <Btn sm v={sampleMode === 'source' ? 'primary' : 'ghost'} onClick={() => setSampleMode('source')} disabled={isReadOnly}>Pull from source config</Btn>
           </div>
 
           <input
@@ -92,12 +94,14 @@ export default function SourceUploadStep() {
             type="file"
             accept=".json,.csv,application/json,text/csv,text/plain"
             style={{ display: 'none' }}
+            disabled={isReadOnly}
             onChange={handleInputChange}
           />
 
           {/* Drop zone */}
           <DropZone
             phase={phase}
+            readOnly={isReadOnly}
             sampleMode={sampleMode}
             onBrowse={openFilePicker}
             onFileSelected={inferSchemaFromFile}
@@ -123,28 +127,33 @@ export default function SourceUploadStep() {
   )
 }
 
-function DropZone({ phase, sampleMode, onBrowse, onFileSelected, detectedFieldCount }) {
+function DropZone({ phase, readOnly, sampleMode, onBrowse, onFileSelected, detectedFieldCount }) {
   const [hovering, setHovering] = useState(false)
 
   const handleDrop = async (e) => {
     e.preventDefault()
     setHovering(false)
-    if (phase === 'parsing' || sampleMode !== 'local') return
+    if (readOnly || phase === 'parsing' || sampleMode !== 'local') return
     const file = e.dataTransfer?.files?.[0]
     await onFileSelected(file)
   }
 
   return (
     <div
-      onClick={phase !== 'parsing' && sampleMode === 'local' ? onBrowse : undefined}
-      onDragOver={e => { e.preventDefault(); setHovering(true) }}
+      aria-disabled={readOnly ? 'true' : undefined}
+      onClick={!readOnly && phase !== 'parsing' && sampleMode === 'local' ? onBrowse : undefined}
+      onDragOver={e => {
+        e.preventDefault()
+        if (!readOnly) setHovering(true)
+      }}
       onDragLeave={() => setHovering(false)}
       onDrop={handleDrop}
       style={{
         border: `2px dashed ${phase === 'done' ? 'var(--success)' : hovering ? 'var(--accent)' : 'var(--border)'}`,
         borderRadius: 'var(--radius)', padding: 40, textAlign: 'center',
-        cursor: phase === 'parsing' || sampleMode !== 'local' ? 'default' : 'pointer',
+        cursor: readOnly || phase === 'parsing' || sampleMode !== 'local' ? 'default' : 'pointer',
         transition: 'all .2s',
+        opacity: readOnly ? 0.65 : 1,
         background: phase === 'done' ? 'rgba(34,197,94,.07)' : hovering ? 'rgba(79,110,247,.07)' : 'var(--surf2)',
       }}
     >

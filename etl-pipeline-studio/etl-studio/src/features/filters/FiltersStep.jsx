@@ -75,7 +75,7 @@ function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions
   )
 }
 
-function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions }) {
+function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions, readOnly = false }) {
   const addRule = () => onUpdate({
     ...group,
     rules: [...group.rules, { id: `r-${Date.now()}`, field: fieldOptions[0] || 'id', op: 'eq', value: '1' }]
@@ -91,6 +91,7 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions 
 
   const colors = ['rgba(79,110,247,.12)', 'rgba(124,58,237,.12)', 'rgba(236,72,153,.1)']
   const borderColors = ['rgba(79,110,247,.4)', 'rgba(124,58,237,.4)', 'rgba(236,72,153,.4)']
+  const disableRootGroupButtons = readOnly && depth === 0
 
   return (
     <div style={{
@@ -105,10 +106,11 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions 
         </span>
         <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 5, overflow: 'hidden' }}>
           {['AND', 'OR'].map(op => (
-            <button key={op} onClick={() => onUpdate({ ...group, logic: op })} style={{
-              padding: '3px 10px', fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer',
+            <button key={op} onClick={() => onUpdate({ ...group, logic: op })} disabled={disableRootGroupButtons} style={{
+              padding: '3px 10px', fontSize: 11, fontWeight: 700, border: 'none', cursor: disableRootGroupButtons ? 'not-allowed' : 'pointer',
               background: group.logic === op ? (depth === 0 ? 'var(--accent)' : 'var(--accent2)') : 'transparent',
               color: group.logic === op ? '#fff' : 'var(--muted)',
+              opacity: disableRootGroupButtons ? 0.5 : 1,
               transition: 'all .15s',
             }}>{op}</button>
           ))}
@@ -119,10 +121,11 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions 
         {depth === 0 && (
           <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 5, overflow: 'hidden' }}>
             {['include', 'exclude'].map(mode => (
-              <button key={mode} onClick={() => onUpdate({ ...group, mode: mode || 'include' })} style={{
-                padding: '3px 10px', fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer', textTransform: 'capitalize',
+              <button key={mode} onClick={() => onUpdate({ ...group, mode: mode || 'include' })} disabled={disableRootGroupButtons} style={{
+                padding: '3px 10px', fontSize: 11, fontWeight: 700, border: 'none', cursor: disableRootGroupButtons ? 'not-allowed' : 'pointer', textTransform: 'capitalize',
                 background: (group.mode || 'include') === mode ? 'var(--accent)' : 'transparent',
                 color: (group.mode || 'include') === mode ? '#fff' : 'var(--muted)',
+                opacity: disableRootGroupButtons ? 0.5 : 1,
                 transition: 'all .15s',
               }}>{mode}</button>
             ))}
@@ -156,6 +159,7 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions 
             onRemove={() => removeSubgroup(sg.id)}
             operators={operators}
             fieldOptions={fieldOptions}
+            readOnly={readOnly}
           />
         </div>
       ))}
@@ -174,6 +178,7 @@ export default function   FiltersStep() {
   const { filters: operators } = useConfig()
   const filters = state.filters
   const setFilters = actions.setFilters
+  const isReadOnly = state.readOnly === true
   const fieldOptions = resolveSourceSchema(state.upload).map(f => f.id)
 
   const formatRuleValue = (rule) => {
@@ -213,6 +218,7 @@ export default function   FiltersStep() {
           onRemove={() => removeGroup(g.id)}
           operators={operators}
           fieldOptions={fieldOptions}
+          readOnly={isReadOnly}
         />
       ))}
 

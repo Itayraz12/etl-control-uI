@@ -53,8 +53,19 @@ vi.mock('../../shared/store/configContext.jsx', () => ({
 }))
 
 const WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
+const PREVIEW_USER = { userId: 'alice', teamName: 'platform' }
 
-function renderWithPersistedState(mappingOverrides = {}, uploadOverrides = {}, targetSchema = []) {
+function seedPreviewState(wizardState) {
+  window.history.pushState({}, '', '/?preview=true&deploymentId=dep-1&previewSource=saved')
+  localStorage.setItem(
+    'etl-deployment-preview:dep-1:saved',
+    JSON.stringify({ wizardState })
+  )
+}
+
+function renderWithPersistedState(mappingOverrides = {}, uploadOverrides = {}, targetSchema = [], options = {}) {
+  const { user = null } = options
+
   localStorage.setItem(
     WIZARD_STORAGE_KEY,
     JSON.stringify({
@@ -114,13 +125,15 @@ function renderWithPersistedState(mappingOverrides = {}, uploadOverrides = {}, t
   )
 
   return render(
-    <WizardProvider>
+    <WizardProvider user={user}>
       <FieldMappingStep />
     </WizardProvider>
   )
 }
 
-function renderWithPersistedMappings(mappings, uploadOverrides = {}, targetSchema = []) {
+function renderWithPersistedMappings(mappings, uploadOverrides = {}, targetSchema = [], options = {}) {
+  const { user = null } = options
+
   localStorage.setItem(
     WIZARD_STORAGE_KEY,
     JSON.stringify({
@@ -163,13 +176,95 @@ function renderWithPersistedMappings(mappings, uploadOverrides = {}, targetSchem
   )
 
   return render(
-    <WizardProvider>
+    <WizardProvider user={user}>
       <FieldMappingStep />
     </WizardProvider>
   )
 }
 
 describe('FieldMappingStep zoom controls', () => {
+  it('disables every rendered button in preview mode', async () => {
+    localStorage.clear()
+    window.history.pushState({}, '', '/')
+
+    const upload = {
+      done: true,
+      schema: [
+        { id: 'productName', name: 'productName', path: 'productName', type: 'string' },
+      ],
+      fileName: 'sample.json',
+      fileType: 'application/json',
+      fileSize: 123,
+    }
+    const targetSchema = [
+      { id: 'name', name: 'name', path: 'name', type: 'string', required: false },
+    ]
+
+    seedPreviewState({
+      navigationMode: 'etl-config',
+      currentStep: 4,
+      completedSteps: [0, 1, 2, 3],
+      metadata: {
+        productSource: 'ERP',
+        productType: 'Inventory',
+        team: 'platform',
+        environment: 'production',
+        entityName: 'Product',
+        tags: '',
+      },
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: 'source_products_raw',
+        format: 'JSON',
+        jsonSplit: '',
+        streamingContinuity: 'continuous',
+        recordsPerDay: 'millions',
+      },
+      upload,
+      targetSchema,
+      mappings: [
+        {
+          src: 'productName',
+          tgt: 'name',
+          srcNodeId: 'src-productName',
+          tgtNodeId: 'tgt-name',
+          srcPos: { x: 40, y: 30 },
+          tgtPos: { x: 650, y: 30 },
+          srcMetadata: { sendToSaknay: true, expression: '' },
+          tgtMetadata: { sendToSaknay: true, expression: '' },
+          transformer: 'none',
+          transformerInputType: 'any',
+          transformerOutputType: 'any',
+          transformerProps: {},
+          extraInputs: [],
+        },
+      ],
+      filters: [],
+      sink: {
+        sinkType: 'kafka',
+        sinkKafkaTopic: 'etl_products_v3',
+        sinkKafkaEnv: 'production',
+        shadow: false,
+        shadowTopic: '',
+        saknay: false,
+        saknayTopic: '',
+        asg: false,
+      },
+    })
+
+    renderWithPersistedState({}, upload, targetSchema, { user: PREVIEW_USER })
+
+    await waitFor(() => {
+      expect(screen.getByText('Lineage Canvas')).toBeInTheDocument()
+      expect(document.getElementById('nd-src-productName')).toBeInTheDocument()
+    })
+
+    const buttons = screen.getAllByRole('button', { hidden: true })
+    expect(buttons.length).toBeGreaterThan(0)
+    expect(buttons.every(button => button.disabled)).toBe(true)
+  })
+
   it('does not render the Show Transformers button in the mapping toolbar', async () => {
     renderWithPersistedState()
 
@@ -228,6 +323,113 @@ describe('FieldMappingStep zoom controls', () => {
 })
 
 describe('FieldMappingStep transformer modal regression', () => {
+  it('keeps transformer selection locked in preview mode while allowing the modal to close', async () => {
+    const user = userEvent.setup()
+    localStorage.clear()
+    window.history.pushState({}, '', '/')
+
+    seedPreviewState({
+      navigationMode: 'etl-config',
+      currentStep: 4,
+      completedSteps: [0, 1, 2, 3],
+      metadata: {
+        productSource: 'ERP',
+        productType: 'Inventory',
+        team: 'platform',
+        environment: 'production',
+        entityName: 'Product',
+        tags: '',
+      },
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: 'source_products_raw',
+        format: 'JSON',
+        jsonSplit: '',
+        streamingContinuity: 'continuous',
+        recordsPerDay: 'millions',
+      },
+      upload: {
+        done: true,
+        schema: [
+          { id: 'productName', name: 'productName', path: 'productName', type: 'string' },
+        ],
+      },
+      targetSchema: [
+        { id: 'name', name: 'name', path: 'name', type: 'string', required: false },
+      ],
+      mappings: [
+        {
+          src: 'productName',
+          tgt: 'name',
+          srcNodeId: 'src-productName',
+          tgtNodeId: 'tgt-name',
+          srcPos: { x: 40, y: 30 },
+          tgtPos: { x: 650, y: 30 },
+          srcMetadata: { sendToSaknay: true, expression: '' },
+          tgtMetadata: { sendToSaknay: true, expression: '' },
+          transformer: 'tf-1',
+          transformerInputType: 'string',
+          transformerOutputType: 'string',
+          transformerProps: { separator: '-' },
+          extraInputs: [],
+        },
+      ],
+      filters: [],
+      sink: {
+        sinkType: 'kafka',
+        sinkKafkaTopic: 'etl_products_v3',
+        sinkKafkaEnv: 'production',
+        shadow: false,
+        shadowTopic: '',
+        saknay: false,
+        saknayTopic: '',
+        asg: false,
+      },
+    })
+
+    renderWithPersistedState({
+      transformer: 'tf-1',
+      transformerInputType: 'string',
+      transformerOutputType: 'string',
+      transformerProps: { separator: '-' },
+    }, {}, [], { user: PREVIEW_USER })
+
+    const transformerNode = await screen.findByTestId('transformer-node-0-0')
+    await user.click(transformerNode)
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Search transformers...')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: /save concatenate/i })).toBeDisabled()
+      expect(screen.getByText('Separator')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('Uppercase'))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /save concatenate/i })).toBeDisabled()
+      expect(screen.getByText('Separator')).toBeInTheDocument()
+      expect(screen.queryByText('No additional configurable properties')).not.toBeInTheDocument()
+    })
+
+    const closeButton = screen.getAllByRole('button').find(button => button.textContent === '×')
+    expect(closeButton).toBeDefined()
+    expect(closeButton).toBeEnabled()
+    await user.click(closeButton)
+
+    await waitFor(() => {
+      expect(screen.queryByPlaceholderText('Search transformers...')).not.toBeInTheDocument()
+    })
+
+    await user.click(await screen.findByTestId('transformer-node-0-0'))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() => {
+      expect(screen.queryByPlaceholderText('Search transformers...')).not.toBeInTheDocument()
+    })
+  })
+
   it('opens the transformer modal when clicking the add-transformer plus on a connection', async () => {
     const user = userEvent.setup()
     renderWithPersistedState()
@@ -495,7 +697,7 @@ describe('FieldMappingStep transformer modal regression', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByTestId('target-list-item-persons')).toBeInTheDocument()
+      expect(screen.queryByTestId('target-list-item-persons')).not.toBeInTheDocument()
       expect(screen.getByTestId('target-list-item-person.*.firstName')).toBeInTheDocument()
       expect(screen.getByTestId('target-list-item-person.*.lastName')).toBeInTheDocument()
     })

@@ -88,6 +88,7 @@ function clampZoom(nextZoom) {
 export default function FieldMappingStep() {
   const { state, actions } = useWizard()
   const { transformers } = useConfig()
+  const isReadOnly = state.readOnly === true
   const sourceSchema = resolveSourceSchema(state.upload)
   const targetSchema = resolveTargetSchema(state.targetSchema)
   const canvasRef = useRef(null)
@@ -1308,6 +1309,7 @@ export default function FieldMappingStep() {
             />
             <button
               onClick={handleSourceBulkAction}
+              disabled={isReadOnly}
               style={{
                 width: '100%',
                 marginTop: '8px',
@@ -1318,7 +1320,8 @@ export default function FieldMappingStep() {
                 color: 'var(--accent)',
                 fontSize: '12px',
                 fontWeight: 600,
-                cursor: 'pointer',
+                cursor: isReadOnly ? 'not-allowed' : 'pointer',
+                opacity: isReadOnly ? 0.45 : 1,
               }}
             >
               {allSourceOnCanvas ? '<<<' : '>>>'}
@@ -1399,10 +1402,9 @@ export default function FieldMappingStep() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--surf2)' }}>
                 <button
                   type="button"
-                  data-etl-ro-allow
                   aria-label="Zoom out"
                   onClick={handleZoomOut}
-                  disabled={zoom <= MIN_ZOOM}
+                  disabled={isReadOnly || zoom <= MIN_ZOOM}
                   style={{
                     width: '28px',
                     height: '28px',
@@ -1410,20 +1412,20 @@ export default function FieldMappingStep() {
                     background: 'transparent',
                     color: 'var(--text)',
                     borderRadius: '6px',
-                    cursor: zoom <= MIN_ZOOM ? 'not-allowed' : 'pointer',
+                    cursor: isReadOnly || zoom <= MIN_ZOOM ? 'not-allowed' : 'pointer',
                     fontSize: '16px',
                     fontWeight: 700,
-                    opacity: zoom <= MIN_ZOOM ? 0.45 : 1,
+                    opacity: isReadOnly || zoom <= MIN_ZOOM ? 0.45 : 1,
                   }}
                 >
                   −
                 </button>
                 <button
                   type="button"
-                  data-etl-ro-allow
                   aria-label="Reset zoom"
                   data-testid="field-mapping-zoom-reset"
                   onClick={handleZoomReset}
+                  disabled={isReadOnly}
                   style={{
                     minWidth: '62px',
                     height: '28px',
@@ -1431,20 +1433,20 @@ export default function FieldMappingStep() {
                     background: 'transparent',
                     color: 'var(--text)',
                     borderRadius: '6px',
-                    cursor: 'pointer',
+                    cursor: isReadOnly ? 'not-allowed' : 'pointer',
                     fontSize: '11px',
                     fontWeight: 700,
                     padding: '0 8px',
+                    opacity: isReadOnly ? 0.45 : 1,
                   }}
                 >
                   {zoomPercentage}%
                 </button>
                 <button
                   type="button"
-                  data-etl-ro-allow
                   aria-label="Zoom in"
                   onClick={handleZoomIn}
-                  disabled={zoom >= MAX_ZOOM}
+                  disabled={isReadOnly || zoom >= MAX_ZOOM}
                   style={{
                     width: '28px',
                     height: '28px',
@@ -1452,10 +1454,10 @@ export default function FieldMappingStep() {
                     background: 'transparent',
                     color: 'var(--text)',
                     borderRadius: '6px',
-                    cursor: zoom >= MAX_ZOOM ? 'not-allowed' : 'pointer',
+                    cursor: isReadOnly || zoom >= MAX_ZOOM ? 'not-allowed' : 'pointer',
                     fontSize: '16px',
                     fontWeight: 700,
-                    opacity: zoom >= MAX_ZOOM ? 0.45 : 1,
+                    opacity: isReadOnly || zoom >= MAX_ZOOM ? 0.45 : 1,
                   }}
                 >
                   +
@@ -1463,16 +1465,18 @@ export default function FieldMappingStep() {
               </div>
               <button
                 onClick={alignNodes}
+                disabled={isReadOnly}
                 style={{
                   padding: '6px 12px',
                   border: '1px solid var(--border)',
                   background: 'transparent',
                   color: 'var(--text)',
                   borderRadius: '6px',
-                  cursor: 'pointer',
+                  cursor: isReadOnly ? 'not-allowed' : 'pointer',
                   fontSize: '12px',
                   fontWeight: 500,
                   transition: 'all 0.2s',
+                  opacity: isReadOnly ? 0.45 : 1,
                 }}
                 onMouseEnter={(e) => {
                   e.target.style.borderColor = 'var(--accent)'
@@ -1487,16 +1491,18 @@ export default function FieldMappingStep() {
               </button>
               <button
                 onClick={mapAllFields}
+                disabled={isReadOnly}
                 style={{
                   padding: '6px 12px',
                   border: '1px solid var(--accent)',
                   background: 'rgba(79, 110, 247, 0.08)',
                   color: 'var(--accent)',
                   borderRadius: '6px',
-                  cursor: 'pointer',
+                  cursor: isReadOnly ? 'not-allowed' : 'pointer',
                   fontSize: '12px',
                   fontWeight: 600,
                   transition: 'all 0.2s',
+                  opacity: isReadOnly ? 0.45 : 1,
                 }}
                 onMouseEnter={(e) => { 
                   e.target.style.background = 'var(--accent)'
@@ -1511,16 +1517,18 @@ export default function FieldMappingStep() {
               </button>
               <button
                 onClick={clearCanvas}
+                disabled={isReadOnly}
                 style={{
                   padding: '6px 12px',
                   border: '1px solid var(--border)',
                   background: 'transparent',
                   color: 'var(--text)',
                   borderRadius: '6px',
-                  cursor: 'pointer',
+                  cursor: isReadOnly ? 'not-allowed' : 'pointer',
                   fontSize: '12px',
                   fontWeight: 500,
                   transition: 'all 0.2s',
+                  opacity: isReadOnly ? 0.45 : 1,
                 }}
                 onMouseEnter={(e) => { 
                   e.target.style.borderColor = 'var(--danger)'
@@ -2152,6 +2160,7 @@ export default function FieldMappingStep() {
                                 data-testid={`target-saknay-toggle-${node.id}`}
                                 title={node.sendToSaknay ? 'Send to Saknay: Yes' : 'Send to Saknay: No'}
                                 aria-label={`Toggle Saknay for ${node.name}`}
+                                disabled={isReadOnly}
                                 onMouseDown={(e) => {
                                   e.preventDefault()
                                   e.stopPropagation()
@@ -2175,11 +2184,12 @@ export default function FieldMappingStep() {
                                   letterSpacing: '0.04em',
                                   userSelect: 'none',
                                   whiteSpace: 'nowrap',
-                                  cursor: 'pointer',
+                                  cursor: isReadOnly ? 'not-allowed' : 'pointer',
                                   pointerEvents: 'auto',
                                   appearance: 'none',
                                   outline: 'none',
                                   flexShrink: 0,
+                                  opacity: isReadOnly ? 0.45 : 1,
                                 }}
                               >
                                 <span style={{ fontSize: '10px', lineHeight: 1 }}>{node.sendToSaknay ? '✓' : '⊘'}</span>
@@ -2226,6 +2236,7 @@ export default function FieldMappingStep() {
                     <button
                       className="nd-del"
                       onClick={() => removeNode(node.id)}
+                      disabled={isReadOnly}
                       style={{
                         display: 'none',
                         position: 'absolute',
@@ -2237,7 +2248,7 @@ export default function FieldMappingStep() {
                         background: 'var(--danger)',
                         color: '#fff',
                         border: 'none',
-                        cursor: 'pointer',
+                        cursor: isReadOnly ? 'not-allowed' : 'pointer',
                         fontSize: '16px',
                         fontWeight: 300,
                         zIndex: 100,
@@ -2245,6 +2256,7 @@ export default function FieldMappingStep() {
                         justifyContent: 'center',
                         transition: 'all 0.1s',
                         pointerEvents: 'auto',
+                        opacity: isReadOnly ? 0.45 : 1,
                       }}
                       onMouseEnter={(e) => { e.target.style.transform = 'scale(1.15)' }}
                       onMouseLeave={(e) => { e.target.style.transform = 'scale(1)' }}
@@ -2360,6 +2372,7 @@ export default function FieldMappingStep() {
             />
             <button
               onClick={handleTargetBulkAction}
+              disabled={isReadOnly}
               style={{
                 width: '100%',
                 marginTop: '8px',
@@ -2370,7 +2383,8 @@ export default function FieldMappingStep() {
                 color: 'var(--success)',
                 fontSize: '12px',
                 fontWeight: 600,
-                cursor: 'pointer',
+                cursor: isReadOnly ? 'not-allowed' : 'pointer',
+                opacity: isReadOnly ? 0.45 : 1,
               }}
             >
               {allTargetOnCanvas ? '>>>' : '<<<'}
@@ -2529,6 +2543,7 @@ export default function FieldMappingStep() {
                 {showAddTransformerBtn && (
                   <button
                     data-testid="ctxmenu-add-transformer"
+                    disabled={isReadOnly}
                     onClick={() => {
                       setCtxMenu(null)
                       setCurrentCtxId(null)
@@ -2538,7 +2553,8 @@ export default function FieldMappingStep() {
                       width: '100%', padding: '7px 10px',
                       background: 'rgba(79,110,247,0.08)', border: '1px solid rgba(79,110,247,0.3)',
                       borderRadius: '6px', color: 'var(--accent)', fontSize: '12px', fontWeight: 600,
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                      cursor: isReadOnly ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                      opacity: isReadOnly ? 0.45 : 1,
                     }}
                   >
                     <span>⚙</span> Add Transformer
@@ -2937,9 +2953,9 @@ export default function FieldMappingStep() {
                 </span>
                 {selectedTf && (
                   <button
-                    data-etl-ro-allow
+                    disabled={isReadOnly}
                     onClick={() => { setSelectedTf(null); setTfPropValues({}) }}
-                    style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', marginRight: '4px' }}
+                    style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', padding: '4px 10px', cursor: isReadOnly ? 'not-allowed' : 'pointer', fontSize: '12px', marginRight: '4px', opacity: isReadOnly ? 0.45 : 1 }}
                   >← Back</button>
                 )}
                 <button
@@ -2967,14 +2983,19 @@ export default function FieldMappingStep() {
                     )}
                     {filtered.map((t) => {
                       const isSelected = selectedTf?._id === t._id
+                      const isReadOnlyTransformerOption = isReadOnly && (!selectedTf || !isSelected)
                       const propCount = getPropsSchema(transformers, t._id).length
                       return (
                         <div
                           key={t._id}
-                          onClick={() => handleSelectTf(t)}
-                          style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.15s', marginBottom: '2px', background: isSelected ? 'rgba(79,110,247,0.18)' : 'transparent', border: isSelected ? '1.5px solid rgba(79,110,247,0.5)' : '1.5px solid transparent' }}
-                          onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(79,110,247,0.09)' }}
-                          onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                          aria-disabled={isReadOnlyTransformerOption ? 'true' : undefined}
+                          onClick={() => {
+                            if (isReadOnlyTransformerOption) return
+                            handleSelectTf(t)
+                          }}
+                          style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '8px', cursor: isReadOnlyTransformerOption ? 'not-allowed' : 'pointer', transition: 'background 0.15s', marginBottom: '2px', background: isSelected ? 'rgba(79,110,247,0.18)' : 'transparent', border: isSelected ? '1.5px solid rgba(79,110,247,0.5)' : '1.5px solid transparent', opacity: isReadOnlyTransformerOption ? 0.45 : 1 }}
+                          onMouseEnter={(e) => { if (!isReadOnlyTransformerOption && !isSelected) e.currentTarget.style.background = 'rgba(79,110,247,0.09)' }}
+                          onMouseLeave={(e) => { if (!isReadOnlyTransformerOption && !isSelected) e.currentTarget.style.background = 'transparent' }}
                         >
                           <div style={{ width: '30px', height: '30px', borderRadius: '7px', background: isSelected ? 'rgba(79,110,247,0.25)' : 'rgba(79,110,247,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', flexShrink: 0 }}>{t.icon}</div>
                           <div style={{ flex: 1, minWidth: 0 }}>
@@ -3050,6 +3071,7 @@ export default function FieldMappingStep() {
                 <div>
                   {hadAssignedTransformer && (
                     <button
+                      disabled={isReadOnly}
                       onClick={() => {
                         applyEdges(prev => prev.map(e =>
                           (e.from !== currentModalEdge.from || e.to !== currentModalEdge.to)
@@ -3070,7 +3092,7 @@ export default function FieldMappingStep() {
                         alignNodes()
                         resetTransformerModal()
                       }}
-                      style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
+                      style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: '6px', cursor: isReadOnly ? 'not-allowed' : 'pointer', fontSize: '12px', fontWeight: 600, opacity: isReadOnly ? 0.45 : 1 }}
                     >
                       ✕ Remove Transformer
                     </button>
@@ -3081,7 +3103,7 @@ export default function FieldMappingStep() {
                     Cancel
                   </button>
                   {selectedTf && (
-                    <button onClick={handleApply} style={{ padding: '7px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>
+                    <button disabled={isReadOnly} onClick={handleApply} style={{ padding: '7px 18px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '6px', cursor: isReadOnly ? 'not-allowed' : 'pointer', fontSize: '12px', fontWeight: 700, opacity: isReadOnly ? 0.45 : 1 }}>
                       ✓ {(addTransformerModal.mode === 'insert' || !hadAssignedTransformer) ? 'Apply' : 'Save'} {selectedTf.name}
                     </button>
                   )}
@@ -3127,7 +3149,8 @@ export default function FieldMappingStep() {
               <button
                 type="button"
                 onClick={cancelClearCanvas}
-                style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', width: '26px', height: '26px', cursor: 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                disabled={isReadOnly}
+                style={{ background: 'rgba(255,255,255,0.18)', border: 'none', color: '#fff', borderRadius: '6px', width: '26px', height: '26px', cursor: isReadOnly ? 'not-allowed' : 'pointer', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: isReadOnly ? 0.45 : 1 }}
               >×</button>
             </div>
 
@@ -3143,7 +3166,8 @@ export default function FieldMappingStep() {
                 type="button"
                 data-testid="clear-canvas-cancel"
                 onClick={cancelClearCanvas}
-                style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
+                disabled={isReadOnly}
+                style={{ padding: '7px 16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '6px', cursor: isReadOnly ? 'not-allowed' : 'pointer', fontSize: '12px', opacity: isReadOnly ? 0.45 : 1 }}
               >
                 Cancel
               </button>
@@ -3151,7 +3175,8 @@ export default function FieldMappingStep() {
                 type="button"
                 data-testid="clear-canvas-confirm"
                 onClick={confirmClearCanvas}
-                style={{ padding: '7px 16px', background: 'rgba(239,68,68,.15)', border: '1px solid rgba(239,68,68,.35)', color: 'var(--danger)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
+                disabled={isReadOnly}
+                style={{ padding: '7px 16px', background: 'rgba(239,68,68,.15)', border: '1px solid rgba(239,68,68,.35)', color: 'var(--danger)', borderRadius: '6px', cursor: isReadOnly ? 'not-allowed' : 'pointer', fontSize: '12px', fontWeight: 700, opacity: isReadOnly ? 0.45 : 1 }}
               >
                 Clear Canvas
               </button>
@@ -3209,7 +3234,7 @@ export default function FieldMappingStep() {
               </div>
             </div>
             <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', background: 'var(--bg)' }}>
-              <button onClick={() => setTransformerModal(false)} style={{ padding: '8px 16px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Close</button>
+              <button onClick={() => setTransformerModal(false)} disabled={isReadOnly} style={{ padding: '8px 16px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '6px', cursor: isReadOnly ? 'not-allowed' : 'pointer', fontSize: '12px', fontWeight: 600, opacity: isReadOnly ? 0.45 : 1 }}>Close</button>
             </div>
           </div>
         </>
@@ -3337,15 +3362,17 @@ export default function FieldMappingStep() {
             }}>
               <button
                 onClick={() => setSuccessModal(null)}
+                disabled={isReadOnly}
                 style={{
                   padding: '8px 16px',
                   background: 'var(--success)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',
-                  cursor: 'pointer',
+                  cursor: isReadOnly ? 'not-allowed' : 'pointer',
                   fontSize: '12px',
                   fontWeight: 600,
+                  opacity: isReadOnly ? 0.45 : 1,
                 }}
               >
                 Got it!
