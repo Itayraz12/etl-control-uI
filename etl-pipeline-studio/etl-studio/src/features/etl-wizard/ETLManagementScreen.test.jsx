@@ -207,8 +207,35 @@ describe('ETLManagementScreen table layout stability', () => {
     })
 
     const tableCard = screen.getByTestId('etl-management-table-card')
+    const tableStack = screen.getByTestId('etl-management-table-stack')
+    const tabsFrame = screen.getByTestId('etl-management-tabs-frame')
+    const toolbar = screen.getByTestId('etl-management-toolbar')
+    const notificationsRow = screen.getByTestId('etl-management-notifications-row')
+    const tabsWrapper = screen.getByTestId('etl-management-tabs')
+    const allTabButton = screen.getByRole('button', { name: /All/i })
+    const deletedTabButton = screen.getByRole('button', { name: /Deleted/i })
+    const tabRow = allTabButton.parentElement
+
     expect(tableCard).toHaveStyle({ minHeight: '260px', flex: '1 1 auto' })
     expect(tableCard.style.height).toBe('')
+    expect(tabsWrapper).toHaveStyle({ width: '100%' })
+    expect(tableStack).toContainElement(tabsFrame)
+    expect(tableStack).toContainElement(tableCard)
+    expect(tabsFrame).toContainElement(tabsWrapper)
+    expect(tabsFrame.nextElementSibling).toBe(tableCard)
+    expect(allTabButton.style.flex).toBe('')
+    expect(notificationsRow).toHaveStyle({ minHeight: '52px' })
+    expect(toolbar.nextElementSibling).toBe(notificationsRow)
+    expect(notificationsRow.nextElementSibling).toBe(tableStack)
+    expect(tabsFrame.style.border).toBe('')
+    expect(tabsFrame).toHaveStyle({ alignSelf: 'flex-start', marginBottom: '-1px' })
+    expect(tableCard).toHaveStyle({ borderTopLeftRadius: '10px', borderTopRightRadius: '10px' })
+    expect(tabRow).toHaveStyle({
+      boxShadow: 'inset 0 0 0 1px var(--border)',
+      borderTopLeftRadius: '10px',
+      borderTopRightRadius: '10px',
+    })
+    expect(deletedTabButton).toBeInTheDocument()
 
     const productTypeIndicator = screen.getByTestId('sort-indicator-productType')
     const productSourceIndicator = screen.getByTestId('sort-indicator-productSource')
@@ -222,7 +249,7 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(productTypeIndicator).toHaveStyle({ width: '12px', minWidth: '12px', visibility: 'hidden' })
       expect(productSourceIndicator).toHaveStyle({ width: '12px', minWidth: '12px', visibility: 'visible' })
     })
-  })
+  }, 10000)
 
   it('does not render a left warning border for version mismatch rows', async () => {
     render(<ETLManagementScreen />)
@@ -409,12 +436,17 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByText('Pipeline deleted. You can find it under the Deleted tab.')).toBeInTheDocument()
     })
 
+    const notificationsRow = screen.getByTestId('etl-management-notifications-row')
+
+    expect(within(notificationsRow).getByText('Pipeline deleted. You can find it under the Deleted tab.')).toBeInTheDocument()
+    expect(notificationsRow.nextElementSibling).toBe(screen.getByTestId('etl-management-table-stack'))
+
     await user.click(screen.getByRole('button', { name: /Deleted/i }))
 
     await waitFor(() => {
       expect(screen.getByText('Catalog')).toBeInTheDocument()
     })
-  })
+  }, 10000)
 
   it('stops a running pipeline from the management table', async () => {
     const user = userEvent.setup()

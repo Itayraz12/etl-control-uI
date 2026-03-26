@@ -56,6 +56,7 @@ export default function WizardShell() {
   }, [state.currentStep, useMock, prefetchForStep])
 
   const Step = STEP_COMPONENTS[state.currentStep] || MetadataStep
+  const isReadOnly = state.readOnly || state.interactionMode === 'view'
 
   // Show a full-height spinner while the required data for this step is loading
   const loadingKey = LOADING_FLAG[state.currentStep]
@@ -63,10 +64,12 @@ export default function WizardShell() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'fadeIn .2s ease' }}>
-      {state.readOnly && (
+      {isReadOnly && (
         <>
           <style>{READ_ONLY_CSS}</style>
-          <div style={{
+          <div
+            data-testid="wizard-read-only-banner"
+            style={{
             background: 'rgba(245,158,11,0.12)',
             borderBottom: '1px solid rgba(245,158,11,0.4)',
             padding: '6px 24px',
@@ -77,9 +80,11 @@ export default function WizardShell() {
             gap: 8,
             flexShrink: 0,
           }}>
-            <span style={{ fontSize: 14 }}>👁</span>
-            <strong>View Only</strong>
-            <span style={{ color: 'var(--muted)' }}>— This is a read-only snapshot of the saved version. No changes can be made.</span>
+            <span aria-hidden="true" style={{ fontSize: 14 }}>👁</span>
+            <span>
+              <strong>View mode</strong>
+              <span style={{ color: 'var(--muted)' }}> — configuration is read-only.</span>
+            </span>
           </div>
         </>
       )}
@@ -106,8 +111,10 @@ export default function WizardShell() {
         </div>
       ) : (
         <div
-          data-etl-ro={state.readOnly ? 'true' : undefined}
-          onFocusCapture={state.readOnly ? (e) => e.target.blur() : undefined}
+          data-testid="wizard-step-shell"
+          data-etl-ro={isReadOnly ? 'true' : undefined}
+          aria-readonly={isReadOnly ? 'true' : 'false'}
+          onFocusCapture={isReadOnly ? (e) => e.target.blur() : undefined}
           style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         >
           <Step />

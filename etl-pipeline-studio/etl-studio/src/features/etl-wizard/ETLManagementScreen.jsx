@@ -886,7 +886,9 @@ export default function ETLManagementScreen() {
         </div>
 
         {/* Toolbar: Search + Create Button on Same Row */}
-        <div style={{ 
+        <div
+          data-testid="etl-management-toolbar"
+          style={{ 
           display: 'flex', 
           gap: 12, 
           width: '100%', 
@@ -914,76 +916,126 @@ export default function ETLManagementScreen() {
             + New Configuration
           </Btn>
         </div>
-        <FilterTabs
-          tabs={MANAGEMENT_TABS.map(tab => ({ ...tab, count: tabCounts[tab.id] || 0 }))}
-          activeTab={activeTab}
-          onChange={setActiveTab}
-          style={{ marginBottom: 0, paddingTop: 14 }}
-          rowStyle={{
-            minWidth: 'fit-content',
-            background: 'var(--surf)',
-            gap: 0,
-            borderBottomWidth: 0,
-            borderRadius: '10px 10px 0 0',
-            overflow: 'hidden',
-            boxShadow: 'inset 0 0 0 1px var(--border)',
-          }}
-          tabStyle={{
-            background: 'transparent',
-            borderTopLeftRadius: 0,
-            borderTopRightRadius: 0,
-            padding: '12px 14px 13px',
-          }}
-          activeTabStyle={{
-            background: 'transparent',
-            color: 'var(--text)',
-          }}
-          getTabStyle={(_tab, { isLast }) => ({
-            borderRight: isLast ? 'none' : '1px solid var(--border)',
-          })}
-        />
-        {screenNotice && (
-          <div style={{
-            width: '100%',
-            marginBottom: 16,
-            padding: '10px 12px',
-            borderRadius: 8,
-            background: screenNotice.tone === 'success' ? 'rgba(34,197,94,0.12)' : 'rgba(79,110,247,0.12)',
-            border: screenNotice.tone === 'success' ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(79,110,247,0.35)',
-            color: screenNotice.tone === 'success' ? 'var(--success)' : 'var(--accent)',
-            fontSize: 13,
-          }}>
-            {screenNotice.message}
-          </div>
-        )}
-        {screenError && (
-          <div style={{
-            width: '100%',
-            marginBottom: 16,
-            padding: '10px 12px',
-            borderRadius: 8,
-            background: 'rgba(239,68,68,0.12)',
-            border: '1px solid rgba(239,68,68,0.35)',
-            color: 'var(--danger)',
-            fontSize: 13,
-          }}>
-            {screenError}
-          </div>
-        )}
         <div
-          data-testid="etl-management-table-card"
+          data-testid="etl-management-notifications-row"
           style={{
             width: '100%',
-            background: 'var(--surf)',
-            border: '1px solid var(--border)',
-            borderRadius: 10,
-            overflow: 'hidden',
-            minHeight: '260px',
-            flex: '1 1 auto',
+            minHeight: 52,
+            marginBottom: 16,
             display: 'flex',
-            flexDirection: 'column',
+            alignItems: 'flex-start',
           }}
         >
+          {(screenNotice || screenError) ? (
+            <div style={{ width: '100%', display: 'grid', gap: 10 }}>
+              {screenNotice && (
+                <div
+                  data-testid="etl-management-notice"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    background: screenNotice.tone === 'success' ? 'rgba(34,197,94,0.12)' : 'rgba(79,110,247,0.12)',
+                    border: screenNotice.tone === 'success' ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(79,110,247,0.35)',
+                    color: screenNotice.tone === 'success' ? 'var(--success)' : 'var(--accent)',
+                    fontSize: 13,
+                  }}
+                >
+                  {screenNotice.message}
+                </div>
+              )}
+              {screenError && (
+                <div
+                  data-testid="etl-management-error"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    background: 'rgba(239,68,68,0.12)',
+                    border: '1px solid rgba(239,68,68,0.35)',
+                    color: 'var(--danger)',
+                    fontSize: 13,
+                  }}
+                >
+                  {screenError}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+        <div
+          data-testid="etl-management-table-stack"
+          style={{
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            flex: '1 1 auto',
+          }}
+        >
+          <div
+            data-testid="etl-management-tabs-frame"
+            style={{
+              width: 'fit-content',
+              maxWidth: '100%',
+              background: 'transparent',
+              padding: 0,
+              marginBottom: -1,
+              alignSelf: 'flex-start',
+              position: 'relative',
+              zIndex: 1,
+            }}
+          >
+            <div data-testid="etl-management-tabs" style={{ width: '100%', flexShrink: 0 }}>
+            <FilterTabs
+              tabs={MANAGEMENT_TABS.map(tab => ({ ...tab, count: tabCounts[tab.id] || 0 }))}
+              activeTab={activeTab}
+              onChange={setActiveTab}
+              style={{ marginBottom: 0, overflowX: 'visible' }}
+              rowStyle={{
+                minWidth: 'fit-content',
+                background: 'var(--surf)',
+                gap: 0,
+                borderBottom: '1px solid var(--border)',
+                borderTopLeftRadius: 10,
+                borderTopRightRadius: 10,
+                borderBottomLeftRadius: 0,
+                borderBottomRightRadius: 0,
+                overflow: 'hidden',
+                boxShadow: 'inset 0 0 0 1px var(--border)',
+              }}
+              tabStyle={{
+                background: 'transparent',
+                borderTopLeftRadius: 0,
+                borderTopRightRadius: 0,
+                padding: '12px 14px 13px',
+              }}
+              activeTabStyle={{
+                background: 'transparent',
+                color: 'var(--text)',
+              }}
+              getTabStyle={(_tab, { isLast }) => ({
+                borderRight: isLast ? 'none' : '1px solid var(--border)',
+              })}
+            />
+          </div>
+          </div>
+          <div
+            data-testid="etl-management-table-card"
+            style={{
+              width: '100%',
+              background: 'var(--surf)',
+              border: '1px solid var(--border)',
+              borderTopLeftRadius: 10,
+              borderTopRightRadius: 10,
+              borderBottomLeftRadius: 10,
+              borderBottomRightRadius: 10,
+              overflow: 'hidden',
+              minHeight: '260px',
+              flex: '1 1 auto',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
           {loading ? (
             <div style={{ padding: '20px 24px', color: 'var(--muted)', fontSize: 14 }}>Loading deployments...</div>
           ) : sortedDeployments.length === 0 && filterText ? (
@@ -1459,6 +1511,7 @@ export default function ETLManagementScreen() {
               </table>
             </div>
           )}
+          </div>
         </div>
         <ModalDialog
           isOpen={Boolean(confirmDialog)}
