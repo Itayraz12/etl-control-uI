@@ -879,11 +879,6 @@ export default function ETLManagementScreen() {
             + New Configuration
           </Btn>
         </div>
-        <FilterTabs
-          tabs={MANAGEMENT_TABS.map(tab => ({ ...tab, count: tabCounts[tab.id] || 0 }))}
-          activeTab={activeTab}
-          onChange={setActiveTab}
-        />
         {screenNotice && (
           <div style={{
             width: '100%',
@@ -912,8 +907,37 @@ export default function ETLManagementScreen() {
             {screenError}
           </div>
         )}
+        <FilterTabs
+          tabs={MANAGEMENT_TABS.map(tab => ({ ...tab, count: tabCounts[tab.id] || 0 }))}
+          activeTab={activeTab}
+          onChange={setActiveTab}
+          style={{ marginBottom: 0, paddingTop: 14 }}
+          rowStyle={{
+            minWidth: 'fit-content',
+            background: 'var(--surf)',
+            gap: 0,
+            borderBottomWidth: 0,
+            borderRadius: '10px 10px 0 0',
+            overflow: 'hidden',
+            boxShadow: 'inset 0 0 0 1px var(--border)',
+          }}
+          tabStyle={{
+            background: 'transparent',
+            borderTopLeftRadius: 0,
+            borderTopRightRadius: 0,
+            padding: '12px 14px 13px',
+          }}
+          activeTabStyle={{
+            background: 'transparent',
+            color: 'var(--text)',
+          }}
+          getTabStyle={(_tab, { isLast }) => ({
+            borderRight: isLast ? 'none' : '1px solid var(--border)',
+          })}
+        />
+        <div data-testid="etl-management-table-card" style={{ width: '100%', background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', minHeight: '260px', flex: '1 1 auto', display: 'flex', flexDirection: 'column' }}>
         {loading ? (
-          <div>Loading deployments...</div>
+          <div style={{ padding: '20px 24px', color: 'var(--muted)', fontSize: 14 }}>Loading deployments...</div>
         ) : sortedDeployments.length === 0 && filterText ? (
           /* Empty State */
           <div style={{
@@ -949,7 +973,6 @@ export default function ETLManagementScreen() {
             <div style={{ fontSize: 14 }}>No pipelines in the {MANAGEMENT_TABS.find(tab => tab.id === activeTab)?.label || 'selected'} tab.</div>
           </div>
         ) : (
-          <div data-testid="etl-management-table-card" style={{ width: '100%', background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', minHeight: '260px', flex: '1 1 auto', display: 'flex', flexDirection: 'column' }}>
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, minWidth: '900px' }}>
               <thead>
@@ -1359,8 +1382,8 @@ export default function ETLManagementScreen() {
               </tbody>
             </table>
             </div>
-          </div>
         )}
+        </div>
         <ModalDialog
           isOpen={Boolean(confirmDialog)}
           title={confirmDialog?.title}
