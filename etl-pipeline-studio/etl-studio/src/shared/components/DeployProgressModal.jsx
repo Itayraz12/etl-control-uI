@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import './DeployProgressModal.css';
 import { CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
@@ -24,6 +24,8 @@ const DeployProgressModal = ({
   successTitle = 'Deployment completed successfully',
   failureTitle = 'Deployment failed'
 }) => {
+  const stepRefs = useRef([])
+
   // Prevent body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
@@ -37,9 +39,33 @@ const DeployProgressModal = ({
     };
   }, [isOpen]);
 
+  const activeStepIndex = useMemo(() => {
+    if (!Array.isArray(steps) || steps.length === 0) return -1
+    const boundedIndex = Math.min(Math.max(currentStepIndex, 0), steps.length - 1)
+    if (steps[boundedIndex]) return boundedIndex
+    return steps.findIndex(step => step?.status === 'active')
+  }, [currentStepIndex, steps])
+
+  useEffect(() => {
+    if (!isOpen || activeStepIndex < 0) return undefined
+
+    const activeStepNode = stepRefs.current[activeStepIndex]
+    if (!activeStepNode || typeof activeStepNode.scrollIntoView !== 'function') return undefined
+
+    const frameId = window.requestAnimationFrame(() => {
+      activeStepNode.scrollIntoView({
+        block: 'center',
+        inline: 'nearest',
+        behavior: 'smooth',
+      })
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [activeStepIndex, isOpen])
+
   if (!isOpen) return null;
 
-  const renderStepIcon = (step, index) => {
+  const renderStepIcon = (step) => {
     switch (step.status) {
       case 'done':
         return <CheckCircle className="step-icon done" size={20} />;
@@ -81,9 +107,6 @@ const DeployProgressModal = ({
     );
   };
 
-  const allStepsComplete = steps.every(step => step.status === 'done');
-  const hasFailedStep = steps.some(step => step.status === 'failed');
-
   return (
     <div className="deploy-modal-overlay">
       <div className="deploy-modal">
@@ -112,6 +135,9 @@ const DeployProgressModal = ({
             {steps.map((step, index) => (
               <div
                 key={step.id || index}
+                ref={node => {
+                  stepRefs.current[index] = node
+                }}
                 className={`step ${step.status} ${
                   step.status === 'active' ? 'pulse' : ''
                 }`}
