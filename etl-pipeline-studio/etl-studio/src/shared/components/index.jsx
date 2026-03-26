@@ -99,7 +99,7 @@ export function CardTitle({ children, style = {} }) {
   )
 }
 
-export function FilterTabs({ tabs = [], activeTab, onChange, style = {} }) {
+export function FilterTabs({ tabs = [], activeTab, onChange, style = {}, rowStyle = {}, tabStyle = {}, activeTabStyle = {}, getTabStyle }) {
   return (
     <div style={{ overflowX: 'auto', marginBottom: 14, ...style }}>
       <div style={{
@@ -107,9 +107,13 @@ export function FilterTabs({ tabs = [], activeTab, onChange, style = {} }) {
         minWidth: '100%',
         borderBottom: '1px solid var(--border)',
         gap: 4,
+        ...rowStyle,
       }}>
         {tabs.map(tab => {
           const isActive = tab.id === activeTab
+          const resolvedTabStyle = typeof getTabStyle === 'function'
+            ? getTabStyle(tab, { isActive, isLast: tabs[tabs.length - 1]?.id === tab.id }) || {}
+            : {}
           return (
             <button
               key={tab.id}
@@ -132,6 +136,9 @@ export function FilterTabs({ tabs = [], activeTab, onChange, style = {} }) {
                 fontWeight: isActive ? 700 : 600,
                 whiteSpace: 'nowrap',
                 transition: 'all .15s ease',
+                ...tabStyle,
+                ...resolvedTabStyle,
+                ...(isActive ? activeTabStyle : {}),
               }}
             >
               <span>{tab.label}</span>

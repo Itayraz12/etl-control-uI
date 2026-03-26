@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { InfoHint, Tooltip } from './index.jsx'
+import { FilterTabs, InfoHint, Tooltip } from './index.jsx'
 
 describe('Tooltip placements', () => {
   it('renders InfoHint tooltips on the right side', () => {
@@ -33,6 +33,34 @@ describe('Tooltip placements', () => {
       left: '50%',
       transform: 'translateX(-50%)',
     })
+  })
+})
+
+describe('FilterTabs styling overrides', () => {
+  it('supports styling a compact options group with separators between tabs', () => {
+    render(
+      <FilterTabs
+        tabs={[
+          { id: 'all', label: 'All', count: 3 },
+          { id: 'prod', label: 'Prod', count: 1 },
+        ]}
+        activeTab="all"
+        rowStyle={{ minWidth: 'fit-content', gap: 0, borderBottomWidth: 0, overflow: 'hidden', boxShadow: 'inset 0 0 0 1px var(--border)' }}
+        tabStyle={{ background: 'transparent', padding: '12px 14px 13px' }}
+        getTabStyle={(_tab, { isLast }) => ({ borderRight: isLast ? 'none' : '1px solid var(--border)' })}
+      />
+    )
+
+    const allTab = screen.getByRole('button', { name: /all/i })
+    const prodTab = screen.getByRole('button', { name: /prod/i })
+    const tabRow = allTab.parentElement
+
+    expect(allTab.getAttribute('style')).toContain('border-right: 1px solid var(--border)')
+    expect(prodTab.getAttribute('style')).not.toContain('border-right: 1px solid var(--border)')
+    expect(tabRow.getAttribute('style')).toContain('border-bottom-width: 0px')
+    expect(tabRow.getAttribute('style')).toContain('min-width: fit-content')
+    expect(tabRow.getAttribute('style')).toContain('gap: 0')
+    expect(tabRow.getAttribute('style')).toContain('box-shadow: inset 0 0 0 1px var(--border)')
   })
 })
 
