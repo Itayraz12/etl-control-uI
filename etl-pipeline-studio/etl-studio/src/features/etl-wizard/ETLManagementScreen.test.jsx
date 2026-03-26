@@ -452,6 +452,8 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByText('Legacy')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Delete permanently' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Restore pipeline' })).toBeInTheDocument()
+      expect(screen.queryByText('Delete permanently')).not.toBeInTheDocument()
+      expect(screen.queryByText('Restore')).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Deploy pipeline' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Upgrade deployment' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Edit configuration' })).not.toBeInTheDocument()
@@ -482,6 +484,7 @@ describe('ETLManagementScreen table layout stability', () => {
     await waitFor(() => {
       expect(screen.getByText('Legacy')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Restore pipeline' })).toBeInTheDocument()
+      expect(screen.queryByText('Restore')).not.toBeInTheDocument()
     })
 
     await user.click(screen.getByRole('button', { name: 'Restore pipeline' }))

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleArrowUp, Hand, Rocket, SquarePen, Trash2 } from 'lucide-react';
+import { CircleArrowUp, Hand, Rocket, RotateCcw, SquarePen, Trash2 } from 'lucide-react';
 import { Btn, Card, Chip, DeployProgressModal, FilterTabs, ModalDialog, Tooltip } from '../../shared/components/index.jsx';
 import * as deploymentsService from '../../shared/services/deploymentsService.js';
 import { fetchDeploymentSteps, subscribeToDeploymentProgress, deployFromYaml }
@@ -1084,6 +1084,8 @@ export default function ETLManagementScreen() {
                       : actionLoading[dep.id] === 'delete'
                         ? 'Deleting pipeline'
                         : 'Delete pipeline';
+                    const isPermanentDeleteDisabled = actionLoading[dep.id] === 'delete-permanent' || actionLoading[dep.id] === 'restore';
+                    const isRestoreDisabled = actionLoading[dep.id] === 'restore' || actionLoading[dep.id] === 'delete-permanent';
                     const upgradeTooltip = !canUpgrade && hasVersionMismatch
                       ? 'Pipeline must be running'
                       : !canUpgrade
@@ -1259,21 +1261,24 @@ export default function ETLManagementScreen() {
                                     type="button"
                                     aria-label="Delete permanently"
                                     onClick={() => requestPermanentDelete(dep)}
-                                    disabled={actionLoading[dep.id] === 'delete-permanent' || actionLoading[dep.id] === 'restore'}
+                                    disabled={isPermanentDeleteDisabled}
                                     style={{
-                                      padding: '6px 12px',
-                                      borderRadius: 8,
-                                      border: '1px solid #ef4444',
-                                      background: 'rgba(239,68,68,0.1)',
+                                      ...ICON_BUTTON_STYLE,
+                                      borderColor: '#ef4444',
                                       color: '#dc2626',
-                                      fontSize: 12,
-                                      fontWeight: 700,
-                                      cursor: (actionLoading[dep.id] === 'delete-permanent' || actionLoading[dep.id] === 'restore') ? 'not-allowed' : 'pointer',
-                                      opacity: (actionLoading[dep.id] === 'delete-permanent' || actionLoading[dep.id] === 'restore') ? 0.5 : 1,
-                                      transition: 'all .15s ease',
+                                      opacity: isPermanentDeleteDisabled ? 0.4 : 1,
+                                      cursor: isPermanentDeleteDisabled ? 'not-allowed' : 'pointer',
+                                    }}
+                                    onMouseEnter={e => {
+                                      if (!isPermanentDeleteDisabled) {
+                                        e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
+                                      }
+                                    }}
+                                    onMouseLeave={e => {
+                                      e.currentTarget.style.background = 'var(--bg)';
                                     }}
                                   >
-                                    Delete permanently
+                                    <Trash2 size={16} strokeWidth={2.1} />
                                   </button>
                                 </span>
                               </Tooltip>
@@ -1284,21 +1289,24 @@ export default function ETLManagementScreen() {
                                     type="button"
                                     aria-label="Restore pipeline"
                                     onClick={() => requestRestore(dep)}
-                                    disabled={actionLoading[dep.id] === 'restore' || actionLoading[dep.id] === 'delete-permanent'}
+                                    disabled={isRestoreDisabled}
                                     style={{
-                                      padding: '6px 12px',
-                                      borderRadius: 8,
-                                      border: '1px solid var(--accent)',
-                                      background: 'rgba(79,110,247,0.1)',
+                                      ...ICON_BUTTON_STYLE,
+                                      borderColor: 'var(--accent)',
                                       color: 'var(--accent)',
-                                      fontSize: 12,
-                                      fontWeight: 700,
-                                      cursor: (actionLoading[dep.id] === 'restore' || actionLoading[dep.id] === 'delete-permanent') ? 'not-allowed' : 'pointer',
-                                      opacity: (actionLoading[dep.id] === 'restore' || actionLoading[dep.id] === 'delete-permanent') ? 0.5 : 1,
-                                      transition: 'all .15s ease',
+                                      opacity: isRestoreDisabled ? 0.4 : 1,
+                                      cursor: isRestoreDisabled ? 'not-allowed' : 'pointer',
+                                    }}
+                                    onMouseEnter={e => {
+                                      if (!isRestoreDisabled) {
+                                        e.currentTarget.style.background = 'rgba(79,110,247,0.15)';
+                                      }
+                                    }}
+                                    onMouseLeave={e => {
+                                      e.currentTarget.style.background = 'var(--bg)';
                                     }}
                                   >
-                                    Restore
+                                    <RotateCcw size={15} strokeWidth={2.1} />
                                   </button>
                                 </span>
                               </Tooltip>
