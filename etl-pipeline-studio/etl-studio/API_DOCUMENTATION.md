@@ -21,7 +21,7 @@ This document provides a comprehensive reference for all REST API endpoints used
 - `GET /deployments` - List all ETL deployments
 - `POST /deployments` - Create new deployment
 - `GET /deployments/:id` - Get deployment details
-- `DELETE /deployments/:id` - Stop/cancel deployment
+- `POST /backend/deployments/stop` - Stop/cancel deployment
 
 #### Data Processing (1 endpoint)
 - `POST /process` - Execute data transformation pipeline
@@ -582,18 +582,25 @@ GET /deployments/deploy-12345
 
 ---
 
-### 9. DELETE /deployments/:id
+### 9. DELETE /backend/deployments/delete
 
 Stop or cancel a deployment (if running) or delete a completed deployment.
 
 **Method:** `DELETE`  
-**Path:** `/deployments/{deploymentId}`  
+**Path:** `/api/backend/deployments/delete`  
 **Authentication:** Not required (mock mode)  
 **Status Code:** `200 OK` / `404 Not Found` / `409 Conflict`
 
+**Request Parameters:**
+- `productType` (`String`) — pipeline product type
+- `source` (`String`) — pipeline source system
+- `team` (`String`) — owning team name
+- `environment` (`String`) — target environment
+- `isPermanent` (`boolean`) — `false` for soft delete, `true` for permanent delete
+
 **Request Example:**
 ```
-DELETE /deployments/deploy-12345
+DELETE /api/backend/deployments/delete?productType=Catalog&source=CRM&team=data-platform&environment=staging&isPermanent=false
 ```
 
 **Response Example (Running):**
@@ -643,7 +650,7 @@ DELETE /deployments/deploy-12345
 }
 ```
 
-**Usage Location:** `src/shared/services/deploymentsService.js:stopDeployment()`
+**Usage Location:** `src/shared/services/deploymentsService.js:deleteDeployment()`
 
 **Implementation Notes:**
 - Returns 409 Conflict if attempting to delete pending deployments

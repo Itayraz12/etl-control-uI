@@ -131,7 +131,7 @@ function applyDeploymentStatusOverrides(rows, teamName) {
 
 /**
  * POSTs the generated YAML to the backend to create and immediately start a
- * new deployment.  Used by the Summary wizard step.
+ * new deployment, or re-deploy an upgrade, using deployment identity request params.
  *
  * Backend endpoint: POST /api/backend/deployments/deploy
  * Content-Type: text/plain (raw YAML)
@@ -140,14 +140,29 @@ function applyDeploymentStatusOverrides(rows, teamName) {
  *
  * @returns {{ success: boolean, deploymentId?: string, error?: string }}
  */
-export async function deployFromYaml(yamlContent) {
+export async function deployFromYaml({
+  productType,
+  source,
+  team,
+  environment = 'production',
+  isDeploy = true,
+  configurationYaml,
+}) {
   try {
-    const url = `${API_BASE}/backend/deployments/deploy`
+    const params = buildDeploymentIdentityParams({
+      productType,
+      source,
+      team,
+      environment,
+    }, {
+      isDeploy: Boolean(isDeploy),
+    })
+    const url = `${API_BASE}/backend/deployments/deploy?${params.toString()}`
     console.log('[deploymentsService] deployFromYaml →', url)
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: yamlContent,
+      body: configurationYaml,
     })
 
     if (!response.ok) {
@@ -621,24 +636,14 @@ export async function deployService(id, useMock = false) {
     return { success: true, id };
   } else {
     try {
-      const url = `${API_BASE}/backend/deployments/${id}/deploy`;
-      console.log('🔵 Deploying service:', id);
-      console.log('   URL:', url);
-
-      const response = await fetch(url, { method: 'POST' });
-      console.log('🟢 Deploy response received:', response);
-      console.log('   Status:', response.status);
-      console.log('   OK:', response.ok);
-
-      if (!response.ok) {
-        throw new Error(`Deploy failed with status: ${response.status}`);
+      if (!id || typeof id !== 'object' || !id.configurationYaml) {
+        throw new Error('Upgrade failed: configurationYaml is required to call the shared deploy endpoint.')
       }
 
-      const result = await response.json();
-      console.log('📊 Deploy result:', result);
-      console.log('   Full response object:', JSON.stringify(result, null, 2));
-      console.log('✅ Deploy successful!');
-      return result;
+      return await deployFromYaml({
+        ...id,
+        isDeploy: false,
+      })
     } catch (error) {
       console.error('❌ Deploy failed:', error);
       console.error('   Error message:', error.message);
@@ -647,7 +652,42 @@ export async function deployService(id, useMock = false) {
   }
 }
 
-export async function stopDeployment(id, useMock = false) {
+function normalizeDeploymentTarget(target) {
+  if (typeof target === 'string') {
+    return { id: target }
+  }
+
+  return target || {}
+}
+
+function buildDeploymentIdentityParams(target, extraParams = {}) {
+  const deployment = normalizeDeploymentTarget(target)
+  const params = new URLSearchParams({
+    productType: String(deployment.productType || ''),
+    source: String(deployment.productSource || deployment.source || ''),
+    team: String(deployment.teamName || deployment.team || ''),
+    environment: String(deployment.environment || 'production'),
+    ...Object.fromEntries(Object.entries(extraParams).map(([key, value]) => [key, String(value)])),
+  })
+
+  const missingFields = [
+    ['productType', params.get('productType')],
+    ['source', params.get('source')],
+    ['team', params.get('team')],
+    ['environment', params.get('environment')],
+  ].filter(([, value]) => !value)
+
+  if (missingFields.length > 0) {
+    throw new Error(`Request failed: missing required deployment fields (${missingFields.map(([key]) => key).join(', ')}).`)
+  }
+
+  return params
+}
+
+export async function stopDeployment(target, useMock = false) {
+  const deployment = normalizeDeploymentTarget(target)
+  const id = deployment.id
+
   if (String(id).startsWith('local-draft:')) {
     const drafts = readLocalDrafts()
     if (drafts[id]) {
@@ -676,8 +716,9 @@ export async function stopDeployment(id, useMock = false) {
     return { success: true };
   } else {
     try {
-      const url = `${API_BASE}/backend/deployments/${id}/stop`;
-      console.log('🔵 Stopping deployment:', id);
+      const params = buildDeploymentIdentityParams(deployment)
+      const url = `${API_BASE}/backend/deployments/stop?${params.toString()}`;
+      console.log('🔵 Stopping deployment:', id || `${deployment.productSource}/${deployment.productType}`);
       console.log('   URL:', url);
 
       const response = await fetch(url, { method: 'POST' });
@@ -702,7 +743,14 @@ export async function stopDeployment(id, useMock = false) {
   }
 }
 
-export async function deleteDeployment(id, useMock = false) {
+function buildDeleteRequestParams(target, isPermanent) {
+  return buildDeploymentIdentityParams(target, { isPermanent: Boolean(isPermanent) })
+}
+
+export async function deleteDeployment(target, useMock = false, isPermanent = false) {
+  const deployment = normalizeDeploymentTarget(target)
+  const id = deployment.id
+
   // Local-only draft rows are never on the backend — just remove from localStorage.
   if (String(id).startsWith('local-draft:')) {
     const drafts = readLocalDrafts()
@@ -737,8 +785,9 @@ export async function deleteDeployment(id, useMock = false) {
     return { success: true, id };
   } else {
     try {
-      const url = `${API_BASE}/backend/deployments/${id}`;
-      console.log('🔵 Deleting deployment:', id);
+      const params = buildDeleteRequestParams(deployment, isPermanent)
+      const url = `${API_BASE}/backend/deployments/delete?${params.toString()}`;
+      console.log('🔵 Deleting deployment:', id || `${deployment.productSource}/${deployment.productType}`);
       console.log('   URL:', url);
 
       const response = await fetch(url, { method: 'DELETE' });
@@ -816,9 +865,12 @@ export async function restoreDeployment(id, useMock = false) {
   }
 }
 
-export async function permanentlyDeleteDeployment(id, useMock = false) {
+export async function permanentlyDeleteDeployment(target, useMock = false) {
+  const deployment = normalizeDeploymentTarget(target)
+  const id = deployment.id
+
   if (String(id).startsWith('local-draft:')) {
-    return deleteDeployment(id, useMock)
+    return deleteDeployment(deployment, useMock, true)
   }
 
   if (useMock) {
@@ -827,7 +879,7 @@ export async function permanentlyDeleteDeployment(id, useMock = false) {
     return { success: true, id }
   }
 
-  return deleteDeployment(id, useMock)
+  return deleteDeployment(deployment, useMock, true)
 }
 
 export async function fetchDeploymentConfig(id, useMock = false) {

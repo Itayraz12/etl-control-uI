@@ -90,6 +90,27 @@ const MANAGEMENT_TABS = [
   { id: 'deleted', label: 'Deleted' },
 ];
 
+const MANAGEMENT_DEPLOYMENT_COPY = {
+  deploy: {
+    loadingKey: 'deploy',
+    modalTitle: 'Deploying pipeline from management...',
+    modalSuccessTitle: 'Deployment completed successfully',
+    modalFailureTitle: 'Deployment failed',
+    failureDialogTitle: 'Deployment Failed',
+    successOverlayTitle: 'Pipeline Deployed!',
+    successOverlayDescription: 'Your ETL pipeline has been deployed and is now running.',
+  },
+  upgrade: {
+    loadingKey: 'upgrade',
+    modalTitle: 'Upgrading pipeline from management...',
+    modalSuccessTitle: 'Upgrade completed successfully',
+    modalFailureTitle: 'Upgrade failed',
+    failureDialogTitle: 'Upgrade Failed',
+    successOverlayTitle: 'Pipeline Upgraded!',
+    successOverlayDescription: 'Your ETL pipeline has been upgraded and is now running the latest saved version.',
+  },
+};
+
 function matchesManagementTab(deployment, tabId) {
   const environment = String(deployment?.environment || '').toLowerCase();
   const status = String(deployment?.deploymentStatus || '').toLowerCase();
@@ -173,12 +194,14 @@ export default function ETLManagementScreen() {
   const [deployedVersionHover, setDeployedVersionHover] = useState(null); // dep.id with tooltip open
   const [successCopied, setSuccessCopied] = useState(false);
   const [activeDeployId, setActiveDeployId] = useState(null);
+  const [activeDeploymentAction, setActiveDeploymentAction] = useState('deploy');
   const { actions, state } = useWizard();
   const { useMock, setUseMock } = useMockMode();
   const { user } = useUser();
 
   // Use team name from user context
   const teamName = user?.teamName || 'default';
+  const activeDeploymentCopy = MANAGEMENT_DEPLOYMENT_COPY[activeDeploymentAction] || MANAGEMENT_DEPLOYMENT_COPY.deploy;
 
   const deployment = useDeploymentProgress({
     autoAdvance: false,  // steps are driven by SSE events (or mock simulation)
@@ -337,31 +360,33 @@ export default function ETLManagementScreen() {
     )));
   };
 
-  const handleDeploy = async (deploymentRow) => {
+  const runManagementDeploymentAction = async (deploymentRow, mode) => {
+    const actionCopy = MANAGEMENT_DEPLOYMENT_COPY[mode] || MANAGEMENT_DEPLOYMENT_COPY.deploy;
+    const isDeploy = mode !== 'upgrade';
     const id = deploymentRow.id;
     if (actionLoading[id]) return;
 
     setScreenError('');
     setScreenNotice(null);
     setActiveDeployId(id);
-    setActionLoading(a => ({ ...a, [id]: 'deploy' }));
+    setActiveDeploymentAction(mode);
+    setActionLoading(a => ({ ...a, [id]: actionCopy.loadingKey }));
 
-    console.log('[handleDeploy] ── start ──────────────────────');
-    console.log('[handleDeploy] pipeline id:', id);
+    console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] ── start ──────────────────────`);
+    console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] pipeline id:`, id);
 
-    // Helper: close the progress modal and show the error popup,
-    // mirroring the exact behaviour of SummaryStep's handleFailure.
-    const showDeployError = (msg) => {
+    const showActionError = (msg) => {
       updateDeploymentRowStatus(deploymentRow, 'failed');
-      deployment.reset();                       // close progress modal
-      setErrorModal({ icon: '❌', title: 'Deployment Failed', message: msg });
+      deployment.reset();
+      setErrorModal({ icon: '❌', title: actionCopy.failureDialogTitle, message: msg });
       setActionLoading(a => ({ ...a, [id]: null }));
       setActiveDeployId(null);
+      setActiveDeploymentAction('deploy');
     };
 
     // 1. Fetch the ordered step list from the backend (falls back to built-in list)
     const steps = await fetchDeploymentSteps(false);
-    console.log('[handleDeploy] steps:', steps.length, steps.map(s => s.id));
+    console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] steps:`, steps.length, steps.map(s => s.id));
 
     // 2. Open the progress modal immediately — all steps shown as 'pending'
     deployment.startDeployment(steps);
@@ -371,7 +396,7 @@ export default function ETLManagementScreen() {
     const environment = deploymentRow.environment || 'production';
     let yamlText;
     try {
-      console.log('[handleDeploy] fetching YAML for', deploymentRow.productType, '/', deploymentRow.productSource);
+      console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] fetching YAML for`, deploymentRow.productType, '/', deploymentRow.productSource);
       yamlText = await fetchDraftConfiguration({
         productType: deploymentRow.productType,
         source: deploymentRow.productSource,
@@ -380,22 +405,29 @@ export default function ETLManagementScreen() {
       }, false);
     } catch (fetchErr) {
       const msg = fetchErr?.message || 'Failed to fetch pipeline configuration.';
-      console.error('[handleDeploy] fetchDraftConfiguration failed:', msg);
-      showDeployError(msg);
+      console.error(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] fetchDraftConfiguration failed:`, msg);
+      showActionError(msg);
       return;
     }
 
     if (!yamlText) {
-      showDeployError('No saved YAML configuration found for this pipeline.');
+      showActionError('No saved YAML configuration found for this pipeline.');
       return;
     }
 
-    console.log('[handleDeploy] posting YAML to deploy endpoint...');
-    const result = await deployFromYaml(yamlText);
-    console.log('[handleDeploy] deployFromYaml result:', JSON.stringify(result));
+    console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] posting YAML to deploy endpoint...`);
+    const result = await deployFromYaml({
+      productType: deploymentRow.productType,
+      source: deploymentRow.productSource,
+      team: teamName,
+      environment,
+      isDeploy,
+      configurationYaml: yamlText,
+    });
+    console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] deployFromYaml result:`, JSON.stringify(result));
 
     if (!result || result.success === false) {
-      showDeployError(result?.error || 'Unable to start deployment.');
+      showActionError(result?.error || `Unable to start ${mode === 'upgrade' ? 'upgrade' : 'deployment'}.`);
       return;
     }
 
@@ -407,11 +439,11 @@ export default function ETLManagementScreen() {
       result?.run_id       ??
       result?.jobId        ??
       result?.job_id;
-    console.log('[handleDeploy] full result:', JSON.stringify(result));
-    console.log('[handleDeploy] opening SSE stream for deploymentId:', deploymentId);
+    console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] full result:`, JSON.stringify(result));
+    console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] opening SSE stream for deploymentId:`, deploymentId);
 
     if (!deploymentId) {
-      showDeployError('Server did not return a deployment ID. Cannot track progress.');
+      showActionError('Server did not return a deployment ID. Cannot track progress.');
       return;
     }
 
@@ -419,16 +451,16 @@ export default function ETLManagementScreen() {
     const handleFailure = (stepIndex, error) => {
       const msg = error || 'Deployment step failed.';
       const idx = typeof stepIndex === 'number' ? stepIndex : 0;
-      console.warn('[handleDeploy] failure at step', idx, ':', msg);
-      showDeployError(msg);
+      console.warn(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] failure at step`, idx, ':', msg);
+      showActionError(msg);
     };
 
     // ── Progress callbacks driven by SSE events ───────────────────────────
     const progressCallbacks = {
       onStepStart: ({ stepIndex, label } = {}) => {
-        console.log('[handleDeploy] → step-start', stepIndex, label);
+        console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] → step-start`, stepIndex, label);
         if (typeof stepIndex !== 'number') {
-          console.warn('[handleDeploy] step-start missing stepIndex:', { stepIndex, label });
+          console.warn(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] step-start missing stepIndex:`, { stepIndex, label });
           return;
         }
         deployment.setCurrentStepIndex(stepIndex);
@@ -438,9 +470,9 @@ export default function ETLManagementScreen() {
         });
       },
       onStepComplete: ({ stepIndex, label } = {}) => {
-        console.log('[handleDeploy] → step-complete', stepIndex);
+        console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] → step-complete`, stepIndex);
         if (typeof stepIndex !== 'number') {
-          console.warn('[handleDeploy] step-complete missing stepIndex:', { stepIndex });
+          console.warn(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] step-complete missing stepIndex:`, { stepIndex });
           return;
         }
         deployment.updateStep(stepIndex, {
@@ -454,18 +486,17 @@ export default function ETLManagementScreen() {
       },
       onStepFailed: ({ stepIndex, error } = {}) => handleFailure(stepIndex, error),
       onComplete: async () => {
-        console.log('[handleDeploy] → deployment-complete');
+        console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] → deployment-complete`);
         deployment.updateStep(steps.length - 1, { status: 'done' });
         deployment.setIsComplete(true);
         updateDeploymentRowStatus(deploymentRow, 'running', {
           deployedVersion: deploymentRow.savedVersion ?? deploymentRow.deployedVersion,
         });
         try { await refreshDeployments(); } catch (e) {
-          console.warn('[handleDeploy] refresh failed:', e);
+          console.warn(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] refresh failed:`, e);
         }
         setActionLoading(a => ({ ...a, [id]: null }));
         setActiveDeployId(null);
-        // Auto-transition to success page after a short delay — mirrors SummaryStep
         setTimeout(() => {
           deployment.reset();
           const pipelineId = `ETL-${Date.now().toString(36).toUpperCase()}`;
@@ -474,30 +505,43 @@ export default function ETLManagementScreen() {
             `&type=${encodeURIComponent(deploymentRow.productType || '')}` +
             `&refresh=30s`;
           setSuccessInfo({
+            mode,
+            title: actionCopy.successOverlayTitle,
+            description: actionCopy.successOverlayDescription,
             productType:   deploymentRow.productType,
             productSource: deploymentRow.productSource,
             environment,
             pipelineId,
             grafanaLink,
           });
+          setActiveDeploymentAction('deploy');
         }, 500);
       },
       onConnectionError: (msg) => {
-        console.warn('[handleDeploy] → SSE connection error:', msg);
+        console.warn(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] → SSE connection error:`, msg);
         handleFailure(undefined, msg);
       },
     };
 
     sseCleanupRef.current = subscribeToDeploymentProgress(deploymentId, progressCallbacks);
-    console.log('[handleDeploy] SSE stream opened');
+    console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] SSE stream opened`);
   };
 
-  const handleDelete = async (id) => {
+  const handleDeploy = async (deploymentRow) => {
+    await runManagementDeploymentAction(deploymentRow, 'deploy');
+  };
+
+  const handleDelete = async (deploymentRow) => {
+    const id = deploymentRow.id;
     setScreenError('');
     setScreenNotice(null);
     setActionLoading(a => ({ ...a, [id]: 'delete' }));
     console.log('[ETLManagementScreen] handleDelete, useMock:', useMock);
-    const result = await deploymentsService.deleteDeployment(id, useMock);
+    const result = await deploymentsService.deleteDeployment({
+      ...deploymentRow,
+      teamName,
+      environment: deploymentRow.environment || 'production',
+    }, useMock);
 
     if (result?.success !== false) {
       await refreshDeployments();
@@ -512,12 +556,17 @@ export default function ETLManagementScreen() {
     setActionLoading(a => ({ ...a, [id]: null }));
   };
 
-  const handlePermanentDelete = async (id) => {
+  const handlePermanentDelete = async (deploymentRow) => {
+    const id = deploymentRow.id;
     setScreenError('');
     setScreenNotice(null);
     setActionLoading(a => ({ ...a, [id]: 'delete-permanent' }));
     console.log('[ETLManagementScreen] handlePermanentDelete, useMock:', useMock);
-    const result = await deploymentsService.permanentlyDeleteDeployment(id, useMock);
+    const result = await deploymentsService.permanentlyDeleteDeployment({
+      ...deploymentRow,
+      teamName,
+      environment: deploymentRow.environment || 'production',
+    }, useMock);
 
     if (result?.success !== false) {
       await refreshDeployments();
@@ -557,7 +606,11 @@ export default function ETLManagementScreen() {
     setScreenNotice(null);
     setActionLoading(a => ({ ...a, [id]: 'stop' }));
 
-    const result = await deploymentsService.stopDeployment(id, useMock);
+    const result = await deploymentsService.stopDeployment({
+      ...deploymentRow,
+      teamName,
+      environment: deploymentRow.environment || 'production',
+    }, useMock);
 
     if (result?.success !== false) {
       updateDeploymentRowStatus(deploymentRow, 'stopped');
@@ -573,19 +626,9 @@ export default function ETLManagementScreen() {
     setActionLoading(a => ({ ...a, [id]: null }));
   };
 
-  const handleUpgrade = async (id) => {
-    setScreenError('');
-    setScreenNotice(null);
-    setActionLoading(a => ({ ...a, [id]: 'upgrade' }));
+  const handleUpgrade = async (deploymentRow) => {
     console.log('[ETLManagementScreen] handleUpgrade, useMock:', useMock);
-    const result = await deploymentsService.deployService(id, useMock);
-    if (result?.success === false) {
-      setScreenError(result.error || 'Upgrade failed.');
-    } else {
-      await refreshDeployments();
-      setScreenNotice({ tone: 'success', message: 'Deployment upgraded to the latest saved version.' });
-    }
-    setActionLoading(a => ({ ...a, [id]: null }));
+    await runManagementDeploymentAction(deploymentRow, 'upgrade');
   };
 
   const handleEdit = async (dep) => {
@@ -783,7 +826,7 @@ export default function ETLManagementScreen() {
       confirmVariant: 'danger',
       onConfirm: async () => {
         setConfirmDialog(null);
-        await handleDelete(dep.id);
+        await handleDelete(dep);
       },
     });
   }
@@ -798,7 +841,7 @@ export default function ETLManagementScreen() {
       confirmVariant: 'danger',
       onConfirm: async () => {
         setConfirmDialog(null);
-        await handlePermanentDelete(dep.id);
+        await handlePermanentDelete(dep);
       },
     });
   }
@@ -1450,7 +1493,7 @@ export default function ETLManagementScreen() {
                                 <span style={{ display: 'inline-flex' }}>
                                   <button
                                     aria-label="Upgrade deployment"
-                                    onClick={() => handleUpgrade(dep.id)}
+                                    onClick={() => handleUpgrade(dep)}
                                     disabled={!canUpgrade || actionLoading[dep.id] === 'upgrade'}
                                     style={{
                                       ...ICON_BUTTON_STYLE,
@@ -1550,10 +1593,11 @@ export default function ETLManagementScreen() {
               setActionLoading(a => ({ ...a, [activeDeployId]: null }));
               setActiveDeployId(null);
             }
+            setActiveDeploymentAction('deploy');
           }}
-          title="Deploying pipeline from management..."
-          successTitle="Deployment completed successfully"
-          failureTitle="Deployment failed"
+          title={activeDeploymentCopy.modalTitle}
+          successTitle={activeDeploymentCopy.modalSuccessTitle}
+          failureTitle={activeDeploymentCopy.modalFailureTitle}
         />
       </div>
 
@@ -1576,14 +1620,14 @@ export default function ETLManagementScreen() {
               background: 'linear-gradient(135deg,#4f6ef7,#7c3aed)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
             }}>
-              Pipeline Deployed!
+              {successInfo.title || 'Pipeline Deployed!'}
             </h2>
           </div>
 
           {/* Subtitle */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 80, marginBottom: 20 }}>
             <p style={{ color: 'var(--muted)', maxWidth: 440, textAlign: 'center' }}>
-              Your ETL pipeline has been deployed and is now running.
+              {successInfo.description || 'Your ETL pipeline has been deployed and is now running.'}
             </p>
           </div>
 
@@ -1658,7 +1702,7 @@ export default function ETLManagementScreen() {
 
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 12 }}>
-            <Btn v="primary" onClick={() => { setSuccessInfo(null); setSuccessCopied(false); }}>
+            <Btn v="primary" onClick={() => { setSuccessInfo(null); setSuccessCopied(false); setActiveDeploymentAction('deploy'); }}>
               Back to Deployments
             </Btn>
           </div>

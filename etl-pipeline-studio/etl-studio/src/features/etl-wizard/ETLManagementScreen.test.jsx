@@ -150,17 +150,17 @@ describe('ETLManagementScreen table layout stability', () => {
     mockSubscribeToDeploymentProgress.mockClear()
     mockSetDeploymentStatus.mockClear()
     mockDeleteDeployment.mockReset()
-    mockDeleteDeployment.mockImplementation(async (id) => {
+    mockDeleteDeployment.mockImplementation(async (dep) => {
       mockDeployments = mockDeployments.map(deployment => (
-        deployment.id === id
+        deployment.id === dep.id
           ? { ...deployment, previousDeploymentStatus: deployment.deploymentStatus, deploymentStatus: 'deleted' }
           : deployment
       ))
       return { success: true }
     })
     mockPermanentlyDeleteDeployment.mockReset()
-    mockPermanentlyDeleteDeployment.mockImplementation(async (id) => {
-      mockDeployments = mockDeployments.filter(deployment => deployment.id !== id)
+    mockPermanentlyDeleteDeployment.mockImplementation(async (dep) => {
+      mockDeployments = mockDeployments.filter(deployment => deployment.id !== dep.id)
       return { success: true }
     })
     mockRestoreDeployment.mockReset()
@@ -177,9 +177,9 @@ describe('ETLManagementScreen table layout stability', () => {
       return { success: true }
     })
     mockStopDeployment.mockReset()
-    mockStopDeployment.mockImplementation(async (id) => {
+    mockStopDeployment.mockImplementation(async (dep) => {
       mockDeployments = mockDeployments.map(deployment => (
-        deployment.id === id
+        deployment.id === dep.id
           ? {
               ...deployment,
               deploymentStatus: 'stopped',
@@ -191,6 +191,12 @@ describe('ETLManagementScreen table layout stability', () => {
     mockHydrateWizardStateFromYaml.mockClear()
     localStorage.clear()
     window.open = vi.fn()
+    mockDeploymentProgress.isOpen = false
+    mockDeploymentProgress.steps = []
+    mockDeploymentProgress.currentStepIndex = 0
+    mockDeploymentProgress.isComplete = false
+    mockDeploymentProgress.isError = false
+    mockDeploymentProgress.errorMessage = ''
     Object.values(mockDeploymentProgress).forEach(value => {
       if (typeof value === 'function') value.mockClear()
     })
@@ -432,7 +438,13 @@ describe('ETLManagementScreen table layout stability', () => {
     await user.click(screen.getByRole('button', { name: 'Delete' }))
 
     await waitFor(() => {
-      expect(mockDeleteDeployment).toHaveBeenCalledWith('dep-2', true)
+      expect(mockDeleteDeployment).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'dep-2',
+        productType: 'Catalog',
+        productSource: 'CRM',
+        teamName: 'data-platform',
+        environment: 'staging',
+      }), true)
       expect(screen.getByText('Pipeline deleted. You can find it under the Deleted tab.')).toBeInTheDocument()
     })
 
@@ -464,9 +476,55 @@ describe('ETLManagementScreen table layout stability', () => {
     await user.click(enabledStopButton)
 
     await waitFor(() => {
-      expect(mockStopDeployment).toHaveBeenCalledWith('dep-1', true)
+      expect(mockStopDeployment).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'dep-1',
+        productType: 'Inventory',
+        productSource: 'ERP',
+        teamName: 'data-platform',
+        environment: 'production',
+      }), true)
       expect(screen.getByText('Pipeline stopped successfully.')).toBeInTheDocument()
       expect(screen.getByText('1 stopped')).toBeInTheDocument()
+    })
+  })
+
+  it('uses the shared deploy modal and SSE flow when upgrading a running deployment', async () => {
+    const user = userEvent.setup()
+    mockDeploymentProgress.isOpen = true
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Pricing')).toBeInTheDocument()
+    })
+
+    const upgradeButton = screen.getAllByRole('button', { name: 'Upgrade deployment' }).find(button => !button.disabled)
+
+    expect(upgradeButton).toBeTruthy()
+
+    await user.click(upgradeButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Upgrading pipeline from management...')).toBeInTheDocument()
+      expect(mockFetchDeploymentSteps).toHaveBeenCalledWith(false)
+      expect(mockDeploymentProgress.startDeployment).toHaveBeenCalledWith([
+        { id: 'validate', label: 'Validate' },
+        { id: 'deploy', label: 'Deploy' },
+      ])
+      expect(mockFetchDraftConfiguration).toHaveBeenCalledWith({
+        productType: 'Pricing',
+        source: 'PIM',
+        team: 'data-platform',
+        environment: 'production',
+      }, false)
+      expect(mockDeployFromYaml).toHaveBeenCalledWith({
+        productType: 'Pricing',
+        source: 'PIM',
+        team: 'data-platform',
+        environment: 'production',
+        isDeploy: false,
+        configurationYaml: 'pipeline: yaml',
+      })
+      expect(mockSubscribeToDeploymentProgress).toHaveBeenCalledWith('dep-run-1', expect.any(Object))
     })
   })
 
@@ -501,7 +559,13 @@ describe('ETLManagementScreen table layout stability', () => {
     await user.click(screen.getAllByRole('button', { name: 'Delete permanently' })[1])
 
     await waitFor(() => {
-      expect(mockPermanentlyDeleteDeployment).toHaveBeenCalledWith('dep-4', true)
+      expect(mockPermanentlyDeleteDeployment).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'dep-4',
+        productType: 'Legacy',
+        productSource: 'Archive',
+        teamName: 'data-platform',
+        environment: 'production',
+      }), true)
       expect(screen.queryByText('Legacy')).not.toBeInTheDocument()
       expect(screen.getByText('Pipeline permanently deleted.')).toBeInTheDocument()
     })
@@ -558,6 +622,14 @@ describe('ETLManagementScreen table layout stability', () => {
     await user.click(deployButton)
 
     await waitFor(() => {
+      expect(mockDeployFromYaml).toHaveBeenCalledWith({
+        productType: 'Catalog',
+        source: 'CRM',
+        team: 'data-platform',
+        environment: 'staging',
+        isDeploy: true,
+        configurationYaml: 'pipeline: yaml',
+      })
       expect(screen.getByText('Kafka broker was unavailable')).toBeInTheDocument()
       expect(screen.getByText('1 failed')).toBeInTheDocument()
       expect(screen.queryByText('Failure Reason')).not.toBeInTheDocument()

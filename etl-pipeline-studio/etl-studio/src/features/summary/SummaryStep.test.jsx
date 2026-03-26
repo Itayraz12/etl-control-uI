@@ -184,4 +184,24 @@ sink:
 
     expect(mockActions.setNavigationMode).toHaveBeenCalledWith('etl-management')
   })
+
+  it('sends deploy request params and configurationYaml when saving and deploying', async () => {
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save & deploy/i }))
+      await Promise.resolve()
+    })
+
+    expect(mockFetchDeploymentSteps).toHaveBeenCalledTimes(1)
+    expect(mockDeployFromYaml).toHaveBeenCalledWith(expect.objectContaining({
+      productType: 'Catalog',
+      source: 'ERP',
+      team: 'data-platform',
+      environment: 'production',
+      isDeploy: true,
+      configurationYaml: expect.stringContaining('productType: Catalog'),
+    }))
+    expect(mockSubscribeToDeploymentProgress).toHaveBeenCalledWith('dep-1', expect.any(Object))
+  })
 })

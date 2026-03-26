@@ -486,7 +486,14 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
 
     // 3. POST the generated YAML to the backend to create + start the deployment
     console.log('[SummaryStep] posting YAML to backend...')
-    const result = await deployFromYaml(yaml)
+    const result = await deployFromYaml({
+      productType: state.metadata.productType,
+      source: state.metadata.productSource,
+      team: state.metadata.team,
+      environment: state.metadata.environment,
+      isDeploy: true,
+      configurationYaml: yaml,
+    })
     console.log('[SummaryStep] deployFromYaml result:', JSON.stringify(result))
 
     if (!result || result.success === false) {

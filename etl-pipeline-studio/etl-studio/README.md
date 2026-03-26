@@ -183,15 +183,16 @@ All live calls use the configured `VITE_API_BASE` value. By default, this is `ht
 | Entities | GET | `/backbone/entities` | |
 | Deployments list | GET | `/backend/deployments?teamName=<team>` | |
 | Deployment steps | GET | `/backend/deployments/steps` | Returns `[{ id, label }]`; falls back to built-in list on error |
-| Deploy from YAML | POST | `/backend/deployments/deploy` | `Content-Type: text/plain`; raw YAML body; returns `{ success, deploymentId }` |
+| Deploy from YAML / Upgrade | POST | `/backend/deployments/deploy?productType=&source=&team=&environment=&isDeploy=<true|false>` | `Content-Type: text/plain`; raw YAML body (`configurationYaml`); `isDeploy=true` for deploy, `false` for upgrade |
 | Deployment progress | GET | `/backend/deployments/:deploymentId/progress` | SSE stream — see event contract below |
-| Stop deployment | POST | `/backend/deployments/:id/stop` | |
+| Stop deployment | POST | `/backend/deployments/stop?productType=&source=&team=&environment=` | |
 | Draft YAML (read) | GET | `/backend/configuration/yaml?productType=&source=&team=&environment=` | |
 | Draft YAML (save) | POST | `/backend/configuration/yaml?productType=&source=&team=&environment=` | |
 
 > **Note:** Both the Summary wizard tab and the Management screen use the same
-> `POST /backend/deployments/deploy` endpoint.  The management deploy flow fetches
+> `POST /backend/deployments/deploy?productType=&source=&team=&environment=&isDeploy=true` endpoint. The management deploy flow fetches
 > the saved YAML via the draft endpoint first, then posts it — exactly like the wizard.
+> Management upgrade uses the same endpoint with `isDeploy=false`.
 
 When mock mode is enabled, network calls are replaced with in-memory sample data and simulated responses.
 
@@ -202,7 +203,7 @@ Both the Summary tab and the Management screen share the same four-phase deploy 
 ```
 1. GET  /backend/deployments/steps           → ordered step list for the modal
 2. Open DeployProgressModal (steps visible)
-3. POST /backend/deployments/deploy          → returns { success, deploymentId }
+3. POST /backend/deployments/deploy?productType=&source=&team=&environment=&isDeploy=true → returns { success, deploymentId }
 4. GET  /backend/deployments/:id/progress    → SSE stream drives step progress
 ```
 
@@ -228,7 +229,7 @@ when the server closes the connection normally.
 
 ### `deploymentId` resolution
 
-The response from `POST /backend/deployments/deploy` is checked for the run ID in this
+The response from `POST /backend/deployments/deploy?productType=&source=&team=&environment=&isDeploy=true|false` is checked for the run ID in this
 priority order, making the client resilient to different backend field-naming conventions:
 
 ```
@@ -435,7 +436,7 @@ Relevant files:
 |---|---|
 | Deploy modal shows fallback step labels | Verify `GET /backend/deployments/steps` is reachable and returns `[{ id, label }]` |
 | Deploy modal stuck at step 0 with no progress | Check browser console for `[deploymentsService] SSE …` logs; verify the backend sends named SSE events (`event: step-start` etc.) or unnamed events with a `type` field in the JSON body |
-| Deploy error: "No deployment ID returned" | Verify `POST /backend/deployments/deploy` response includes a run ID under one of: `deploymentId`, `id`, `runId`, `run_id`, `jobId`, `job_id` |
+| Deploy error: "No deployment ID returned" | Verify `POST /backend/deployments/deploy?productType=&source=&team=&environment=&isDeploy=true|false` response includes a run ID under one of: `deploymentId`, `id`, `runId`, `run_id`, `jobId`, `job_id` |
 | Deploy error: "Failed to fetch pipeline configuration" | Verify `GET /backend/configuration/yaml` is reachable for the deployment's `productType`, `source`, `team`, and `environment` |
 | Transformer properties do not appear | Verify the backend returns `additionalProperties` (or legacy `additionalProperites`) |
 | Summary shows transformer `_id` values after refresh | Verify step `6` prefetches `/api/config/transformers` and wait for `loadingTransformers` to complete |
