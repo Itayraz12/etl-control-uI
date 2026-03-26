@@ -170,6 +170,37 @@ export function Tooltip({ children, content, placement = 'top', maxWidth = 260, 
   if (!content) return children
 
   const isTop = placement === 'top'
+  const isRight = placement === 'right'
+
+  const bubblePlacementStyle = isRight
+    ? {
+        top: '50%',
+        left: 'calc(100% + 8px)',
+        transform: 'translateY(-50%)',
+      }
+    : {
+        [isTop ? 'bottom' : 'top']: 'calc(100% + 8px)',
+        left: '50%',
+        transform: 'translateX(-50%)',
+      }
+
+  const arrowPlacementStyle = isRight
+    ? {
+        top: '50%',
+        left: -5,
+        transform: 'translateY(-50%) rotate(45deg)',
+        borderTop: 'none',
+        borderRight: 'none',
+      }
+    : {
+        [isTop ? 'bottom' : 'top']: -5,
+        left: '50%',
+        transform: 'translateX(-50%) rotate(45deg)',
+        borderTop: isTop ? 'none' : undefined,
+        borderLeft: isTop ? 'none' : undefined,
+        borderBottom: isTop ? undefined : 'none',
+        borderRight: isTop ? undefined : 'none',
+      }
 
   return (
     <span
@@ -185,9 +216,7 @@ export function Tooltip({ children, content, placement = 'top', maxWidth = 260, 
           role="tooltip"
           style={{
             position: 'absolute',
-            [isTop ? 'bottom' : 'top']: 'calc(100% + 8px)',
-            left: '50%',
-            transform: 'translateX(-50%)',
+            ...bubblePlacementStyle,
             background: 'linear-gradient(180deg, rgba(24,31,51,0.98), rgba(17,24,39,0.98))',
             border: '1px solid rgba(99,102,241,0.22)',
             borderRadius: 10,
@@ -208,17 +237,11 @@ export function Tooltip({ children, content, placement = 'top', maxWidth = 260, 
           {content}
           <span style={{
             position: 'absolute',
-            [isTop ? 'bottom' : 'top']: -5,
-            left: '50%',
-            transform: 'translateX(-50%) rotate(45deg)',
+            ...arrowPlacementStyle,
             width: 9,
             height: 9,
             background: 'rgba(17,24,39,0.98)',
             border: '1px solid rgba(99,102,241,0.22)',
-            borderTop: isTop ? 'none' : undefined,
-            borderLeft: isTop ? 'none' : undefined,
-            borderBottom: isTop ? undefined : 'none',
-            borderRight: isTop ? undefined : 'none',
           }} />
         </span>
       )}
@@ -228,7 +251,7 @@ export function Tooltip({ children, content, placement = 'top', maxWidth = 260, 
 
 export function InfoHint({ text }) {
   return (
-    <Tooltip content={text}>
+    <Tooltip content={text} placement="right">
       <span style={{
         width: 16,
         height: 16,

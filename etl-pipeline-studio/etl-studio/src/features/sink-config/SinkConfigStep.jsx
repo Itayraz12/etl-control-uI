@@ -168,18 +168,18 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets }) {
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>🏷️ Data Catalog Options</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px', marginBottom: '8px' }}>
-              <input
-                type="checkbox"
-                checked={sink.shadow || false}
-                onChange={e => u('shadow', e.target.checked)}
-                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-              />
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  🌬️ SHADOW
-                  <InfoHint text="Mirrors output data to a shadow topic for audit and validation purposes" />
-                </span>
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '8px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px' }}>
+                <input
+                  type="checkbox"
+                  checked={sink.shadow || false}
+                  onChange={e => u('shadow', e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                <span>🌬️ SHADOW</span>
+              </label>
+              <InfoHint text="Mirrors output data to a shadow topic for audit and validation purposes" />
+            </div>
             {sink.shadow && (
               <input
                 type="text"
@@ -200,18 +200,18 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets }) {
               />
             )}
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px' }}>
-            <input
-              type="checkbox"
-              checked={sink.asg || false}
-              onChange={e => u('asg', e.target.checked)}
-              style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-            />
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              📊 ASG
-              <InfoHint text="Asgard data governance system for compliance and metadata management" />
-            </span>
-          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px' }}>
+              <input
+                type="checkbox"
+                checked={sink.asg || false}
+                onChange={e => u('asg', e.target.checked)}
+                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+              />
+              <span>📊 ASG</span>
+            </label>
+            <InfoHint text="Asgard data governance system for compliance and metadata management" />
+          </div>
         </div>
       </div>
     </CfgPanel>

@@ -1,10 +1,22 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import SinkConfigStep from './SinkConfigStep.jsx'
 import { WizardProvider } from '../../shared/store/wizardStore.jsx'
 
 const WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
+const READ_ONLY_CSS = `
+  [data-etl-ro] input,
+  [data-etl-ro] select,
+  [data-etl-ro] textarea,
+  [data-etl-ro] button:not([data-etl-ro-allow]),
+  [data-etl-ro] [role="button"]:not([data-etl-ro-allow]),
+  [data-etl-ro] [draggable="true"],
+  [data-etl-ro] label {
+    pointer-events: none !important;
+    cursor: default !important;
+  }
+`
 
 function renderStep(initialSink = {}, initialMappings = []) {
   localStorage.setItem(
@@ -54,6 +66,61 @@ function renderStep(initialSink = {}, initialMappings = []) {
   return render(
     <WizardProvider>
       <SinkConfigStep />
+    </WizardProvider>
+  )
+}
+
+function renderReadOnlyStep(initialSink = {}, initialMappings = []) {
+  localStorage.setItem(
+    WIZARD_STORAGE_KEY,
+    JSON.stringify({
+      navigationMode: 'etl-config',
+      currentStep: 5,
+      completedSteps: [0, 1, 2, 3, 4],
+      metadata: {
+        productSource: 'ERP',
+        productType: 'Inventory',
+        team: 'data-platform',
+        environment: 'production',
+        entityName: 'Product',
+        tags: '',
+      },
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: 'source_products_raw',
+        format: 'JSON',
+        jsonSplit: '',
+        streamingContinuity: 'continuous',
+        recordsPerDay: 'millions',
+      },
+      upload: { done: true, schema: [], fileName: '', fileType: '', fileSize: 0 },
+      targetSchema: [],
+      mappings: initialMappings,
+      filters: [],
+      sink: {
+        sinkType: 'kafka',
+        sinkKafkaTopic: 'etl_products_v3',
+        sinkKafkaEnv: 'production',
+        sinkKafkaAdditionalPropertiesEnabled: false,
+        sinkKafkaAdditionalProperties: [],
+        shadow: false,
+        shadowTopic: '',
+        saknay: false,
+        saknayTopic: '',
+        asg: false,
+        ...initialSink,
+      },
+      theme: 'dark',
+    })
+  )
+
+  return render(
+    <WizardProvider>
+      <style>{READ_ONLY_CSS}</style>
+      <div data-etl-ro="true">
+        <SinkConfigStep />
+      </div>
     </WizardProvider>
   )
 }
@@ -174,6 +241,23 @@ describe('SinkConfigStep Kafka additional properties', () => {
     renderStep()
 
     expect(screen.queryByRole('button', { name: /test connection/i })).not.toBeInTheDocument()
+  })
+
+  it('keeps SHADOW and ASG hints visible in read-only mode', () => {
+    renderReadOnlyStep()
+
+    const shadowRow = screen.getByText('🌬️ SHADOW').closest('label')?.parentElement
+    const asgRow = screen.getByText('📊 ASG').closest('label')?.parentElement
+
+    expect(shadowRow).toBeTruthy()
+    expect(asgRow).toBeTruthy()
+
+    fireEvent.mouseEnter(within(shadowRow).getByText('i'))
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Mirrors output data to a shadow topic for audit and validation purposes')
+
+    fireEvent.mouseLeave(within(shadowRow).getByText('i'))
+    fireEvent.mouseEnter(within(asgRow).getByText('i'))
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Asgard data governance system for compliance and metadata management')
   })
 })
 
