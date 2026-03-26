@@ -239,6 +239,10 @@ export default function ETLManagementScreen() {
     MANAGEMENT_TABS.map(tab => [tab.id, deployments.filter(dep => matchesManagementTab(dep, tab.id)).length])
   ), [deployments]);
 
+  const tabDeployments = useMemo(() => (
+    deployments.filter(dep => matchesManagementTab(dep, activeTab))
+  ), [activeTab, deployments]);
+
   const visibleDeployments = useMemo(() => {
     const search = filterText.trim().toLowerCase();
 
@@ -830,23 +834,23 @@ export default function ETLManagementScreen() {
         }}>
           <span>{teamName || 'default'}</span>
           <span>·</span>
-          <span>{deployments.length} {deployments.length === 1 ? 'pipeline' : 'pipelines'}</span>
+          <span>{tabDeployments.length} {tabDeployments.length === 1 ? 'pipeline' : 'pipelines'}</span>
           <span>·</span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#22c55e', animation: 'pulse 2s ease-in-out infinite' }}></span>
-            <span style={{ color: '#22c55e' }}>{deployments.filter(d => d.deploymentStatus === 'running').length} running</span>
+            <span style={{ color: '#22c55e' }}>{tabDeployments.filter(d => d.deploymentStatus === 'running').length} running</span>
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#ef4444' }}></span>
-            <span style={{ color: '#ef4444' }}>{deployments.filter(d => d.deploymentStatus === 'stopped').length} stopped</span>
+            <span style={{ color: '#ef4444' }}>{tabDeployments.filter(d => d.deploymentStatus === 'stopped').length} stopped</span>
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#f59e0b' }}></span>
-            <span style={{ color: '#f59e0b' }}>{deployments.filter(d => d.deploymentStatus === 'draft').length} draft</span>
+            <span style={{ color: '#f59e0b' }}>{tabDeployments.filter(d => d.deploymentStatus === 'draft').length} draft</span>
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#dc2626' }}></span>
-            <span style={{ color: '#dc2626' }}>{deployments.filter(d => d.deploymentStatus === 'failed').length} failed</span>
+            <span style={{ color: '#dc2626' }}>{tabDeployments.filter(d => d.deploymentStatus === 'failed').length} failed</span>
           </span>
         </div>
 

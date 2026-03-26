@@ -272,6 +272,39 @@ describe('ETLManagementScreen table layout stability', () => {
     })
   })
 
+  it('updates the summary line to reflect only the active tab', async () => {
+    const user = userEvent.setup()
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('4 pipelines')).toBeInTheDocument()
+      expect(screen.getByText('2 running')).toBeInTheDocument()
+      expect(screen.getByText('0 stopped')).toBeInTheDocument()
+      expect(screen.getByText('1 draft')).toBeInTheDocument()
+      expect(screen.getByText('0 failed')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Stage/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('1 pipeline')).toBeInTheDocument()
+      expect(screen.getByText('0 running')).toBeInTheDocument()
+      expect(screen.getByText('0 stopped')).toBeInTheDocument()
+      expect(screen.getByText('1 draft')).toBeInTheDocument()
+      expect(screen.getByText('0 failed')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Deleted/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('1 pipeline')).toBeInTheDocument()
+      expect(screen.getByText('0 running')).toBeInTheDocument()
+      expect(screen.getByText('0 stopped')).toBeInTheDocument()
+      expect(screen.getByText('0 draft')).toBeInTheDocument()
+      expect(screen.getByText('0 failed')).toBeInTheDocument()
+    })
+  })
+
   it('reloads the management table after delete and moves the pipeline into the Deleted tab', async () => {
     const user = userEvent.setup()
     render(<ETLManagementScreen />)
