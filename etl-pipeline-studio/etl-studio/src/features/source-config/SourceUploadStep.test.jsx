@@ -45,6 +45,8 @@ describe('SourceUploadStep', () => {
 
     renderStep()
 
+    expect(screen.queryByRole('button', { name: 'Pull from source config' })).not.toBeInTheDocument()
+
     await user.click(screen.getByRole('button', { name: 'Upload sample' }))
 
     expect(clickSpy).toHaveBeenCalledTimes(1)

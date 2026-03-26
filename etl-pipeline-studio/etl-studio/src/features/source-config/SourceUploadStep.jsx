@@ -9,7 +9,6 @@ export default function SourceUploadStep() {
   const { state, actions } = useWizard()
   const { useMock } = useMockMode()
   const fileInputRef = useRef(null)
-  const [sampleMode, setSampleMode] = useState('local')
   const [phase, setPhase] = useState(state.upload.done ? 'done' : 'idle')
   const [error, setError] = useState('')
   const sourceSchema = resolveSourceSchema(state.upload)
@@ -65,7 +64,6 @@ export default function SourceUploadStep() {
 
   const handleUploadButtonClick = () => {
     if (isReadOnly) return
-    setSampleMode('local')
     openFilePicker()
   }
 
@@ -81,11 +79,8 @@ export default function SourceUploadStep() {
         <Card>
           <CardTitle>📥 Source Upload / Preview</CardTitle>
 
-          {/* Mode toggle */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>Sample origin:</span>
-            <Btn sm v={sampleMode === 'local' ? 'primary' : 'ghost'} onClick={handleUploadButtonClick} disabled={isReadOnly}>Upload sample</Btn>
-            <Btn sm v={sampleMode === 'source' ? 'primary' : 'ghost'} onClick={() => setSampleMode('source')} disabled={isReadOnly}>Pull from source config</Btn>
+            <Btn sm v="primary" onClick={handleUploadButtonClick} disabled={isReadOnly}>Upload sample</Btn>
           </div>
 
           <input
@@ -102,16 +97,13 @@ export default function SourceUploadStep() {
           <DropZone
             phase={phase}
             readOnly={isReadOnly}
-            sampleMode={sampleMode}
             onBrowse={openFilePicker}
             onFileSelected={inferSchemaFromFile}
             detectedFieldCount={sourceSchema.length}
           />
 
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10 }}>
-            {sampleMode === 'source'
-              ? 'Uses Kafka / RabbitMQ settings from Source Config to pull a live sample.'
-              : 'Drop a JSON or CSV file — the selected sample is sent to the backend for schema inference.'}
+            Drop a JSON or CSV file — the selected sample is sent to the backend for schema inference.
           </div>
 
           {!!error && (
@@ -127,13 +119,13 @@ export default function SourceUploadStep() {
   )
 }
 
-function DropZone({ phase, readOnly, sampleMode, onBrowse, onFileSelected, detectedFieldCount }) {
+function DropZone({ phase, readOnly, onBrowse, onFileSelected, detectedFieldCount }) {
   const [hovering, setHovering] = useState(false)
 
   const handleDrop = async (e) => {
     e.preventDefault()
     setHovering(false)
-    if (readOnly || phase === 'parsing' || sampleMode !== 'local') return
+    if (readOnly || phase === 'parsing') return
     const file = e.dataTransfer?.files?.[0]
     await onFileSelected(file)
   }
@@ -141,7 +133,7 @@ function DropZone({ phase, readOnly, sampleMode, onBrowse, onFileSelected, detec
   return (
     <div
       aria-disabled={readOnly ? 'true' : undefined}
-      onClick={!readOnly && phase !== 'parsing' && sampleMode === 'local' ? onBrowse : undefined}
+      onClick={!readOnly && phase !== 'parsing' ? onBrowse : undefined}
       onDragOver={e => {
         e.preventDefault()
         if (!readOnly) setHovering(true)
@@ -151,7 +143,7 @@ function DropZone({ phase, readOnly, sampleMode, onBrowse, onFileSelected, detec
       style={{
         border: `2px dashed ${phase === 'done' ? 'var(--success)' : hovering ? 'var(--accent)' : 'var(--border)'}`,
         borderRadius: 'var(--radius)', padding: 40, textAlign: 'center',
-        cursor: readOnly || phase === 'parsing' || sampleMode !== 'local' ? 'default' : 'pointer',
+        cursor: readOnly || phase === 'parsing' ? 'default' : 'pointer',
         transition: 'all .2s',
         opacity: readOnly ? 0.65 : 1,
         background: phase === 'done' ? 'rgba(34,197,94,.07)' : hovering ? 'rgba(79,110,247,.07)' : 'var(--surf2)',
@@ -161,10 +153,10 @@ function DropZone({ phase, readOnly, sampleMode, onBrowse, onFileSelected, detec
         <>
           <div style={{ fontSize: 42, marginBottom: 10 }}>☁️</div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 5 }}>
-            {sampleMode === 'local' ? 'Drop a sample file here' : 'Click to pull from source'}
+            Drop a sample file here
           </div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-            {sampleMode === 'local' ? 'or click to browse · JSON / CSV' : 'Uses source config settings'}
+            or click to browse · JSON / CSV
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 14 }}>
             {['JSON', 'CSV'].map(f => {
