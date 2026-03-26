@@ -46,7 +46,7 @@ output:
       sendToGP: true
       sendToSaknay: false
       expression: trim(name)
-      additional_inputs:
+      additionalInputs:
         - productName
         - price
   transformations:
@@ -207,6 +207,127 @@ sink:
     expect(state.metadata).toMatchObject({
       productSource: 'ERP',
       productType: 'Inventory',
+    })
+  })
+
+  it('hydrates camelCase dataStreamInfo metadata keys', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+  dataStreamInfo:
+    streamingContinuity: batch
+    avgRecordsAmount: thousands
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+input:
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.source).toMatchObject({
+      streamingContinuity: 'batch',
+      recordsPerDay: 'thousands',
+    })
+  })
+
+  it('hydrates legacy snake_case additional_inputs mapping keys', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+input:
+  mapping:
+    - name: id
+      type: string
+    - name: price
+      type: number
+    - name: quantity
+      type: number
+output:
+  mapping:
+    - inName: id
+      outName: name
+      additional_inputs:
+        - price
+        - quantity
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.mappings[0].extraInputs.map(input => input.field)).toEqual(['price', 'quantity'])
+  })
+
+  it('hydrates legacy snake_case stream info keys', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+  dataStreamInfo:
+    streaming_continuity: batch
+    avg_records_amount: thousands
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+input:
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.source).toMatchObject({
+      streamingContinuity: 'batch',
+      recordsPerDay: 'thousands',
     })
   })
 

@@ -350,9 +350,9 @@ ${state.metadata.productCode ? `  productCode: ${quoteYamlDoubleQuoted(String(st
   productType: ${state.metadata.productType}
   environment: ${state.metadata.environment}
   owner: ${state.metadata.team}
-  data_stream_info:
-    streaming_continuity: ${state.source.streamingContinuity || 'continuous'}
-    avg_records_amount: ${state.source.recordsPerDay || 'millions'}
+  dataStreamInfo:
+    streamingContinuity: ${state.source.streamingContinuity || 'continuous'}
+    avgRecordsAmount: ${state.source.recordsPerDay || 'millions'}
 
 source:
   type: ${state.source.sourceType}
@@ -376,7 +376,7 @@ ${state.mappings.map(m => {
   mapping += `\n      sendToSaknay: ${m.tgtMetadata?.sendToSaknay ?? true}`
   const additionalInputs = Array.isArray(m.extraInputs) ? m.extraInputs.map(input => input?.field).filter(Boolean) : []
   if (additionalInputs.length > 0) {
-    mapping += `\n      additional_inputs:\n${additionalInputs.map(input => `        - ${input}`).join('\n')}`
+    mapping += `\n      additionalInputs:\n${additionalInputs.map(input => `        - ${input}`).join('\n')}`
   }
   if (m.srcMetadata?.expression) {
     mapping += `\n      src_expression: ${quoteYamlDoubleQuoted(String(m.srcMetadata.expression).trim())}`

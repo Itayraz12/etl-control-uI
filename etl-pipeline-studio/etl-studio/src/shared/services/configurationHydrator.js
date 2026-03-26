@@ -393,9 +393,11 @@ function buildMappings(mappings, transformations) {
       const targetField = asString(mapping?.outName || mapping?.tgt)
       const transformation = transformationByTarget.get(targetField)
       const inputFieldsFromTransformation = transformation?.inputs?.map(input => input.field).filter(Boolean) || []
-      const mappedAdditionalInputs = Array.isArray(mapping?.additional_inputs)
-        ? mapping.additional_inputs.map(asString).filter(Boolean)
-        : []
+      const mappedAdditionalInputs = Array.isArray(mapping?.additionalInputs)
+        ? mapping.additionalInputs.map(asString).filter(Boolean)
+        : (Array.isArray(mapping?.additional_inputs)
+          ? mapping.additional_inputs.map(asString).filter(Boolean)
+          : [])
       const primarySource = asString(mapping?.inName || mapping?.src || inputFieldsFromTransformation[0])
       const extraInputFields = mappedAdditionalInputs.length > 0
         ? mappedAdditionalInputs
@@ -435,6 +437,7 @@ function buildMappings(mappings, transformations) {
 export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const parsed = parse(asString(yamlText, '')) || {}
   const metadata = parsed.metadata || {}
+  const dataStreamInfo = metadata.dataStreamInfo ?? metadata.data_stream_info ?? {}
   const source = parsed.source || {}
   const output = parsed.output || {}
   const general = parsed.general || {}
@@ -473,8 +476,8 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       format: sourceFormat,
       csvDelimiter,
       jsonSplit: asString(source.split_key),
-      streamingContinuity: asString(metadata.data_stream_info?.streaming_continuity, 'continuous'),
-      recordsPerDay: asString(metadata.data_stream_info?.avg_records_amount, 'millions'),
+      streamingContinuity: asString(dataStreamInfo.streamingContinuity ?? dataStreamInfo.streaming_continuity, 'continuous'),
+      recordsPerDay: asString(dataStreamInfo.avgRecordsAmount ?? dataStreamInfo.avg_records_amount, 'millions'),
     },
     upload: {
       done: true,

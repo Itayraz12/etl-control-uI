@@ -445,9 +445,9 @@ metadata:
   productType: ${productType || 'Mock Type'}
   environment: ${environment || 'production'}
   owner: ${team || 'default'}
-  data_stream_info:
-    streaming_continuity: continuous
-    avg_records_amount: millions
+  dataStreamInfo:
+    streamingContinuity: continuous
+    avgRecordsAmount: millions
 
 source:
   type: kafka
@@ -522,9 +522,9 @@ metadata:
   productType: ${productType || 'Mock Type'}
   environment: ${environment || 'production'}
   owner: ${team || 'default'}
-  data_stream_info:
-    streaming_continuity: continuous
-    avg_records_amount: millions
+  dataStreamInfo:
+    streamingContinuity: continuous
+    avgRecordsAmount: millions
 
 source:
   type: kafka

@@ -28,7 +28,14 @@ const mockWizardState = {
     { id: 'sku', name: 'sku', path: 'sku', type: 'string', required: true },
   ],
   mappings: [
-    { src: 'sku', tgt: 'sku', transformer: 'none' },
+    {
+      src: 'sku',
+      tgt: 'sku',
+      transformer: 'none',
+      extraInputs: [
+        { field: 'skuVariant' },
+      ],
+    },
   ],
   filters: [],
   sink: {
@@ -134,7 +141,7 @@ metadata:
   productType: Catalog
   environment: production
   owner: data-platform
-  data_stream_info:
+  dataStreamInfo:
     streaming_continuity: continuous
     avg_records_amount: millions
 
@@ -202,6 +209,12 @@ sink:
       isDeploy: true,
       configurationYaml: expect.stringContaining('productType: Catalog'),
     }))
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('additionalInputs:')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('additional_inputs:')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('streamingContinuity: continuous')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('avgRecordsAmount: millions')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('streaming_continuity:')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('avg_records_amount:')
     expect(mockSubscribeToDeploymentProgress).toHaveBeenCalledWith('dep-1', expect.any(Object))
   })
 })
