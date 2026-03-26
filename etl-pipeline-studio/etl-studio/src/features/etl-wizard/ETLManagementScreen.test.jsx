@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ETLManagementScreen from './ETLManagementScreen.jsx'
+import ETLManagementScreen, { getManagementSearchTerms, matchesManagementSearch } from './ETLManagementScreen.jsx'
 
 const mockFetchDraftConfiguration = vi.fn(() => Promise.resolve('pipeline: yaml'))
 const mockFetchSavedDraftYaml = vi.fn(() => Promise.resolve('saved: yaml'))
@@ -302,6 +302,89 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByText('0 stopped')).toBeInTheDocument()
       expect(screen.getByText('0 draft')).toBeInTheDocument()
       expect(screen.getByText('0 failed')).toBeInTheDocument()
+    })
+  })
+
+  it('normalizes multi-word filter text and matches terms across different columns', () => {
+    expect(getManagementSearchTerms('  ERP   running  ')).toEqual(['erp', 'running'])
+
+    expect(matchesManagementSearch(baseMockDeployments[0], 'ERP running')).toBe(true)
+    expect(matchesManagementSearch(baseMockDeployments[1], 'ERP running')).toBe(false)
+    expect(matchesManagementSearch(baseMockDeployments[1], 'CRM staging')).toBe(true)
+    expect(matchesManagementSearch(baseMockDeployments[1], '13 Mar 2026')).toBe(true)
+    expect(matchesManagementSearch(baseMockDeployments[0], '13 Mar 2026')).toBe(false)
+    expect(matchesManagementSearch(baseMockDeployments[1], '2026-03-13')).toBe(true)
+  })
+
+  it('matches separate filter words across different columns in the same row', async () => {
+    const user = userEvent.setup()
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Inventory')).toBeInTheDocument()
+      expect(screen.getByText('Catalog')).toBeInTheDocument()
+      expect(screen.getByText('Pricing')).toBeInTheDocument()
+    })
+
+    const filterInput = screen.getByPlaceholderText('🔍 Filter deployments...')
+    await user.type(filterInput, 'ERP running')
+
+    await waitFor(() => {
+      const rows = screen.getAllByRole('row')
+      expect(rows).toHaveLength(2)
+      expect(within(rows[1]).getByText('Inventory')).toBeInTheDocument()
+      expect(within(rows[1]).getByText('ERP')).toBeInTheDocument()
+    })
+
+    await user.clear(filterInput)
+    await user.type(filterInput, 'CRM staging')
+
+    await waitFor(() => {
+      const rows = screen.getAllByRole('row')
+      expect(rows).toHaveLength(2)
+      expect(within(rows[1]).getByText('Catalog')).toBeInTheDocument()
+      expect(within(rows[1]).getByText('CRM')).toBeInTheDocument()
+    })
+  })
+
+  it('requires every filter word to match somewhere in the same row', async () => {
+    const user = userEvent.setup()
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Inventory')).toBeInTheDocument()
+    })
+
+    const filterInput = screen.getByPlaceholderText('🔍 Filter deployments...')
+    await user.type(filterInput, 'ERP deleted')
+
+    await waitFor(() => {
+      expect(screen.getByText('No deployments match "ERP deleted"')).toBeInTheDocument()
+      expect(screen.queryByText('Inventory')).not.toBeInTheDocument()
+      expect(screen.queryByText('Legacy')).not.toBeInTheDocument()
+    })
+  })
+
+  it('filters rows by last status change text', async () => {
+    const user = userEvent.setup()
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Inventory')).toBeInTheDocument()
+      expect(screen.getByText('Catalog')).toBeInTheDocument()
+      expect(screen.getByText('Pricing')).toBeInTheDocument()
+    })
+
+    const filterInput = screen.getByPlaceholderText('🔍 Filter deployments...')
+    await user.type(filterInput, '13 mar 2026')
+
+    await waitFor(() => {
+      const rows = screen.getAllByRole('row')
+      expect(rows).toHaveLength(2)
+      expect(within(rows[1]).getByText('Catalog')).toBeInTheDocument()
+      expect(within(rows[1]).getByText('CRM')).toBeInTheDocument()
+      expect(screen.queryByText('Inventory')).not.toBeInTheDocument()
+      expect(screen.queryByText('Pricing')).not.toBeInTheDocument()
     })
   })
 

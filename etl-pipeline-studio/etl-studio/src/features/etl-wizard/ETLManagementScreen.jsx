@@ -109,6 +109,43 @@ function matchesManagementTab(deployment, tabId) {
   }
 }
 
+export function getManagementSearchTerms(filterText = '') {
+  return String(filterText || '')
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+}
+
+function getManagementSearchValue(deployment, columnKey) {
+  const value = deployment?.[columnKey]
+
+  if (value == null) return ''
+
+  if (columnKey === 'lastStatusChange') {
+    const date = new Date(value)
+    const formattedValue = Number.isNaN(date.getTime()) ? '' : formatDateShort(value)
+
+    return [String(value), formattedValue]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+  }
+
+  return String(value).toLowerCase()
+}
+
+export function matchesManagementSearch(deployment, filterText, columns = COLUMNS) {
+  const terms = Array.isArray(filterText) ? filterText : getManagementSearchTerms(filterText)
+
+  if (terms.length === 0) return true
+
+  return terms.every(term => columns.some(col => {
+    const searchValue = getManagementSearchValue(deployment, col.key)
+    return searchValue.includes(term)
+  }))
+}
+
 function buildPreviewUrl(deploymentId, previewSource) {
   const params = new URLSearchParams({
     preview: 'true',
@@ -244,17 +281,11 @@ export default function ETLManagementScreen() {
   ), [activeTab, deployments]);
 
   const visibleDeployments = useMemo(() => {
-    const search = filterText.trim().toLowerCase();
+    const searchTerms = getManagementSearchTerms(filterText)
 
     return deployments.filter(dep => {
       if (!matchesManagementTab(dep, activeTab)) return false;
-      if (!search) return true;
-
-      return COLUMNS.some(col => {
-        const val = dep[col.key];
-        if (val == null) return false;
-        return String(val).toLowerCase().includes(search);
-      });
+      return matchesManagementSearch(dep, searchTerms, COLUMNS)
     });
   }, [activeTab, deployments, filterText]);
 
@@ -883,34 +914,6 @@ export default function ETLManagementScreen() {
             + New Configuration
           </Btn>
         </div>
-        {screenNotice && (
-          <div style={{
-            width: '100%',
-            marginBottom: 16,
-            padding: '10px 12px',
-            borderRadius: 8,
-            background: screenNotice.tone === 'success' ? 'rgba(34,197,94,0.12)' : 'rgba(79,110,247,0.12)',
-            border: screenNotice.tone === 'success' ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(79,110,247,0.35)',
-            color: screenNotice.tone === 'success' ? 'var(--success)' : 'var(--accent)',
-            fontSize: 13,
-          }}>
-            {screenNotice.message}
-          </div>
-        )}
-        {screenError && (
-          <div style={{
-            width: '100%',
-            marginBottom: 16,
-            padding: '10px 12px',
-            borderRadius: 8,
-            background: 'rgba(239,68,68,0.12)',
-            border: '1px solid rgba(239,68,68,0.35)',
-            color: 'var(--danger)',
-            fontSize: 13,
-          }}>
-            {screenError}
-          </div>
-        )}
         <FilterTabs
           tabs={MANAGEMENT_TABS.map(tab => ({ ...tab, count: tabCounts[tab.id] || 0 }))}
           activeTab={activeTab}
@@ -939,454 +942,515 @@ export default function ETLManagementScreen() {
             borderRight: isLast ? 'none' : '1px solid var(--border)',
           })}
         />
-        <div data-testid="etl-management-table-card" style={{ width: '100%', background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', minHeight: '260px', flex: '1 1 auto', display: 'flex', flexDirection: 'column' }}>
-        {loading ? (
-          <div style={{ padding: '20px 24px', color: 'var(--muted)', fontSize: 14 }}>Loading deployments...</div>
-        ) : sortedDeployments.length === 0 && filterText ? (
-          /* Empty State */
+        {screenNotice && (
           <div style={{
             width: '100%',
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 16,
-            color: 'var(--muted)',
-            minHeight: 260,
+            marginBottom: 16,
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: screenNotice.tone === 'success' ? 'rgba(34,197,94,0.12)' : 'rgba(79,110,247,0.12)',
+            border: screenNotice.tone === 'success' ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(79,110,247,0.35)',
+            color: screenNotice.tone === 'success' ? 'var(--success)' : 'var(--accent)',
+            fontSize: 13,
           }}>
-            <div style={{ fontSize: 32 }}>🔍</div>
-            <div style={{ fontSize: 14 }}>No deployments match "{filterText}"</div>
-            <Btn v="secondary" sm onClick={() => setFilterText('')}>
-              Clear filter
-            </Btn>
+            {screenNotice.message}
           </div>
-        ) : sortedDeployments.length === 0 ? (
-          <div style={{
-            width: '100%',
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 12,
-            color: 'var(--muted)',
-            minHeight: 260,
-          }}>
-            <div style={{ fontSize: 30 }}>📑</div>
-            <div style={{ fontSize: 14 }}>No pipelines in the {MANAGEMENT_TABS.find(tab => tab.id === activeTab)?.label || 'selected'} tab.</div>
-          </div>
-        ) : (
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, minWidth: '900px' }}>
-              <thead>
-                <tr>
-                  {COLUMNS.map(col => (
-                    <th
-                      key={col.key}
-                      onClick={() => handleSort(col.key)}
-                      style={{
-                        position: 'sticky',
-                        top: 0,
-                        zIndex: 2,
-                        background: 'var(--surf)',
-                        padding: 8,
-                        cursor: 'pointer',
-                        userSelect: 'none',
-                        borderBottom: '2px solid var(--border)',
-                        backgroundClip: 'padding-box',
-                        transition: 'background .15s',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(79,110,247,.15)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'var(--surf)'}
-                    >
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-                        {col.label}
-                        <span
-                          data-testid={`sort-indicator-${col.key}`}
-                          style={{
-                            ...SORT_INDICATOR_STYLE,
-                            visibility: sortKey === col.key ? 'visible' : 'hidden',
-                          }}
-                          aria-hidden="true"
-                        >
-                          {sortOrder === 'asc' ? '▲' : '▼'}
-                        </span>
-                      </span>
-                    </th>
-                  ))}
-                  <th style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--surf)', padding: 8, textAlign: 'center', borderBottom: '2px solid var(--border)', backgroundClip: 'padding-box' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedDeployments.map(dep => {
-                  const hasVersionMismatch = dep.deployedVersion && dep.savedVersion && dep.deployedVersion !== dep.savedVersion;
-                  const canUpgrade = hasVersionMismatch && dep.deploymentStatus === 'running';
-                  const isRunning = dep.deploymentStatus === 'running';
-                  const isDeletedRow = dep.deploymentStatus === 'deleted' && activeTab === 'deleted';
-
-                  return (
-                    <tr 
-                      key={dep.id} 
-                      style={{ 
-                        borderTop: '1px solid var(--border)',
-                        height: 44,
-                      }}
-                    >
-                      <td style={{ padding: 8 }}>{dep.productSource}</td>
-                      <td style={{ padding: 8 }}>{dep.productType}</td>
-                      <td style={{ padding: 8 }}>{dep.environment || 'production'}</td>
-                      <td style={{ padding: 8 }}>
-                        <Chip 
-                          c={STATUS_COLORS[dep.deploymentStatus] || 'muted'}
-                          style={{ 
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            minWidth: 80,
-                            position: 'relative',
-                          }}
-                        >
-                          <span style={{ 
-                            display: 'inline-block', 
-                            width: 8, 
-                            height: 8, 
-                            borderRadius: '50%', 
-                            background: 'currentColor',
-                            animation: isRunning ? 'pulse 2s ease-in-out infinite' : 'none',
-                          }}></span>
-                          {dep.deploymentStatus}
-                        </Chip>
-                      </td>
-                      <td style={{ padding: 8, fontFamily: 'var(--mono)', fontSize: 13 }}>
-                        {dep.savedVersion ? (
-                          <span style={{ position: 'relative', display: 'inline-block' }}>
-                            <button
-                              onClick={() => handleViewSavedVersion(dep)}
-                              disabled={!!actionLoading[`${dep.id}_savedVersion`]}
-                              onMouseEnter={e => { e.currentTarget.style.opacity = '0.75'; setSavedVersionHover(dep.id); }}
-                              onMouseLeave={e => { e.currentTarget.style.opacity = actionLoading[`${dep.id}_savedVersion`] ? '0.5' : '1'; setSavedVersionHover(null); }}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                padding: 0,
-                                cursor: actionLoading[`${dep.id}_savedVersion`] ? 'wait' : 'pointer',
-                                fontFamily: 'var(--mono)',
-                                fontSize: 13,
-                                color: 'var(--accent)',
-                                textDecoration: 'underline',
-                                textDecorationStyle: 'dashed',
-                                textUnderlineOffset: '3px',
-                                opacity: actionLoading[`${dep.id}_savedVersion`] ? 0.5 : 1,
-                                transition: 'opacity 0.15s',
-                              }}
-                            >
-                              {actionLoading[`${dep.id}_savedVersion`] ? '…' : dep.savedVersion}
-                            </button>
-                            {savedVersionHover === dep.id && (
-                              <div style={{
-                                position: 'absolute',
-                                top: 'calc(100% + 7px)',
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                background: 'var(--surf)',
-                                border: '1px solid var(--border)',
-                                borderRadius: 7,
-                                padding: '6px 11px',
-                                fontSize: 12,
-                                color: 'var(--text)',
-                                whiteSpace: 'nowrap',
-                                zIndex: 200,
-                                boxShadow: '0 6px 20px rgba(0,0,0,0.22)',
-                                pointerEvents: 'none',
-                              }}>
-                                {/* Arrow pointing up */}
-                                <div style={{
-                                  position: 'absolute', top: -5, left: '50%',
-                                  transform: 'translateX(-50%) rotate(45deg)',
-                                  width: 8, height: 8,
-                                  background: 'var(--surf)',
-                                  borderTop: '1px solid var(--border)',
-                                  borderLeft: '1px solid var(--border)',
-                                }} />
-                                {actionLoading[`${dep.id}_savedVersion`]
-                                  ? '⏳ Loading configuration…'
-                                  : '👁 Open saved version preview'}
-                              </div>
-                            )}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--muted)' }}>—</span>
-                        )}
-                      </td>
-                      <td style={{ padding: 8, fontFamily: 'var(--mono)', fontSize: 13 }}>
-                        {dep.deployedVersion ? (
-                          <span style={{ position: 'relative', display: 'inline-block' }}>
-                            <button
-                              onClick={() => handleViewDeployedVersion(dep)}
-                              disabled={!!actionLoading[`${dep.id}_deployedVersion`]}
-                              onMouseEnter={e => { e.currentTarget.style.opacity = '0.75'; setDeployedVersionHover(dep.id); }}
-                              onMouseLeave={e => { e.currentTarget.style.opacity = actionLoading[`${dep.id}_deployedVersion`] ? '0.5' : '1'; setDeployedVersionHover(null); }}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                padding: 0,
-                                cursor: actionLoading[`${dep.id}_deployedVersion`] ? 'wait' : 'pointer',
-                                fontFamily: 'var(--mono)',
-                                fontSize: 13,
-                                color: hasVersionMismatch ? 'var(--warning)' : 'var(--accent)',
-                                fontWeight: hasVersionMismatch ? 600 : 400,
-                                textDecoration: 'underline',
-                                textDecorationStyle: 'dashed',
-                                textUnderlineOffset: '3px',
-                                opacity: actionLoading[`${dep.id}_deployedVersion`] ? 0.5 : 1,
-                                transition: 'opacity 0.15s',
-                              }}
-                            >
-                              {actionLoading[`${dep.id}_deployedVersion`] ? '…' : dep.deployedVersion}
-                            </button>
-                            {deployedVersionHover === dep.id && (
-                              <div style={{
-                                position: 'absolute',
-                                top: 'calc(100% + 7px)',
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                background: 'var(--surf)',
-                                border: '1px solid var(--border)',
-                                borderRadius: 7,
-                                padding: '6px 11px',
-                                fontSize: 12,
-                                color: 'var(--text)',
-                                whiteSpace: 'nowrap',
-                                zIndex: 200,
-                                boxShadow: '0 6px 20px rgba(0,0,0,0.22)',
-                                pointerEvents: 'none',
-                              }}>
-                                <div style={{
-                                  position: 'absolute', top: -5, left: '50%',
-                                  transform: 'translateX(-50%) rotate(45deg)',
-                                  width: 8, height: 8,
-                                  background: 'var(--surf)',
-                                  borderTop: '1px solid var(--border)',
-                                  borderLeft: '1px solid var(--border)',
-                                }} />
-                                {actionLoading[`${dep.id}_deployedVersion`]
-                                  ? '⏳ Loading configuration…'
-                                  : '👁 Open deployed version preview'}
-                              </div>
-                            )}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--muted)' }}>—</span>
-                        )}
-                      </td>
-                      <td style={{ padding: 8 }}>{formatDateShort(dep.lastStatusChange)}</td>
-                      <td style={{ padding: 8, textAlign: 'center', display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
-                        {isDeletedRow ? (
-                          <>
-                            <Tooltip content={actionLoading[dep.id] === 'delete-permanent' ? 'Deleting permanently' : 'Delete permanently'}>
-                              <span style={{ display: 'inline-flex' }}>
-                                <button
-                                  type="button"
-                                  aria-label="Delete permanently"
-                                  onClick={() => requestPermanentDelete(dep)}
-                                  disabled={actionLoading[dep.id] === 'delete-permanent' || actionLoading[dep.id] === 'restore'}
-                                  style={{
-                                    padding: '6px 12px',
-                                    borderRadius: 8,
-                                    border: '1px solid #ef4444',
-                                    background: 'rgba(239,68,68,0.1)',
-                                    color: '#dc2626',
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    cursor: (actionLoading[dep.id] === 'delete-permanent' || actionLoading[dep.id] === 'restore') ? 'not-allowed' : 'pointer',
-                                    opacity: (actionLoading[dep.id] === 'delete-permanent' || actionLoading[dep.id] === 'restore') ? 0.5 : 1,
-                                    transition: 'all .15s ease',
-                                  }}
-                                >
-                                  Delete permanently
-                                </button>
-                              </span>
-                            </Tooltip>
-
-                            <Tooltip content={actionLoading[dep.id] === 'restore' ? 'Restoring pipeline' : 'Restore pipeline'}>
-                              <span style={{ display: 'inline-flex' }}>
-                                <button
-                                  type="button"
-                                  aria-label="Restore pipeline"
-                                  onClick={() => requestRestore(dep)}
-                                  disabled={actionLoading[dep.id] === 'restore' || actionLoading[dep.id] === 'delete-permanent'}
-                                  style={{
-                                    padding: '6px 12px',
-                                    borderRadius: 8,
-                                    border: '1px solid var(--accent)',
-                                    background: 'rgba(79,110,247,0.1)',
-                                    color: 'var(--accent)',
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    cursor: (actionLoading[dep.id] === 'restore' || actionLoading[dep.id] === 'delete-permanent') ? 'not-allowed' : 'pointer',
-                                    opacity: (actionLoading[dep.id] === 'restore' || actionLoading[dep.id] === 'delete-permanent') ? 0.5 : 1,
-                                    transition: 'all .15s ease',
-                                  }}
-                                >
-                                  Restore
-                                </button>
-                              </span>
-                            </Tooltip>
-                          </>
-                        ) : (
-                          <>
-                            {/* Deploy/Play Button */}
-                            <Tooltip content={dep.deploymentStatus === 'running' ? 'Already running' : actionLoading[dep.id] === 'deploy' ? 'Deploying pipeline' : 'Deploy pipeline'}>
-                              <span style={{ display: 'inline-flex' }}>
-                                <button
-                                  aria-label="Deploy pipeline"
-                                  onClick={() => handleDeploy(dep)}
-                                  disabled={dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy'}
-                                  style={{
-                                    ...ICON_BUTTON_STYLE,
-                                    borderColor: '#22c55e',
-                                    color: '#22c55e',
-                                    opacity: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy') ? 0.4 : 1,
-                                    cursor: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy') ? 'not-allowed' : 'pointer',
-                                  }}
-                                  onMouseEnter={e => {
-                                    if (dep.deploymentStatus !== 'running' && actionLoading[dep.id] !== 'deploy') {
-                                      e.currentTarget.style.background = 'rgba(34,197,94,0.15)';
-                                    }
-                                  }}
-                                  onMouseLeave={e => {
-                                    e.currentTarget.style.background = 'var(--bg)';
-                                  }}
-                                >
-                                  <Rocket size={16} strokeWidth={2.1} />
-                                </button>
-                              </span>
-                            </Tooltip>
-
-                            {/* Stop Button */}
-                            <Tooltip content={!isRunning ? 'Pipeline is not running' : actionLoading[dep.id] === 'stop' ? 'Stopping pipeline' : 'Stop pipeline'}>
-                              <span style={{ display: 'inline-flex' }}>
-                                <button
-                                  aria-label="Stop pipeline"
-                                  onClick={() => handleStop(dep)}
-                                  disabled={!isRunning || actionLoading[dep.id] === 'stop'}
-                                  style={{
-                                    ...ICON_BUTTON_STYLE,
-                                    borderColor: '#ef4444',
-                                    color: '#ef4444',
-                                    opacity: (!isRunning || actionLoading[dep.id] === 'stop') ? 0.4 : 1,
-                                    cursor: (!isRunning || actionLoading[dep.id] === 'stop') ? 'not-allowed' : 'pointer',
-                                  }}
-                                  onMouseEnter={e => {
-                                    if (isRunning && actionLoading[dep.id] !== 'stop') {
-                                      e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
-                                    }
-                                  }}
-                                  onMouseLeave={e => {
-                                    e.currentTarget.style.background = 'var(--bg)';
-                                  }}
-                                >
-                                  <Hand size={15} strokeWidth={2.1} />
-                                </button>
-                              </span>
-                            </Tooltip>
-
-                            {/* Delete Button */}
-                            <Tooltip content={dep.deploymentStatus === 'running' ? 'Cannot delete a running pipeline' : actionLoading[dep.id] === 'delete' ? 'Deleting pipeline' : 'Delete pipeline'}>
-                              <span style={{ display: 'inline-flex' }}>
-                                <button
-                                  aria-label="Delete pipeline"
-                                  onClick={() => requestDelete(dep)}
-                                  disabled={dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete'}
-                                  style={{
-                                    ...ICON_BUTTON_STYLE,
-                                    borderColor: '#ef4444',
-                                    color: '#ef4444',
-                                    opacity: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete') ? 0.4 : 1,
-                                    cursor: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete') ? 'not-allowed' : 'pointer',
-                                  }}
-                                  onMouseEnter={e => {
-                                    if (dep.deploymentStatus !== 'running' && actionLoading[dep.id] !== 'delete') {
-                                      e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
-                                    }
-                                  }}
-                                  onMouseLeave={e => {
-                                    e.currentTarget.style.background = 'var(--bg)';
-                                  }}
-                                >
-                                  <Trash2 size={16} strokeWidth={2.1} />
-                                </button>
-                              </span>
-                            </Tooltip>
-
-                            {/* Upgrade Button */}
-                            <Tooltip content={!canUpgrade && hasVersionMismatch ? 'Pipeline must be running' : !canUpgrade ? 'No update available' : actionLoading[dep.id] === 'upgrade' ? 'Upgrading deployment' : 'Upgrade to latest version'}>
-                              <span style={{ display: 'inline-flex' }}>
-                                <button
-                                  aria-label="Upgrade deployment"
-                                  onClick={() => handleUpgrade(dep.id)}
-                                  disabled={!canUpgrade || actionLoading[dep.id] === 'upgrade'}
-                                  style={{
-                                    ...ICON_BUTTON_STYLE,
-                                    borderColor: 'var(--warning)',
-                                    color: 'var(--warning)',
-                                    opacity: (!canUpgrade || actionLoading[dep.id] === 'upgrade') ? 0.4 : 1,
-                                    cursor: (!canUpgrade || actionLoading[dep.id] === 'upgrade') ? 'not-allowed' : 'pointer',
-                                  }}
-                                  onMouseEnter={e => {
-                                    if (canUpgrade && actionLoading[dep.id] !== 'upgrade') {
-                                      e.currentTarget.style.background = 'rgba(245,158,11,0.15)';
-                                    }
-                                  }}
-                                  onMouseLeave={e => {
-                                    e.currentTarget.style.background = 'var(--bg)';
-                                  }}
-                                >
-                                  <CircleArrowUp size={15} strokeWidth={2.1} />
-                                </button>
-                              </span>
-                            </Tooltip>
-
-                            {/* Edit Button */}
-                            <Tooltip content={actionLoading[dep.id] === 'edit' ? 'Opening deployment editor' : 'Edit configuration'}>
-                              <span style={{ display: 'inline-flex' }}>
-                                <button
-                                  aria-label="Edit configuration"
-                                  onClick={() => requestEdit(dep)}
-                                  disabled={actionLoading[dep.id] === 'edit'}
-                                  style={{
-                                    ...ICON_BUTTON_STYLE,
-                                    opacity: actionLoading[dep.id] === 'edit' ? 0.4 : 1,
-                                    cursor: actionLoading[dep.id] === 'edit' ? 'not-allowed' : 'pointer',
-                                  }}
-                                  onMouseEnter={e => {
-                                    if (actionLoading[dep.id] !== 'edit') {
-                                      e.currentTarget.style.background = 'rgba(79,110,247,0.15)';
-                                      e.currentTarget.style.borderColor = 'var(--accent)';
-                                      e.currentTarget.style.color = 'var(--accent)';
-                                    }
-                                  }}
-                                  onMouseLeave={e => {
-                                    e.currentTarget.style.background = 'var(--bg)';
-                                    e.currentTarget.style.borderColor = 'var(--border)';
-                                    e.currentTarget.style.color = 'var(--text)';
-                                  }}
-                                >
-                                  <SquarePen size={15} strokeWidth={2.1} />
-                                </button>
-                              </span>
-                            </Tooltip>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            </div>
         )}
+        {screenError && (
+          <div style={{
+            width: '100%',
+            marginBottom: 16,
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: 'rgba(239,68,68,0.12)',
+            border: '1px solid rgba(239,68,68,0.35)',
+            color: 'var(--danger)',
+            fontSize: 13,
+          }}>
+            {screenError}
+          </div>
+        )}
+        <div
+          data-testid="etl-management-table-card"
+          style={{
+            width: '100%',
+            background: 'var(--surf)',
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            overflow: 'hidden',
+            minHeight: '260px',
+            flex: '1 1 auto',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {loading ? (
+            <div style={{ padding: '20px 24px', color: 'var(--muted)', fontSize: 14 }}>Loading deployments...</div>
+          ) : sortedDeployments.length === 0 && filterText ? (
+            <div style={{
+              width: '100%',
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 16,
+              color: 'var(--muted)',
+              minHeight: 260,
+            }}>
+              <div style={{ fontSize: 32 }}>🔍</div>
+              <div style={{ fontSize: 14 }}>No deployments match "{filterText}"</div>
+              <Btn v="secondary" sm onClick={() => setFilterText('')}>
+                Clear filter
+              </Btn>
+            </div>
+          ) : sortedDeployments.length === 0 ? (
+            <div style={{
+              width: '100%',
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+              color: 'var(--muted)',
+              minHeight: 260,
+            }}>
+              <div style={{ fontSize: 30 }}>📑</div>
+              <div style={{ fontSize: 14 }}>No pipelines in the {MANAGEMENT_TABS.find(tab => tab.id === activeTab)?.label || 'selected'} tab.</div>
+            </div>
+          ) : (
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, minWidth: '900px' }}>
+                <thead>
+                  <tr>
+                    {COLUMNS.map(col => (
+                      <th
+                        key={col.key}
+                        onClick={() => handleSort(col.key)}
+                        style={{
+                          position: 'sticky',
+                          top: 0,
+                          zIndex: 2,
+                          background: 'var(--surf)',
+                          padding: 8,
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                          borderBottom: '2px solid var(--border)',
+                          backgroundClip: 'padding-box',
+                          transition: 'background .15s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(79,110,247,.15)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'var(--surf)'}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                          {col.label}
+                          <span
+                            data-testid={`sort-indicator-${col.key}`}
+                            style={{
+                              ...SORT_INDICATOR_STYLE,
+                              visibility: sortKey === col.key ? 'visible' : 'hidden',
+                            }}
+                            aria-hidden="true"
+                          >
+                            {sortOrder === 'asc' ? '▲' : '▼'}
+                          </span>
+                        </span>
+                      </th>
+                    ))}
+                    <th style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--surf)', padding: 8, textAlign: 'center', borderBottom: '2px solid var(--border)', backgroundClip: 'padding-box' }}>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedDeployments.map(dep => {
+                    const hasVersionMismatch = dep.deployedVersion && dep.savedVersion && dep.deployedVersion !== dep.savedVersion;
+                    const canUpgrade = hasVersionMismatch && dep.deploymentStatus === 'running';
+                    const isRunning = dep.deploymentStatus === 'running';
+                    const isDeletedRow = dep.deploymentStatus === 'deleted' && activeTab === 'deleted';
+                    const deployTooltip = dep.deploymentStatus === 'running'
+                      ? 'Already running'
+                      : actionLoading[dep.id] === 'deploy'
+                        ? 'Deploying pipeline'
+                        : 'Deploy pipeline';
+                    const stopTooltip = !isRunning
+                      ? 'Pipeline is not running'
+                      : actionLoading[dep.id] === 'stop'
+                        ? 'Stopping pipeline'
+                        : 'Stop pipeline';
+                    const deleteTooltip = dep.deploymentStatus === 'running'
+                      ? 'Cannot delete a running pipeline'
+                      : actionLoading[dep.id] === 'delete'
+                        ? 'Deleting pipeline'
+                        : 'Delete pipeline';
+                    const upgradeTooltip = !canUpgrade && hasVersionMismatch
+                      ? 'Pipeline must be running'
+                      : !canUpgrade
+                        ? 'No update available'
+                        : actionLoading[dep.id] === 'upgrade'
+                          ? 'Upgrading deployment'
+                          : 'Upgrade to latest version';
+                    const editTooltip = actionLoading[dep.id] === 'edit'
+                      ? 'Opening deployment editor'
+                      : 'Edit configuration';
+
+                    return (
+                      <tr
+                        key={dep.id}
+                        style={{
+                          borderTop: '1px solid var(--border)',
+                          height: 44,
+                        }}
+                      >
+                        <td style={{ padding: 8 }}>{dep.productSource}</td>
+                        <td style={{ padding: 8 }}>{dep.productType}</td>
+                        <td style={{ padding: 8 }}>{dep.environment || 'production'}</td>
+                        <td style={{ padding: 8 }}>
+                          <Chip
+                            c={STATUS_COLORS[dep.deploymentStatus] || 'muted'}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              minWidth: 80,
+                              position: 'relative',
+                            }}
+                          >
+                            <span style={{
+                              display: 'inline-block',
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              background: 'currentColor',
+                              animation: isRunning ? 'pulse 2s ease-in-out infinite' : 'none',
+                            }}></span>
+                            {dep.deploymentStatus}
+                          </Chip>
+                        </td>
+                        <td style={{ padding: 8, fontFamily: 'var(--mono)', fontSize: 13 }}>
+                          {dep.savedVersion ? (
+                            <span style={{ position: 'relative', display: 'inline-block' }}>
+                              <button
+                                onClick={() => handleViewSavedVersion(dep)}
+                                disabled={!!actionLoading[`${dep.id}_savedVersion`]}
+                                onMouseEnter={e => { e.currentTarget.style.opacity = '0.75'; setSavedVersionHover(dep.id); }}
+                                onMouseLeave={e => { e.currentTarget.style.opacity = actionLoading[`${dep.id}_savedVersion`] ? '0.5' : '1'; setSavedVersionHover(null); }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  cursor: actionLoading[`${dep.id}_savedVersion`] ? 'wait' : 'pointer',
+                                  fontFamily: 'var(--mono)',
+                                  fontSize: 13,
+                                  color: 'var(--accent)',
+                                  textDecoration: 'underline',
+                                  textDecorationStyle: 'dashed',
+                                  textUnderlineOffset: '3px',
+                                  opacity: actionLoading[`${dep.id}_savedVersion`] ? 0.5 : 1,
+                                  transition: 'opacity 0.15s',
+                                }}
+                              >
+                                {actionLoading[`${dep.id}_savedVersion`] ? '…' : dep.savedVersion}
+                              </button>
+                              {savedVersionHover === dep.id && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: 'calc(100% + 7px)',
+                                  left: '50%',
+                                  transform: 'translateX(-50%)',
+                                  background: 'var(--surf)',
+                                  border: '1px solid var(--border)',
+                                  borderRadius: 7,
+                                  padding: '6px 11px',
+                                  fontSize: 12,
+                                  color: 'var(--text)',
+                                  whiteSpace: 'nowrap',
+                                  zIndex: 200,
+                                  boxShadow: '0 6px 20px rgba(0,0,0,0.22)',
+                                  pointerEvents: 'none',
+                                }}>
+                                  <div style={{
+                                    position: 'absolute', top: -5, left: '50%',
+                                    transform: 'translateX(-50%) rotate(45deg)',
+                                    width: 8, height: 8,
+                                    background: 'var(--surf)',
+                                    borderTop: '1px solid var(--border)',
+                                    borderLeft: '1px solid var(--border)',
+                                  }} />
+                                  {actionLoading[`${dep.id}_savedVersion`]
+                                    ? '⏳ Loading configuration…'
+                                    : '👁 Open saved version preview'}
+                                </div>
+                              )}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--muted)' }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: 8, fontFamily: 'var(--mono)', fontSize: 13 }}>
+                          {dep.deployedVersion ? (
+                            <span style={{ position: 'relative', display: 'inline-block' }}>
+                              <button
+                                onClick={() => handleViewDeployedVersion(dep)}
+                                disabled={!!actionLoading[`${dep.id}_deployedVersion`]}
+                                onMouseEnter={e => { e.currentTarget.style.opacity = '0.75'; setDeployedVersionHover(dep.id); }}
+                                onMouseLeave={e => { e.currentTarget.style.opacity = actionLoading[`${dep.id}_deployedVersion`] ? '0.5' : '1'; setDeployedVersionHover(null); }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  cursor: actionLoading[`${dep.id}_deployedVersion`] ? 'wait' : 'pointer',
+                                  fontFamily: 'var(--mono)',
+                                  fontSize: 13,
+                                  color: hasVersionMismatch ? 'var(--warning)' : 'var(--accent)',
+                                  fontWeight: hasVersionMismatch ? 600 : 400,
+                                  textDecoration: 'underline',
+                                  textDecorationStyle: 'dashed',
+                                  textUnderlineOffset: '3px',
+                                  opacity: actionLoading[`${dep.id}_deployedVersion`] ? 0.5 : 1,
+                                  transition: 'opacity 0.15s',
+                                }}
+                              >
+                                {actionLoading[`${dep.id}_deployedVersion`] ? '…' : dep.deployedVersion}
+                              </button>
+                              {deployedVersionHover === dep.id && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: 'calc(100% + 7px)',
+                                  left: '50%',
+                                  transform: 'translateX(-50%)',
+                                  background: 'var(--surf)',
+                                  border: '1px solid var(--border)',
+                                  borderRadius: 7,
+                                  padding: '6px 11px',
+                                  fontSize: 12,
+                                  color: 'var(--text)',
+                                  whiteSpace: 'nowrap',
+                                  zIndex: 200,
+                                  boxShadow: '0 6px 20px rgba(0,0,0,0.22)',
+                                  pointerEvents: 'none',
+                                }}>
+                                  <div style={{
+                                    position: 'absolute', top: -5, left: '50%',
+                                    transform: 'translateX(-50%) rotate(45deg)',
+                                    width: 8, height: 8,
+                                    background: 'var(--surf)',
+                                    borderTop: '1px solid var(--border)',
+                                    borderLeft: '1px solid var(--border)',
+                                  }} />
+                                  {actionLoading[`${dep.id}_deployedVersion`]
+                                    ? '⏳ Loading configuration…'
+                                    : '👁 Open deployed version preview'}
+                                </div>
+                              )}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--muted)' }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: 8 }}>{formatDateShort(dep.lastStatusChange)}</td>
+                        <td style={{ padding: 8, textAlign: 'center', display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
+                          {isDeletedRow ? (
+                            <>
+                              <Tooltip content={actionLoading[dep.id] === 'delete-permanent' ? 'Deleting permanently' : 'Delete permanently'}>
+                                <span style={{ display: 'inline-flex' }}>
+                                  <button
+                                    type="button"
+                                    aria-label="Delete permanently"
+                                    onClick={() => requestPermanentDelete(dep)}
+                                    disabled={actionLoading[dep.id] === 'delete-permanent' || actionLoading[dep.id] === 'restore'}
+                                    style={{
+                                      padding: '6px 12px',
+                                      borderRadius: 8,
+                                      border: '1px solid #ef4444',
+                                      background: 'rgba(239,68,68,0.1)',
+                                      color: '#dc2626',
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                      cursor: (actionLoading[dep.id] === 'delete-permanent' || actionLoading[dep.id] === 'restore') ? 'not-allowed' : 'pointer',
+                                      opacity: (actionLoading[dep.id] === 'delete-permanent' || actionLoading[dep.id] === 'restore') ? 0.5 : 1,
+                                      transition: 'all .15s ease',
+                                    }}
+                                  >
+                                    Delete permanently
+                                  </button>
+                                </span>
+                              </Tooltip>
+
+                              <Tooltip content={actionLoading[dep.id] === 'restore' ? 'Restoring pipeline' : 'Restore pipeline'}>
+                                <span style={{ display: 'inline-flex' }}>
+                                  <button
+                                    type="button"
+                                    aria-label="Restore pipeline"
+                                    onClick={() => requestRestore(dep)}
+                                    disabled={actionLoading[dep.id] === 'restore' || actionLoading[dep.id] === 'delete-permanent'}
+                                    style={{
+                                      padding: '6px 12px',
+                                      borderRadius: 8,
+                                      border: '1px solid var(--accent)',
+                                      background: 'rgba(79,110,247,0.1)',
+                                      color: 'var(--accent)',
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                      cursor: (actionLoading[dep.id] === 'restore' || actionLoading[dep.id] === 'delete-permanent') ? 'not-allowed' : 'pointer',
+                                      opacity: (actionLoading[dep.id] === 'restore' || actionLoading[dep.id] === 'delete-permanent') ? 0.5 : 1,
+                                      transition: 'all .15s ease',
+                                    }}
+                                  >
+                                    Restore
+                                  </button>
+                                </span>
+                              </Tooltip>
+                            </>
+                          ) : (
+                            <>
+                              <Tooltip content={deployTooltip}>
+                                <span style={{ display: 'inline-flex' }}>
+                                  <button
+                                    aria-label="Deploy pipeline"
+                                    onClick={() => handleDeploy(dep)}
+                                    disabled={dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy'}
+                                    style={{
+                                      ...ICON_BUTTON_STYLE,
+                                      borderColor: '#22c55e',
+                                      color: '#22c55e',
+                                      opacity: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy') ? 0.4 : 1,
+                                      cursor: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy') ? 'not-allowed' : 'pointer',
+                                    }}
+                                    onMouseEnter={e => {
+                                      if (dep.deploymentStatus !== 'running' && actionLoading[dep.id] !== 'deploy') {
+                                        e.currentTarget.style.background = 'rgba(34,197,94,0.15)';
+                                      }
+                                    }}
+                                    onMouseLeave={e => {
+                                      e.currentTarget.style.background = 'var(--bg)';
+                                    }}
+                                  >
+                                    <Rocket size={16} strokeWidth={2.1} />
+                                  </button>
+                                </span>
+                              </Tooltip>
+
+                              <Tooltip content={stopTooltip}>
+                                <span style={{ display: 'inline-flex' }}>
+                                  <button
+                                    aria-label="Stop pipeline"
+                                    onClick={() => handleStop(dep)}
+                                    disabled={!isRunning || actionLoading[dep.id] === 'stop'}
+                                    style={{
+                                      ...ICON_BUTTON_STYLE,
+                                      borderColor: '#ef4444',
+                                      color: '#ef4444',
+                                      opacity: (!isRunning || actionLoading[dep.id] === 'stop') ? 0.4 : 1,
+                                      cursor: (!isRunning || actionLoading[dep.id] === 'stop') ? 'not-allowed' : 'pointer',
+                                    }}
+                                    onMouseEnter={e => {
+                                      if (isRunning && actionLoading[dep.id] !== 'stop') {
+                                        e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
+                                      }
+                                    }}
+                                    onMouseLeave={e => {
+                                      e.currentTarget.style.background = 'var(--bg)';
+                                    }}
+                                  >
+                                    <Hand size={15} strokeWidth={2.1} />
+                                  </button>
+                                </span>
+                              </Tooltip>
+
+                              <Tooltip content={deleteTooltip}>
+                                <span style={{ display: 'inline-flex' }}>
+                                  <button
+                                    aria-label="Delete pipeline"
+                                    onClick={() => requestDelete(dep)}
+                                    disabled={dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete'}
+                                    style={{
+                                      ...ICON_BUTTON_STYLE,
+                                      borderColor: '#ef4444',
+                                      color: '#ef4444',
+                                      opacity: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete') ? 0.4 : 1,
+                                      cursor: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete') ? 'not-allowed' : 'pointer',
+                                    }}
+                                    onMouseEnter={e => {
+                                      if (dep.deploymentStatus !== 'running' && actionLoading[dep.id] !== 'delete') {
+                                        e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
+                                      }
+                                    }}
+                                    onMouseLeave={e => {
+                                      e.currentTarget.style.background = 'var(--bg)';
+                                    }}
+                                  >
+                                    <Trash2 size={16} strokeWidth={2.1} />
+                                  </button>
+                                </span>
+                              </Tooltip>
+
+                              <Tooltip content={upgradeTooltip}>
+                                <span style={{ display: 'inline-flex' }}>
+                                  <button
+                                    aria-label="Upgrade deployment"
+                                    onClick={() => handleUpgrade(dep.id)}
+                                    disabled={!canUpgrade || actionLoading[dep.id] === 'upgrade'}
+                                    style={{
+                                      ...ICON_BUTTON_STYLE,
+                                      borderColor: 'var(--warning)',
+                                      color: 'var(--warning)',
+                                      opacity: (!canUpgrade || actionLoading[dep.id] === 'upgrade') ? 0.4 : 1,
+                                      cursor: (!canUpgrade || actionLoading[dep.id] === 'upgrade') ? 'not-allowed' : 'pointer',
+                                    }}
+                                    onMouseEnter={e => {
+                                      if (canUpgrade && actionLoading[dep.id] !== 'upgrade') {
+                                        e.currentTarget.style.background = 'rgba(245,158,11,0.15)';
+                                      }
+                                    }}
+                                    onMouseLeave={e => {
+                                      e.currentTarget.style.background = 'var(--bg)';
+                                    }}
+                                  >
+                                    <CircleArrowUp size={15} strokeWidth={2.1} />
+                                  </button>
+                                </span>
+                              </Tooltip>
+
+                              <Tooltip content={editTooltip}>
+                                <span style={{ display: 'inline-flex' }}>
+                                  <button
+                                    aria-label="Edit configuration"
+                                    onClick={() => requestEdit(dep)}
+                                    disabled={actionLoading[dep.id] === 'edit'}
+                                    style={{
+                                      ...ICON_BUTTON_STYLE,
+                                      opacity: actionLoading[dep.id] === 'edit' ? 0.4 : 1,
+                                      cursor: actionLoading[dep.id] === 'edit' ? 'not-allowed' : 'pointer',
+                                    }}
+                                    onMouseEnter={e => {
+                                      if (actionLoading[dep.id] !== 'edit') {
+                                        e.currentTarget.style.background = 'rgba(79,110,247,0.15)';
+                                        e.currentTarget.style.borderColor = 'var(--accent)';
+                                        e.currentTarget.style.color = 'var(--accent)';
+                                      }
+                                    }}
+                                    onMouseLeave={e => {
+                                      e.currentTarget.style.background = 'var(--bg)';
+                                      e.currentTarget.style.borderColor = 'var(--border)';
+                                      e.currentTarget.style.color = 'var(--text)';
+                                    }}
+                                  >
+                                    <SquarePen size={15} strokeWidth={2.1} />
+                                  </button>
+                                </span>
+                              </Tooltip>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
         <ModalDialog
           isOpen={Boolean(confirmDialog)}
