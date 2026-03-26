@@ -1,4 +1,5 @@
-const API_BASE = 'http://localhost:8080/api'
+import { API_BASE } from './appConfig.js'
+
 const KAFKA_TEST_CONNECTION_PATH = `${API_BASE}/backend/kafka/test-connection`
 
 export function buildKafkaTestConnectionUrl({ topic, environment }) {

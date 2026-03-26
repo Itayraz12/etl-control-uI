@@ -39,6 +39,26 @@ npm run dev
 
 Open `http://localhost:5173`.
 
+## Build-time application configuration
+
+The UI reads these Vite environment variables at build time:
+
+| Variable | Default | Description |
+|---|---:|---|
+| `VITE_API_BASE` | `http://localhost:8080/api` | Base URL for all live backend API calls |
+| `VITE_APP_VERSION` | `package.json` version | UI version label override shown in the app chrome |
+| `VITE_IDLE_LOGOUT_MINUTES` | `15` | Logs out the active user after this many minutes of inactivity |
+| `VITE_SCOPE_RESET_GRACE_MINUTES` | `10` | Clears a timed-out user's saved wizard scope after this many additional minutes |
+
+Example `.env` values:
+
+```bash
+VITE_API_BASE=http://localhost:8080/api
+VITE_APP_VERSION=1.2.3-build.7
+VITE_IDLE_LOGOUT_MINUTES=20
+VITE_SCOPE_RESET_GRACE_MINUTES=15
+```
+
 ## Verified scripts
 
 ```bash
@@ -46,22 +66,6 @@ npm run dev
 npm run test
 npm run build
 npm run preview
-```
-
-## Session timeout configuration
-
-The UI reads these Vite environment variables at build time:
-
-| Variable | Default | Description |
-|---|---:|---|
-| `VITE_IDLE_LOGOUT_MINUTES` | `15` | Logs out the active user after this many minutes of inactivity |
-| `VITE_SCOPE_RESET_GRACE_MINUTES` | `10` | Clears a timed-out user's saved wizard scope after this many additional minutes |
-
-Example `.env` values:
-
-```bash
-VITE_IDLE_LOGOUT_MINUTES=20
-VITE_SCOPE_RESET_GRACE_MINUTES=15
 ```
 
 ## Application flow
@@ -170,7 +174,7 @@ While those requests are in flight, the shell shows a centered loading spinner i
 
 ## Backend endpoints
 
-All live calls use `http://localhost:8080/api`.
+All live calls use the configured `VITE_API_BASE` value. By default, this is `http://localhost:8080/api`.
 
 | Area | Method | Endpoint | Notes |
 |---|---|---|---|

@@ -13,7 +13,7 @@ describe('kafkaService', () => {
     expect(buildKafkaTestConnectionUrl({
       topic: 'orders.v1',
       environment: 'prod blue',
-    })).toBe('http://localhost:8080/api/backend/kafka/test-connection?topic=orders.v1&environment=prod+blue')
+    })).toBe('http://localhost:8080/api/backend/kafka/test-connection?topicName=orders.v1&environment=prod+blue')
   })
 
   it('returns a normalized success payload when the backend responds successfully', async () => {
@@ -30,7 +30,7 @@ describe('kafkaService', () => {
       })
     )
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/kafka/test-connection?topic=orders.v1&environment=production', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/kafka/test-connection?topicName=orders.v1&environment=production', {
       method: 'GET',
       headers: {
         Accept: 'application/json, text/plain',

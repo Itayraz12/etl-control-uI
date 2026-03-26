@@ -1,5 +1,6 @@
+import { API_BASE } from './appConfig.js'
+
 // Backend service for deployments data
-const API_BASE = 'http://localhost:8080/api'
 
 // ── Local-draft store (localStorage) ─────────────────────────────────────
 // Deployments that have been saved locally (via the wizard's Save action) but

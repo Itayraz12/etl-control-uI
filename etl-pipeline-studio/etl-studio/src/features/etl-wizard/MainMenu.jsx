@@ -1,10 +1,11 @@
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useUser } from '../../shared/store/userContext.jsx';
+import { APP_VERSION } from '../../shared/services/appConfig.js';
 
 export default function MainMenu() {
   const { state, actions } = useWizard()
   const { user, logout } = useUser();
-  const appVersion = `v${__APP_VERSION__}`;
+  const appVersion = `v${APP_VERSION}`;
 
   const handleETLConfiguration = () => {
     actions.setNavigationMode('etl-config')

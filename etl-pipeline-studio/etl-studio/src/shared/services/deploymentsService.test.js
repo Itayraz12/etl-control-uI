@@ -87,7 +87,14 @@ describe('deploymentsService', () => {
       headers: { 'Content-Type': 'application/json' },
     }))
 
-    await expect(fetchDeployments('data-platform', false)).resolves.toEqual([])
+    await expect(fetchDeployments('data-platform', false)).resolves.toEqual([
+      expect.objectContaining({
+        id: 'local-draft:data-platform::erp::catalog::production',
+        deploymentStatus: 'deleted',
+        previousDeploymentStatus: 'draft',
+        isLocalDraft: true,
+      }),
+    ])
   })
 
   it('applies persisted failed status overrides to matching backend rows', async () => {

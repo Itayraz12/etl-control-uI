@@ -1,5 +1,6 @@
 import { MOCK_SCHEMA, normalizeSourceSchema, TARGET_FIELDS } from '../types/index.js'
 import { upsertSavedDraftDeployment } from './deploymentsService.js'
+import { API_BASE } from './appConfig.js'
 
 // ── Config Service ─────────────────────────────────────────────────────────
 // Loads transformers, filters and entities either from the backend API or
@@ -29,7 +30,6 @@ export const TRANSFORMER_INPUT_AMOUNT = {
 // responses, so any new property added on the backend is surfaced in the UI
 // automatically without a frontend change.
 
-const API_BASE = 'http://localhost:8080/api'
 
 function asString(value, fallback = '') {
   if (value === undefined || value === null) return fallback

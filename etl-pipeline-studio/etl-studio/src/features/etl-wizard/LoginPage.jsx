@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useUser } from '../../shared/store/userContext.jsx';
 import { useMockMode } from '../../shared/store/mockModeContext.jsx';
 import { useTeamNames } from '../../shared/store/teamNamesContext.jsx';
+import { APP_VERSION } from '../../shared/services/appConfig.js';
 
 export default function LoginPage() {
   const { login } = useUser();
   const { useMock, setUseMock } = useMockMode();
   const { teamNames, loadingTeamNames, teamNamesError, refreshTeamNames } = useTeamNames();
-  const appVersion = `v${__APP_VERSION__}`;
+  const appVersion = `v${APP_VERSION}`;
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [teamName, setTeamName] = useState('');

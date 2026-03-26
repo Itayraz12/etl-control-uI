@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8080/api'
+import { API_BASE } from './appConfig.js'
 
 function normalizeTeamName(value) {
   if (value == null) return ''

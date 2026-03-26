@@ -1,12 +1,13 @@
 import { Btn, Chip } from '../../shared/components/index.jsx'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useUser } from '../../shared/store/userContext.jsx'
+import { APP_VERSION } from '../../shared/services/appConfig.js'
 
 export default function TopNav() {
   const { state, actions } = useWizard()
   const { logout } = useUser()
   const { readOnly } = state
-  const appVersion = `v${__APP_VERSION__}`
+  const appVersion = `v${APP_VERSION}`
 
   function handleBrandClick() {
     if (readOnly) return
