@@ -637,6 +637,45 @@ describe('ETLManagementScreen table layout stability', () => {
     })
   })
 
+  it('renders saved and deployed version hints as floating tooltips above the last table row', async () => {
+    const user = userEvent.setup()
+
+    render(<ETLManagementScreen />)
+
+    const legacyCell = await screen.findByText('Legacy')
+    const legacyRow = legacyCell.closest('tr')
+
+    expect(legacyRow).toBeTruthy()
+
+    const [savedVersionButton, deployedVersionButton] = within(legacyRow).getAllByRole('button', { name: '0.9.0' })
+
+    await user.hover(savedVersionButton)
+
+    const savedTooltip = await screen.findByRole('tooltip')
+    expect(savedTooltip).toHaveTextContent('👁 Open saved version preview')
+    expect(savedTooltip).toHaveStyle({
+      bottom: 'calc(100% + 8px)',
+      left: '50%',
+    })
+    expect(savedTooltip.style.top).toBe('')
+
+    await user.unhover(savedVersionButton)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+    })
+
+    await user.hover(deployedVersionButton)
+
+    const deployedTooltip = await screen.findByRole('tooltip')
+    expect(deployedTooltip).toHaveTextContent('👁 Open deployed version preview')
+    expect(deployedTooltip).toHaveStyle({
+      bottom: 'calc(100% + 8px)',
+      left: '50%',
+    })
+    expect(deployedTooltip.style.top).toBe('')
+  })
+
   it('opens saved versions in a read-only preview window that carries the deployment id in the URL', async () => {
     const user = userEvent.setup()
 
