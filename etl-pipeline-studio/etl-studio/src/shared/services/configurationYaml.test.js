@@ -52,9 +52,8 @@ output:
     - "ConvertMulti(logic: a:b:c?120|c:d:e?130, defaultValue: 0, case_sensitive: true)(string, id), (string, productName), (number, price) -> (string, name)"
   filters:
     - "(id f-2 2)"
-sink:
-  type: kafka
-  topic: etl_products_v3
+  kafka:
+    topic: etl_products_v3
 `
 
     const state = hydrateWizardStateFromYaml(yaml, {
@@ -132,9 +131,8 @@ output:
     - "ConvertMulti([id,productName,price],[logic: a:b:c?120|c:d:e?130, defaultValue: 0, case_sensitive: true]) -> (string, name)"
   filters:
     - "(id f-2 2)"
-sink:
-  type: kafka
-  topic: etl_products_v3
+  kafka:
+    topic: etl_products_v3
 `
 
     const state = hydrateWizardStateFromYaml(yaml, {
@@ -186,9 +184,8 @@ output:
   mapping:
     - inName: id
       outName: name
-sink:
-  type: kafka
-  topic: etl_products_v3
+  kafka:
+    topic: etl_products_v3
 `
 
     const state = hydrateWizardStateFromYaml(yaml, {
@@ -274,11 +271,10 @@ output:
   mapping:
     - inName: id
       outName: name
-sink:
-  type: kafka
-  topic: etl_products_v3
-  shadow_topic: auto
-  saknay_topic: auto
+  kafka:
+    topic: etl_products_v3
+    shadow_topic: auto
+    saknay_topic: auto
 `
 
     const state = hydrateWizardStateFromYaml(yaml, {
@@ -910,9 +906,9 @@ filters:
 additionalConfig:
   "acks": "all"
   "compression.type": "gzip"
-sink:
-  type: kafka
-  topic: etl_products_v3
+output:
+  kafka:
+    topic: etl_products_v3
 `
 
     const state = hydrateWizardStateFromYaml(yaml, {

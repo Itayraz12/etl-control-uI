@@ -109,6 +109,11 @@ describe('SummaryStep save draft behavior', () => {
     mockWizardState.source.jsonSplit = ''
     mockWizardState.source.kafkaOffset = 'earliest'
     mockWizardState.source.kafkaKeys = 'sku-key, inventory-key'
+    mockWizardState.sink.shadow = false
+    mockWizardState.sink.shadowTopic = ''
+    mockWizardState.sink.saknay = false
+    mockWizardState.sink.saknayTopic = ''
+    mockWizardState.sink.asg = false
     mockWizardState.sink.sinkKafkaAdditionalProperties = []
     mockActions.setNavigationMode.mockReset()
     mockActions.goTo.mockReset()
@@ -180,11 +185,9 @@ output:
       outName: sku
       sendToSaknay: true
   filters: []
-
-sink:
-  saknay_topic: auto
-  type: kafka
-  topic: catalog-sink`
+  kafka:
+    topic: catalog-sink
+    saknay_topic: `
     mockWizardState.originalDraftSignature = buildPipelineChangeSignature(mockWizardState)
 
     render(<SummaryStep />)
@@ -258,8 +261,11 @@ sink:
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('offset: earliest')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('filter: "sku-key, inventory-key"')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('input:\n  convert:\n    mapping:\n      - name: sku')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('output:\n  mapping:')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('  kafka:\n    topic: catalog-sink\n    saknay_topic: ')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('additionalConfig:\n  "acks": "all"\n  "compression.type": "gzip"')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('additional_properties:')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('\nsink:\n')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('source:\n  type: kafka')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('source:\n  format: JSON')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('keyFilter:')
@@ -314,5 +320,51 @@ sink:
     const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
     expect(yaml).toContain('input:\n  convert:\n    splitByPath: "$.items"\n    mapping:\n      - name: sku')
     expect(yaml).not.toContain('split_key:')
+  })
+
+  it('serializes empty shadow_topic as an empty YAML value', async () => {
+    mockWizardState.sink.shadow = true
+    mockWizardState.sink.shadowTopic = ''
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save & deploy/i }))
+      await Promise.resolve()
+    })
+
+    const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
+    expect(yaml).toContain('  kafka:\n    topic: catalog-sink\n    shadow_topic: ')
+    expect(yaml).not.toContain('shadow_topic: auto')
+  })
+
+  it('highlights additionalConfig and nested kafka section keys in the YAML preview', () => {
+    mockWizardState.metadata.location = 'OFFICE'
+    mockWizardState.sink.shadow = true
+    mockWizardState.sink.shadowTopic = ''
+    mockWizardState.sink.sinkKafkaAdditionalProperties = [
+      { id: '1', key: 'acks', value: 'all' },
+    ]
+
+    render(<SummaryStep />)
+
+    expect(screen.getByText('additionalConfig:')).toHaveStyle({
+      color: 'rgb(208, 224, 255)',
+      fontWeight: '600',
+    })
+
+    screen.getAllByText((_, element) => element?.textContent === '  kafka:').forEach((line) => {
+      expect(line).toHaveStyle({
+        color: 'rgb(208, 224, 255)',
+        fontWeight: '600',
+      })
+    })
+
+    ;['shadow_topic:', 'saknay_topic:'].forEach((key) => {
+      expect(screen.getByText((_, element) => element?.textContent?.trim() === key)).toHaveStyle({
+        color: 'rgb(125, 211, 252)',
+        fontWeight: '400',
+      })
+    })
   })
 })
