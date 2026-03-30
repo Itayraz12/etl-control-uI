@@ -251,11 +251,31 @@ export default function SummaryStep() {
 
     // Find source and target field types
     const inputMappingYaml = formatInputFieldsYamlSection(sourceSchema)
-    const inputFormat = state.source.format === 'CSV' ? 'delimited' : 'JSON'
     const columnDelimiter = state.source.csvDelimiter == null || state.source.csvDelimiter === ''
       ? ','
       : String(state.source.csvDelimiter)
     const rowDelimiter = state.source.rowDelimiter == null ? '' : String(state.source.rowDelimiter)
+    const sourceSectionYaml = (() => {
+      const sourceType = String(state.source.sourceType || '').trim().toLowerCase()
+
+      if (!sourceType) {
+        return '  {}'
+      }
+
+      const details = []
+
+      if (sourceType === 'kafka') {
+        details.push(`    topic: ${state.source.kafkaTopic || 'N/A'}`)
+        if (state.source.kafkaOffset) details.push(`    offset: ${state.source.kafkaOffset}`)
+        if (state.source.kafkaKeys) details.push(`    filter: ${quoteYamlDoubleQuoted(String(state.source.kafkaKeys).trim())}`)
+      }
+
+      if (state.source.jsonSplit) {
+        details.push(`    split_key: ${state.source.jsonSplit}`)
+      }
+
+      return [`  ${sourceType}:`, ...details].join('\n')
+    })()
     const inputSectionYaml = `input:
 ${state.source.format === 'CSV' ? `  delimited:
     columnDelimiter: ${quoteYamlDoubleQuoted(columnDelimiter)}
@@ -358,21 +378,12 @@ ${state.metadata.productCode ? `  productCode: ${quoteYamlDoubleQuoted(String(st
     avgRecordsAmount: ${state.source.recordsPerDay || 'millions'}
 
 source:
-  type: ${state.source.sourceType}
-  format: ${state.source.format}
-  topic: ${state.source.kafkaTopic || 'N/A'}
-${state.source.kafkaOffset ? `  offset: ${state.source.kafkaOffset}
-` : ''}
-${state.source.kafkaKeys ? `  filter: ${quoteYamlDoubleQuoted(String(state.source.kafkaKeys).trim())}
-` : ''}
-${state.source.jsonSplit ? `  split_key: ${state.source.jsonSplit}
-` : ''}
+${sourceSectionYaml}
 ${inputSectionYaml}${state.upload.schemaName ? `schema:
   inputSchema: ${quoteYamlDoubleQuoted(String(state.upload.schemaName).trim())}
 
 ` : ''}general:
-  inputFormat: ${inputFormat}
-  outputFormat: ${inputFormat}
+  format: ${state.source.format}
 ${state.source.format === 'CSV' && rowDelimiter ? `  split:
     delimiter: ${quoteYamlDoubleQuoted(rowDelimiter)}
 ` : ''}

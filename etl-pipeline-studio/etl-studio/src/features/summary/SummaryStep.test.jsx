@@ -157,18 +157,16 @@ metadata:
     avg_records_amount: millions
 
 source:
-  type: kafka
-  format: JSON
-  topic: catalog-topic
-  offset: earliest
-  filter: "sku-key, inventory-key"
+  kafka:
+    topic: catalog-topic
+    offset: earliest
+    filter: "sku-key, inventory-key"
 input:
   mapping:
     - name: sku
       type: string
 general:
-  inputFormat: JSON
-  outputFormat: JSON
+  format: JSON
 
 output:
   mapping:
@@ -247,11 +245,15 @@ sink:
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('genomeEntity: product')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('\n  entity:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('location: "OFFICE"')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('source:\n  kafka:\n    topic: catalog-topic')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('offset: earliest')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('filter: "sku-key, inventory-key"')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('source:\n  type: kafka')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('source:\n  format: JSON')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('keyFilter:')
-    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('inputFormat: JSON')
-    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('outputFormat: JSON')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('general:\n  format: JSON')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('inputFormat:')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('outputFormat:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('additionalInputs:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('additional_inputs:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('streamingContinuity: continuous')
@@ -274,7 +276,7 @@ sink:
     })
 
     const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
-    expect(yaml).toContain('inputFormat: delimited')
+    expect(yaml).toContain('general:\n  format: CSV')
     expect(yaml).toContain('split:')
     expect(yaml).toContain('delimiter: "\\\\r\\\\n"')
   })

@@ -38,6 +38,21 @@ function normalizeSinkType(value, fallback = 'kafka') {
   return VALID_SINK_TYPES.has(normalized) ? normalized : fallback
 }
 
+function resolveSourceDefinition(source = {}) {
+  const nestedSourceType = Array.from(VALID_SOURCE_TYPES).find(type => (
+    source?.[type]
+    && typeof source[type] === 'object'
+    && !Array.isArray(source[type])
+  ))
+
+  const sourceType = normalizeSourceType(source?.type ?? nestedSourceType)
+  const sourceConfig = nestedSourceType
+    ? source[nestedSourceType] || {}
+    : source
+
+  return { sourceType, sourceConfig }
+}
+
 function extractBracketGroups(text = '') {
   const groups = []
   let depth = 0
@@ -454,13 +469,16 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const schema = parsed.schema || {}
   const sink = parsed.sink || {}
   const environment = normalizeEnvironment(metadata.environment ?? fallback.environment)
-  const sourceFormatRaw = asString(general.inputFormat ?? general.outputFormat ?? source.format, 'JSON').trim().toLowerCase()
-  const sourceFormat = sourceFormatRaw === 'delimited' ? 'CSV' : sourceFormatRaw.toUpperCase()
-  const csvDelimiter = asString(input.delimited?.columnDelimiter ?? source.csvDelimiter ?? ',', ',')
-  const rowDelimiter = asString(general.split?.delimiter ?? source.rowDelimiter)
-  const sourceType = normalizeSourceType(source.type)
+  const { sourceType, sourceConfig } = resolveSourceDefinition(source)
+  const sourceFormatToken = asString(general.format ?? general.inputFormat ?? general.outputFormat ?? source.format, 'JSON').trim()
+  const normalizedSourceFormatToken = sourceFormatToken.toLowerCase()
+  const sourceFormat = normalizedSourceFormatToken === 'delimited'
+    ? 'CSV'
+    : sourceFormatToken.toUpperCase()
+  const csvDelimiter = asString(input.delimited?.columnDelimiter ?? sourceConfig.csvDelimiter ?? source.csvDelimiter ?? ',', ',')
+  const rowDelimiter = asString(general.split?.delimiter ?? sourceConfig.rowDelimiter ?? source.rowDelimiter)
   const sinkType = normalizeSinkType(sink.type)
-  const sourceTopic = asString(source.topic)
+  const sourceTopic = asString(sourceConfig.topic ?? source.topic)
   const sinkTopic = asString(sink.topic)
   const sinkKafkaAdditionalProperties = sinkType === 'kafka'
     ? buildKeyValueEntries(sink.additional_properties ?? sink.additionalProperties, 'sink-kafka-prop')
@@ -482,15 +500,15 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       sourceType,
       kafkaEnv: environment,
       kafkaTopic: sourceType === 'kafka' ? sourceTopic : '',
-      kafkaOffset: sourceType === 'kafka' ? asString(source.offset) : '',
+      kafkaOffset: sourceType === 'kafka' ? asString(sourceConfig.offset ?? source.offset) : '',
       kafkaKeys: sourceType === 'kafka'
-        ? normalizeKafkaKeys(source.filter ?? source.keyFilter ?? source.kafkaKeys ?? source.keys)
+        ? normalizeKafkaKeys(sourceConfig.filter ?? sourceConfig.keyFilter ?? sourceConfig.kafkaKeys ?? sourceConfig.keys ?? source.filter ?? source.keyFilter ?? source.kafkaKeys ?? source.keys)
         : '',
-      rmqQueue: sourceType === 'rabbitmq' ? sourceTopic : '',
+      rmqQueue: sourceType === 'rabbitmq' ? asString(sourceConfig.queue ?? sourceTopic) : '',
       format: sourceFormat,
       csvDelimiter,
       rowDelimiter,
-      jsonSplit: asString(source.split_key),
+      jsonSplit: asString(sourceConfig.split_key ?? source.split_key),
       streamingContinuity: asString(dataStreamInfo.streamingContinuity ?? dataStreamInfo.streaming_continuity, 'continuous'),
       recordsPerDay: asString(dataStreamInfo.avgRecordsAmount ?? dataStreamInfo.avg_records_amount, 'millions'),
     },
