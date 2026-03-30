@@ -360,6 +360,10 @@ source:
   type: ${state.source.sourceType}
   format: ${state.source.format}
   topic: ${state.source.kafkaTopic || 'N/A'}
+${state.source.kafkaOffset ? `  offset: ${state.source.kafkaOffset}
+` : ''}
+${state.source.kafkaKeys ? `  filter: ${quoteYamlDoubleQuoted(String(state.source.kafkaKeys).trim())}
+` : ''}
 ${state.source.jsonSplit ? `  split_key: ${state.source.jsonSplit}
 ` : ''}
 ${inputSectionYaml}${state.upload.schemaName ? `schema:
@@ -423,7 +427,14 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
   const validations = [
     { type: unmappedRequired.length === 0 ? 'ok' : 'err',  text: `Required fields mapped (${reqMapped}/${requiredTargetFieldIds.length || 0})` },
     { type: state.mappings.length > 0 ? 'ok' : 'warn', text: `${state.mappings.length} field mapping(s) defined` },
-    { type: state.source.kafkaTopic ? 'ok' : 'warn', text: `Source configured: ${srcMeta?.name || 'unknown'}` },
+    {
+      type: state.source.sourceType === 'kafka'
+        ? (state.source.kafkaTopic && state.source.kafkaOffset ? 'ok' : 'err')
+        : (state.source.sourceType ? 'ok' : 'warn'),
+      text: state.source.sourceType === 'kafka'
+        ? `Source configured: ${srcMeta?.name || 'unknown'}${state.source.kafkaOffset ? ` (offset: ${state.source.kafkaOffset})` : ' (offset missing)'}`
+        : `Source configured: ${srcMeta?.name || 'unknown'}`,
+    },
     { type: state.metadata.productSource ? 'ok' : 'err', text: `Metadata: product source "${state.metadata.productSource}"` },
     { type: state.filters.length > 0 ? 'ok' : 'warn', text: `${state.filters.reduce((a, g) => a + g.rules.length, 0)} filter rule(s) active` },
     { type: state.sink.sinkType ? 'ok' : 'err', text: `Sink configured: ${state.sink.sinkType || 'none'}` },
@@ -442,11 +453,13 @@ ${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${stat
     }
     
     // Validate critical config
-    if (!state.source.sourceType || !state.source.kafkaTopic) {
+    if (!state.source.sourceType || !state.source.kafkaTopic || (state.source.sourceType === 'kafka' && !state.source.kafkaOffset)) {
       setErrorModal({
         icon: '⚠️',
         title: 'Source Configuration Incomplete',
-        message: 'Please configure your source settings (type and topic) and try again.',
+        message: state.source.sourceType === 'kafka'
+          ? 'Please configure your Kafka source settings (type, topic, and offset) and try again.'
+          : 'Please configure your source settings (type and topic) and try again.',
       })
       return
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canNavigateToWizardStep } from './wizardValidation.js'
+import { canNavigateToWizardStep, isWizardStepValid } from './wizardValidation.js'
 
 function buildState(overrides = {}) {
   return {
@@ -13,6 +13,9 @@ function buildState(overrides = {}) {
     },
     source: {
       sourceType: 'kafka',
+      kafkaEnv: 'production',
+      kafkaTopic: 'source_products_raw',
+      kafkaOffset: 'earliest',
     },
     upload: {
       done: false,
@@ -39,7 +42,12 @@ describe('canNavigateToWizardStep', () => {
   it('allows only the immediate next step when the current step is valid', () => {
     const state = buildState({
       currentStep: 1,
-      source: { sourceType: 'kafka' },
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: 'source_products_raw',
+        kafkaOffset: 'latest',
+      },
     })
 
     expect(canNavigateToWizardStep(2, state)).toBe(true)
@@ -52,6 +60,21 @@ describe('canNavigateToWizardStep', () => {
       source: { sourceType: '' },
     })
 
+    expect(canNavigateToWizardStep(2, state)).toBe(false)
+  })
+
+  it('treats kafka source config as invalid when offset is missing', () => {
+    const state = buildState({
+      currentStep: 1,
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: 'source_products_raw',
+        kafkaOffset: '',
+      },
+    })
+
+    expect(isWizardStepValid(1, state)).toBe(false)
     expect(canNavigateToWizardStep(2, state)).toBe(false)
   })
 

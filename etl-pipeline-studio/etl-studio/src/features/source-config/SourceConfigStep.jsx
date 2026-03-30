@@ -78,6 +78,16 @@ function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
           <input value={state.kafkaTopic || ''} onChange={e => u('kafkaTopic', e.target.value)} />
         </FormGroup>
       </FormRow>
+      <FormRow>
+        <FormGroup label="Offset" required>
+          <select aria-label="Offset" value={state.kafkaOffset || ''} onChange={e => u('kafkaOffset', e.target.value)}>
+            <option value="">select an offset...</option>
+            <option value="earliest">earliest</option>
+            <option value="latest">latest</option>
+          </select>
+        </FormGroup>
+        <div />
+      </FormRow>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <Btn v="primary" sm onClick={handleKafkaConnectionTest} disabled={readOnly || kafkaTestState.status === 'loading'}>
           {kafkaTestState.status === 'loading' ? '⏳ Testing…' : '🔌 Test Connection'}

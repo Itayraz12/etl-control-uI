@@ -33,7 +33,13 @@ export function isWizardStepValid(stepIndex, state, targetSchema = getResolvedTa
   }
 
   if (stepIndex === 1) {
-    return Boolean(source.sourceType)
+    if (!source.sourceType) return false
+
+    if (source.sourceType === 'kafka') {
+      return Boolean(source.kafkaEnv && source.kafkaTopic && source.kafkaOffset)
+    }
+
+    return true
   }
 
   if (stepIndex === 2) {

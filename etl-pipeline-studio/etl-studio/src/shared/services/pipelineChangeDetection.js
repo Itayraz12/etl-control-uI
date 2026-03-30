@@ -84,6 +84,8 @@ export function buildPipelineChangeSignature(state = {}) {
       sourceType: state?.source?.sourceType || '',
       format: state?.source?.format || '',
       kafkaTopic: state?.source?.kafkaTopic || '',
+      kafkaOffset: state?.source?.kafkaOffset || '',
+      kafkaKeys: state?.source?.kafkaKeys || '',
       jsonSplit: state?.source?.jsonSplit || '',
       csvDelimiter: state?.source?.csvDelimiter ?? ',',
       streamingContinuity: state?.source?.streamingContinuity || 'continuous',

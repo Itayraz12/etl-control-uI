@@ -42,6 +42,7 @@ function renderStep(initialSource = {}, initialMetadata = {}, options = {}) {
         sourceType: 'kafka',
         kafkaEnv: 'production',
         kafkaTopic: 'source_products_raw',
+        kafkaOffset: '',
         kafkaKeys: '',
         format: 'JSON',
         jsonSplit: '',
@@ -82,6 +83,28 @@ describe('SourceConfigStep Kafka test connection', () => {
     expect(screen.queryByText('📊 Data Stream Info')).not.toBeInTheDocument()
   })
 
+  it('shows Kafka offset with no default value selected', () => {
+    renderStep()
+
+    const offsetSelect = screen.getByRole('combobox', { name: 'Offset' })
+    expect(offsetSelect).toHaveValue('')
+    expect(screen.getByRole('option', { name: 'earliest' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'latest' })).toBeInTheDocument()
+  })
+
+  it('persists the selected Kafka offset', async () => {
+    const user = userEvent.setup()
+
+    renderStep()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Offset' }), 'latest')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.source?.kafkaOffset).toBe('latest')
+    })
+  })
+
   it('calls the Kafka test endpoint and shows a success icon for the source config', async () => {
     const user = userEvent.setup()
     testKafkaConnection.mockResolvedValue({ success: true, message: 'Kafka source reachable' })
@@ -120,6 +143,7 @@ describe('SourceConfigStep Kafka test connection', () => {
         sourceType: 'kafka',
         kafkaEnv: 'production',
         kafkaTopic: 'source_products_raw',
+        kafkaOffset: '',
         kafkaKeys: '',
         format: 'JSON',
         jsonSplit: '',

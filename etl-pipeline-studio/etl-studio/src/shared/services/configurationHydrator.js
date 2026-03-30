@@ -15,6 +15,14 @@ function asString(value, fallback = '') {
   return String(value)
 }
 
+function normalizeKafkaKeys(value) {
+  if (Array.isArray(value)) {
+    return value.map(asString).map(item => item.trim()).filter(Boolean).join(', ')
+  }
+
+  return asString(value).trim()
+}
+
 function normalizeEnvironment(value, fallback = 'production') {
   const normalized = asString(value, fallback).toLowerCase()
   return VALID_ENVS.has(normalized) ? normalized : fallback
@@ -473,6 +481,10 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       sourceType,
       kafkaEnv: environment,
       kafkaTopic: sourceType === 'kafka' ? sourceTopic : '',
+      kafkaOffset: sourceType === 'kafka' ? asString(source.offset) : '',
+      kafkaKeys: sourceType === 'kafka'
+        ? normalizeKafkaKeys(source.filter ?? source.keyFilter ?? source.kafkaKeys ?? source.keys)
+        : '',
       rmqQueue: sourceType === 'rabbitmq' ? sourceTopic : '',
       format: sourceFormat,
       csvDelimiter,

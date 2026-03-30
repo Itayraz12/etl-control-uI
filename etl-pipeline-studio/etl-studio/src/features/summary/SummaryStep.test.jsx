@@ -15,6 +15,8 @@ const mockWizardState = {
   source: {
     sourceType: 'kafka',
     kafkaTopic: 'catalog-topic',
+    kafkaOffset: 'earliest',
+    kafkaKeys: 'sku-key, inventory-key',
     format: 'JSON',
     streamingContinuity: 'continuous',
     recordsPerDay: 'millions',
@@ -101,6 +103,8 @@ describe('SummaryStep save draft behavior', () => {
     mockWizardState.originalDraftYaml = ''
     mockWizardState.originalDraftSignature = ''
     mockWizardState.metadata.location = ''
+    mockWizardState.source.kafkaOffset = 'earliest'
+    mockWizardState.source.kafkaKeys = 'sku-key, inventory-key'
     mockActions.setNavigationMode.mockReset()
     mockActions.goTo.mockReset()
     mockSaveDraftConfiguration.mockClear()
@@ -153,6 +157,8 @@ source:
   type: kafka
   format: JSON
   topic: catalog-topic
+  offset: earliest
+  filter: "sku-key, inventory-key"
 input:
   mapping:
     - name: sku
@@ -197,8 +203,27 @@ sink:
     expect(mockActions.setNavigationMode).toHaveBeenCalledWith('etl-management')
   })
 
+  it('blocks deployment when kafka offset is missing', async () => {
+    mockWizardState.metadata.location = 'OFFICE'
+    mockWizardState.source.kafkaOffset = ''
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save & deploy/i }))
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText('Source Configuration Incomplete')).toBeInTheDocument()
+    expect(screen.getByText('Please configure your Kafka source settings (type, topic, and offset) and try again.')).toBeInTheDocument()
+    expect(mockFetchDeploymentSteps).not.toHaveBeenCalled()
+    expect(mockDeployFromYaml).not.toHaveBeenCalled()
+  })
+
   it('sends deploy request params and configurationYaml when saving and deploying', async () => {
     mockWizardState.metadata.location = 'OFFICE'
+    mockWizardState.source.kafkaOffset = 'earliest'
+    mockWizardState.source.kafkaKeys = 'sku-key, inventory-key'
 
     render(<SummaryStep />)
 
@@ -217,6 +242,9 @@ sink:
       configurationYaml: expect.stringContaining('productType: Catalog'),
     }))
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('location: "OFFICE"')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('offset: earliest')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('filter: "sku-key, inventory-key"')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('keyFilter:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('inputFormat: JSON')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('outputFormat: JSON')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('additionalInputs:')

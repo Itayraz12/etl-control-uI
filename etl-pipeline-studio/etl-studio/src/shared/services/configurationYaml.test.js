@@ -206,6 +206,162 @@ sink:
     })
   })
 
+  it('hydrates kafka source offset from YAML', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+  offset: latest
+input:
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.source).toMatchObject({
+      kafkaOffset: 'latest',
+      kafkaTopic: 'source_products_raw',
+    })
+  })
+
+  it('hydrates kafka key filter from canonical filter YAML key', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+  offset: earliest
+  filter: "user-001, order-456"
+input:
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.source).toMatchObject({
+      kafkaKeys: 'user-001, order-456',
+      kafkaOffset: 'earliest',
+    })
+  })
+
+  it('hydrates kafka key filter from legacy keyFilter YAML key', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+  offset: earliest
+  keyFilter: "user-001, order-456"
+input:
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.source).toMatchObject({
+      kafkaKeys: 'user-001, order-456',
+      kafkaOffset: 'earliest',
+    })
+  })
+
+  it('hydrates kafka key filter from array alias YAML keys', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+  offset: earliest
+  keys:
+    - user-001
+    - order-456
+input:
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.source).toMatchObject({
+      kafkaKeys: 'user-001, order-456',
+    })
+  })
+
   it('hydrates legacy snake_case metadata keys', () => {
     const yaml = `metadata:
   entity: Product
