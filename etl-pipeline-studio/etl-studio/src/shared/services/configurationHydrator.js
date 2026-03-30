@@ -488,6 +488,9 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const sinkType = normalizeSinkType(sink.type)
   const sourceTopic = asString(sourceConfig.topic ?? source.topic)
   const sinkTopic = asString(sink.topic)
+  const hasGeneralShadowFlag = Object.prototype.hasOwnProperty.call(general, 'isShadowEnabled')
+  const hasGeneralSaknayFlag = Object.prototype.hasOwnProperty.call(general, 'isSaknayEnabled')
+  const hasGeneralAsgFlag = Object.prototype.hasOwnProperty.call(general, 'isAsgEnabled')
   const sinkKafkaAdditionalProperties = sinkType === 'kafka'
     ? buildKeyValueEntries(parsed.additionalConfig ?? sink.additional_properties ?? sink.additionalProperties, 'sink-kafka-prop')
     : []
@@ -534,11 +537,11 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       sinkKafkaAdditionalPropertiesEnabled: sinkKafkaAdditionalProperties.length > 0,
       sinkKafkaAdditionalProperties,
       sinkRmqQueue: sinkType === 'rabbitmq' ? sinkTopic : '',
-      shadow: sink.shadow === true,
+      shadow: hasGeneralShadowFlag ? general.isShadowEnabled === true : sink.shadow === true,
       shadowTopic: asString(sink.shadow_topic) === 'auto' ? '' : asString(sink.shadow_topic),
-      saknay: sink.saknay === true,
+      saknay: hasGeneralSaknayFlag ? general.isSaknayEnabled === true : sink.saknay === true,
       saknayTopic: asString(sink.saknay_topic) === 'auto' ? '' : asString(sink.saknay_topic),
-      asg: sink.asg === true,
+      asg: hasGeneralAsgFlag ? general.isAsgEnabled === true : sink.asg === true,
     },
   }
 }

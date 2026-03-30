@@ -170,6 +170,9 @@ input:
         type: string
 general:
   format: JSON
+  isShadowEnabled: false
+  isSaknayEnabled: true
+  isAsgEnabled: false
 
 output:
   mapping:
@@ -179,7 +182,6 @@ output:
   filters: []
 
 sink:
-  saknay: true
   saknay_topic: auto
   type: kafka
   topic: catalog-sink`
@@ -262,6 +264,12 @@ sink:
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('source:\n  format: JSON')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('keyFilter:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('general:\n  format: JSON')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('isShadowEnabled: false')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('isSaknayEnabled: true')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('isAsgEnabled: false')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('\n  saknay: true')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('\n  shadow: true')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('\n  asg: true')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('inputFormat:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('outputFormat:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('additionalInputs:')

@@ -250,6 +250,103 @@ sink:
     })
   })
 
+  it('hydrates sink enablement flags from general is*Enabled keys', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  kafka:
+    topic: source_products_raw
+general:
+  format: JSON
+  isShadowEnabled: true
+  isSaknayEnabled: true
+  isAsgEnabled: true
+input:
+  convert:
+    mapping:
+      - name: id
+        type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+  shadow_topic: auto
+  saknay_topic: auto
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.sink).toMatchObject({
+      shadow: true,
+      saknay: true,
+      asg: true,
+      shadowTopic: '',
+      saknayTopic: '',
+    })
+  })
+
+  it('prefers explicit false general is*Enabled keys over legacy sink flags', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  kafka:
+    topic: source_products_raw
+general:
+  format: JSON
+  isShadowEnabled: false
+  isSaknayEnabled: false
+  isAsgEnabled: false
+input:
+  convert:
+    mapping:
+      - name: id
+        type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+  shadow: true
+  saknay: true
+  asg: true
+  shadow_topic: auto
+  saknay_topic: auto
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.sink).toMatchObject({
+      shadow: false,
+      saknay: false,
+      asg: false,
+      shadowTopic: '',
+      saknayTopic: '',
+    })
+  })
+
   it('hydrates canonical genomeEntity metadata key', () => {
     const yaml = `metadata:
   genomeEntity: Product
@@ -876,5 +973,50 @@ sink:
       { id: 'sink-kafka-prop-0', key: 'acks', value: 'all' },
       { id: 'sink-kafka-prop-1', key: 'compression.type', value: 'gzip' },
     ])
+  })
+
+  it('hydrates legacy sink shadow, saknay, and asg flags when general flags are absent', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+input:
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+  shadow: true
+  shadow_topic: auto
+  saknay: true
+  saknay_topic: auto
+  asg: true
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.sink).toMatchObject({
+      shadow: true,
+      saknay: true,
+      asg: true,
+      shadowTopic: '',
+      saknayTopic: '',
+    })
   })
 })

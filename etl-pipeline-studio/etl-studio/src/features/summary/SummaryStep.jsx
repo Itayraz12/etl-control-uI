@@ -387,7 +387,9 @@ ${inputSectionYaml}${state.upload.schemaName ? `schema:
   format: ${state.source.format}
 ${state.source.format === 'CSV' && rowDelimiter ? `  split:
     delimiter: ${quoteYamlDoubleQuoted(rowDelimiter)}
-` : ''}
+` : ''}  isShadowEnabled: ${state.sink.shadow ? 'true' : 'false'}
+  isSaknayEnabled: ${hasSaknayTargets ? 'true' : 'false'}
+  isAsgEnabled: ${state.sink.asg ? 'true' : 'false'}
 
 output:
   mapping:
@@ -421,7 +423,7 @@ ${sinkAdditionalConfigYaml}` : ''}
 sink:
   type: ${state.sink.sinkType}
   topic: ${state.sink.sinkKafkaTopic || 'N/A'}
-${state.sink.shadow ? `  shadow: true\n  shadow_topic: ${state.sink.shadowTopic || 'auto'}\n` : ''}${hasSaknayTargets ? `  saknay: true\n  saknay_topic: ${state.sink.saknayTopic || 'auto'}\n` : ''}${state.sink.asg ? `  asg: true\n` : ''}`
+${state.sink.shadow ? `  shadow_topic: ${state.sink.shadowTopic || 'auto'}\n` : ''}${hasSaknayTargets ? `  saknay_topic: ${state.sink.saknayTopic || 'auto'}\n` : ''}`
   }
 
   const yaml = generateYaml()
