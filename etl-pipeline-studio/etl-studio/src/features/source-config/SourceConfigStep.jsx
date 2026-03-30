@@ -290,9 +290,14 @@ export default function SourceConfigStep() {
             </FormGroup>
           )}
           {src.format === 'CSV' && (
-            <FormGroup label="Column Delimiter">
-              <input value={src.csvDelimiter || ','} onChange={e => u('csvDelimiter', e.target.value)} placeholder="," maxLength="1" />
-            </FormGroup>
+            <FormRow>
+              <FormGroup label="Column Delimiter">
+                <input value={src.csvDelimiter || ','} onChange={e => u('csvDelimiter', e.target.value)} placeholder="," maxLength="1" />
+              </FormGroup>
+              <FormGroup label="Row Delimiter">
+                <input value={src.rowDelimiter || ''} onChange={e => u('rowDelimiter', e.target.value)} placeholder="\\n or \\r\\n" />
+              </FormGroup>
+            </FormRow>
           )}
         </Card>
       </div>

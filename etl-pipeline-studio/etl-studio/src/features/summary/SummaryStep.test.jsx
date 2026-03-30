@@ -103,6 +103,9 @@ describe('SummaryStep save draft behavior', () => {
     mockWizardState.originalDraftYaml = ''
     mockWizardState.originalDraftSignature = ''
     mockWizardState.metadata.location = ''
+    mockWizardState.source.format = 'JSON'
+    mockWizardState.source.csvDelimiter = undefined
+    mockWizardState.source.rowDelimiter = ''
     mockWizardState.source.kafkaOffset = 'earliest'
     mockWizardState.source.kafkaKeys = 'sku-key, inventory-key'
     mockActions.setNavigationMode.mockReset()
@@ -254,5 +257,23 @@ sink:
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('streaming_continuity:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('avg_records_amount:')
     expect(mockSubscribeToDeploymentProgress).toHaveBeenCalledWith('dep-1', expect.any(Object))
+  })
+
+  it('serializes CSV row delimiter under general.split.delimiter', async () => {
+    mockWizardState.source.format = 'CSV'
+    mockWizardState.source.csvDelimiter = ';'
+    mockWizardState.source.rowDelimiter = '\\r\\n'
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save & deploy/i }))
+      await Promise.resolve()
+    })
+
+    const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
+    expect(yaml).toContain('inputFormat: delimited')
+    expect(yaml).toContain('split:')
+    expect(yaml).toContain('delimiter: "\\\\r\\\\n"')
   })
 })

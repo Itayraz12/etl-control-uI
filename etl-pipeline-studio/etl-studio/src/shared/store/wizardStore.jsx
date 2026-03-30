@@ -60,6 +60,7 @@ const initialState = {
     rmqVhost:             '/',
     format:               'JSON',
     csvDelimiter:         ',',
+    rowDelimiter:         '',
     jsonSplit:            '',
     streamingContinuity:  'continuous',
     recordsPerDay:        'millions',

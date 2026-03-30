@@ -457,6 +457,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const sourceFormatRaw = asString(general.inputFormat ?? general.outputFormat ?? source.format, 'JSON').trim().toLowerCase()
   const sourceFormat = sourceFormatRaw === 'delimited' ? 'CSV' : sourceFormatRaw.toUpperCase()
   const csvDelimiter = asString(input.delimited?.columnDelimiter ?? source.csvDelimiter ?? ',', ',')
+  const rowDelimiter = asString(general.split?.delimiter ?? source.rowDelimiter)
   const sourceType = normalizeSourceType(source.type)
   const sinkType = normalizeSinkType(sink.type)
   const sourceTopic = asString(source.topic)
@@ -488,6 +489,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       rmqQueue: sourceType === 'rabbitmq' ? sourceTopic : '',
       format: sourceFormat,
       csvDelimiter,
+      rowDelimiter,
       jsonSplit: asString(source.split_key),
       streamingContinuity: asString(dataStreamInfo.streamingContinuity ?? dataStreamInfo.streaming_continuity, 'continuous'),
       recordsPerDay: asString(dataStreamInfo.avgRecordsAmount ?? dataStreamInfo.avg_records_amount, 'millions'),

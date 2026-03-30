@@ -46,6 +46,7 @@ function renderStep(initialSource = {}, initialMetadata = {}, options = {}) {
         kafkaKeys: '',
         format: 'JSON',
         jsonSplit: '',
+        rowDelimiter: '',
         streamingContinuity: 'continuous',
         recordsPerDay: 'millions',
         ...initialSource,
@@ -105,6 +106,22 @@ describe('SourceConfigStep Kafka test connection', () => {
     })
   })
 
+  it('persists the CSV row delimiter from source format settings', async () => {
+    const user = userEvent.setup()
+
+    renderStep({ format: 'CSV', rowDelimiter: '' })
+
+    const rowDelimiterInput = screen.getByText('Row Delimiter').parentElement.querySelector('input')
+    expect(rowDelimiterInput).toBeTruthy()
+    await user.type(rowDelimiterInput, '\\r\\n')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.source?.format).toBe('CSV')
+      expect(persisted.source?.rowDelimiter).toBe('\\r\\n')
+    })
+  })
+
   it('calls the Kafka test endpoint and shows a success icon for the source config', async () => {
     const user = userEvent.setup()
     testKafkaConnection.mockResolvedValue({ success: true, message: 'Kafka source reachable' })
@@ -147,6 +164,7 @@ describe('SourceConfigStep Kafka test connection', () => {
         kafkaKeys: '',
         format: 'JSON',
         jsonSplit: '',
+        rowDelimiter: '',
         streamingContinuity: 'continuous',
         recordsPerDay: 'millions',
       },
@@ -204,6 +222,4 @@ describe('SourceConfigStep Kafka test connection', () => {
     expect(screen.getByText('Topic and environment are required to test the Kafka connection.')).toBeInTheDocument()
   })
 })
-
-
 

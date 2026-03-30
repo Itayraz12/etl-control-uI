@@ -88,6 +88,7 @@ export function buildPipelineChangeSignature(state = {}) {
       kafkaKeys: state?.source?.kafkaKeys || '',
       jsonSplit: state?.source?.jsonSplit || '',
       csvDelimiter: state?.source?.csvDelimiter ?? ',',
+      rowDelimiter: state?.source?.rowDelimiter || '',
       streamingContinuity: state?.source?.streamingContinuity || 'continuous',
       recordsPerDay: state?.source?.recordsPerDay || 'millions',
     },

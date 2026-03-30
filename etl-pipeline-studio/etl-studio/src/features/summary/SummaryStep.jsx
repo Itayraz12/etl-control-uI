@@ -255,6 +255,7 @@ export default function SummaryStep() {
     const columnDelimiter = state.source.csvDelimiter == null || state.source.csvDelimiter === ''
       ? ','
       : String(state.source.csvDelimiter)
+    const rowDelimiter = state.source.rowDelimiter == null ? '' : String(state.source.rowDelimiter)
     const inputSectionYaml = `input:
 ${state.source.format === 'CSV' ? `  delimited:
     columnDelimiter: ${quoteYamlDoubleQuoted(columnDelimiter)}
@@ -372,6 +373,9 @@ ${inputSectionYaml}${state.upload.schemaName ? `schema:
 ` : ''}general:
   inputFormat: ${inputFormat}
   outputFormat: ${inputFormat}
+${state.source.format === 'CSV' && rowDelimiter ? `  split:
+    delimiter: ${quoteYamlDoubleQuoted(rowDelimiter)}
+` : ''}
 
 output:
   mapping:

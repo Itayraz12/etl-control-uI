@@ -206,6 +206,50 @@ sink:
     })
   })
 
+  it('hydrates CSV row delimiter from general.split.delimiter', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  type: kafka
+  format: CSV
+  topic: source_products_raw
+general:
+  inputFormat: delimited
+  split:
+    delimiter: "\\r\\n"
+input:
+  delimited:
+    columnDelimiter: ";"
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.source).toMatchObject({
+      format: 'CSV',
+      csvDelimiter: ';',
+      rowDelimiter: '\r\n',
+    })
+  })
+
   it('hydrates kafka source offset from YAML', () => {
     const yaml = `metadata:
   entity: Product
