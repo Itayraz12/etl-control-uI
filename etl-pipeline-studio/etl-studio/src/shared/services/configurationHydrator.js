@@ -489,7 +489,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const sourceTopic = asString(sourceConfig.topic ?? source.topic)
   const sinkTopic = asString(sink.topic)
   const sinkKafkaAdditionalProperties = sinkType === 'kafka'
-    ? buildKeyValueEntries(sink.additional_properties ?? sink.additionalProperties, 'sink-kafka-prop')
+    ? buildKeyValueEntries(parsed.additionalConfig ?? sink.additional_properties ?? sink.additionalProperties, 'sink-kafka-prop')
     : []
 
   return {

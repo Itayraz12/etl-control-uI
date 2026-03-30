@@ -109,6 +109,7 @@ describe('SummaryStep save draft behavior', () => {
     mockWizardState.source.jsonSplit = ''
     mockWizardState.source.kafkaOffset = 'earliest'
     mockWizardState.source.kafkaKeys = 'sku-key, inventory-key'
+    mockWizardState.sink.sinkKafkaAdditionalProperties = []
     mockActions.setNavigationMode.mockReset()
     mockActions.goTo.mockReset()
     mockSaveDraftConfiguration.mockClear()
@@ -227,6 +228,10 @@ sink:
     mockWizardState.metadata.location = 'OFFICE'
     mockWizardState.source.kafkaOffset = 'earliest'
     mockWizardState.source.kafkaKeys = 'sku-key, inventory-key'
+    mockWizardState.sink.sinkKafkaAdditionalProperties = [
+      { id: '1', key: 'acks', value: 'all' },
+      { id: '2', key: 'compression.type', value: 'gzip' },
+    ]
 
     render(<SummaryStep />)
 
@@ -251,6 +256,8 @@ sink:
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('offset: earliest')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('filter: "sku-key, inventory-key"')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('input:\n  convert:\n    mapping:\n      - name: sku')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('additionalConfig:\n  "acks": "all"\n  "compression.type": "gzip"')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('additional_properties:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('source:\n  type: kafka')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('source:\n  format: JSON')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('keyFilter:')

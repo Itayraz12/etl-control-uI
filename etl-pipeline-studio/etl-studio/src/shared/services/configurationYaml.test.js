@@ -784,17 +784,17 @@ sink:
     expect(formatFilterYamlItem('(id f-2 2)')).toBe('  - "(id f-2 2)"')
   })
 
-  it('serializes Kafka additional properties as a YAML subsection', () => {
-    expect(formatKeyValueYamlSection('additional_properties', [
+  it('serializes Kafka additional properties as root additionalConfig', () => {
+    expect(formatKeyValueYamlSection('additionalConfig', [
       { id: '1', key: 'acks', value: 'all' },
       { id: '2', key: 'compression.type', value: 'gzip' },
       { id: '3', key: '   ', value: 'ignored' },
-    ])).toBe(`  additional_properties:
-    "acks": "all"
-    "compression.type": "gzip"`)
+    ], '')).toBe(`additionalConfig:
+  "acks": "all"
+  "compression.type": "gzip"`)
   })
 
-  it('hydrates filters from quoted YAML filter entries', () => {
+  it('hydrates filters and root additionalConfig from YAML', () => {
     const yaml = `metadata:
   entity: Product
   product_source: ERP
@@ -810,12 +810,12 @@ mapping:
     outName: name
 filters:
   - "(id f-2 2)"
+additionalConfig:
+  "acks": "all"
+  "compression.type": "gzip"
 sink:
   type: kafka
   topic: etl_products_v3
-  additional_properties:
-    "acks": "all"
-    "compression.type": "gzip"
 `
 
     const state = hydrateWizardStateFromYaml(yaml, {
@@ -832,6 +832,46 @@ sink:
         { field: 'id', op: 'f-2', value: '2' },
       ],
     })
+    expect(state.sink.sinkKafkaAdditionalProperties).toEqual([
+      { id: 'sink-kafka-prop-0', key: 'acks', value: 'all' },
+      { id: 'sink-kafka-prop-1', key: 'compression.type', value: 'gzip' },
+    ])
+  })
+
+  it('hydrates legacy sink additional_properties when root additionalConfig is absent', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+input:
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+  additional_properties:
+    "acks": "all"
+    "compression.type": "gzip"
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
     expect(state.sink.sinkKafkaAdditionalProperties).toEqual([
       { id: 'sink-kafka-prop-0', key: 'acks', value: 'all' },
       { id: 'sink-kafka-prop-1', key: 'compression.type', value: 'gzip' },

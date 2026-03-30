@@ -359,8 +359,8 @@ ${nestedInputMappingYaml}` : ''}
         return formatTransformationYamlItem(expression)
       })
 
-    const sinkAdditionalPropertiesYaml = state.sink.sinkType === 'kafka'
-      ? formatKeyValueYamlSection('additional_properties', state.sink.sinkKafkaAdditionalProperties)
+    const sinkAdditionalConfigYaml = state.sink.sinkType === 'kafka'
+      ? formatKeyValueYamlSection('additionalConfig', state.sink.sinkKafkaAdditionalProperties, '')
       : ''
     const metadataLocation = normalizeMetadataLocation(state.metadata.location, state.metadata.environment)
 
@@ -415,11 +415,13 @@ ${transformations.join('\n')}` : ''}
 ${state.filters.length > 0 ? `
 filters:
 ${state.filters.map(group => formatFilterYamlItem(formatFilterGroup(group))).join('\n')}` : ''}
+${sinkAdditionalConfigYaml ? `
+${sinkAdditionalConfigYaml}` : ''}
 
 sink:
   type: ${state.sink.sinkType}
   topic: ${state.sink.sinkKafkaTopic || 'N/A'}
-${sinkAdditionalPropertiesYaml ? `${sinkAdditionalPropertiesYaml}\n` : ''}${state.sink.shadow ? `  shadow: true\n  shadow_topic: ${state.sink.shadowTopic || 'auto'}\n` : ''}${hasSaknayTargets ? `  saknay: true\n  saknay_topic: ${state.sink.saknayTopic || 'auto'}\n` : ''}${state.sink.asg ? `  asg: true\n` : ''}`
+${state.sink.shadow ? `  shadow: true\n  shadow_topic: ${state.sink.shadowTopic || 'auto'}\n` : ''}${hasSaknayTargets ? `  saknay: true\n  saknay_topic: ${state.sink.saknayTopic || 'auto'}\n` : ''}${state.sink.asg ? `  asg: true\n` : ''}`
   }
 
   const yaml = generateYaml()
