@@ -367,6 +367,7 @@ ${inputSectionYaml}${state.upload.schemaName ? `schema:
 
 ` : ''}general:
   inputFormat: ${inputFormat}
+  outputFormat: ${inputFormat}
 
 output:
   mapping:

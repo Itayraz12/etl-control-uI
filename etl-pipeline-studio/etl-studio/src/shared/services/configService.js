@@ -455,6 +455,7 @@ source:
   topic: source_products_raw
 general:
   inputFormat: JSON
+  outputFormat: JSON
 
 input:
   mapping:
@@ -532,6 +533,7 @@ source:
   topic: source_products_raw
 general:
   inputFormat: JSON
+  outputFormat: JSON
 
 input:
   mapping:

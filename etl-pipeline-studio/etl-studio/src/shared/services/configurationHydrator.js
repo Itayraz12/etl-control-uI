@@ -446,7 +446,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const schema = parsed.schema || {}
   const sink = parsed.sink || {}
   const environment = normalizeEnvironment(metadata.environment ?? fallback.environment)
-  const sourceFormatRaw = asString(general.inputFormat || source.format, 'JSON').trim().toLowerCase()
+  const sourceFormatRaw = asString(general.inputFormat ?? general.outputFormat ?? source.format, 'JSON').trim().toLowerCase()
   const sourceFormat = sourceFormatRaw === 'delimited' ? 'CSV' : sourceFormatRaw.toUpperCase()
   const csvDelimiter = asString(input.delimited?.columnDelimiter ?? source.csvDelimiter ?? ',', ',')
   const sourceType = normalizeSourceType(source.type)
