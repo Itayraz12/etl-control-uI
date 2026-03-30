@@ -1,3 +1,5 @@
+import { normalizeMetadataLocation } from '../types/index.js'
+
 export const LEGACY_WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
 
 export function normalizeStorageUserId(userId = '') {
@@ -76,10 +78,17 @@ export function loadPersistedWizardStateForUser(userId) {
 export function buildStateFromPersisted(baseState, persistedState) {
   if (!persistedState) return baseState
 
+  const metadata = persistedState.metadata
+    ? { ...baseState.metadata, ...persistedState.metadata }
+    : baseState.metadata
+
   return {
     ...baseState,
     ...persistedState,
-    metadata: persistedState.metadata ? { ...baseState.metadata, ...persistedState.metadata } : baseState.metadata,
+    metadata: {
+      ...metadata,
+      location: normalizeMetadataLocation(metadata?.location, metadata?.environment),
+    },
     source: persistedState.source ? { ...baseState.source, ...persistedState.source } : baseState.source,
     upload: persistedState.upload ? { ...baseState.upload, ...persistedState.upload } : baseState.upload,
     targetSchema: persistedState.targetSchema ?? baseState.targetSchema,

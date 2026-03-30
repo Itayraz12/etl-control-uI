@@ -5,6 +5,7 @@ import {
   loadPersistedWizardStateForUser,
   serializeWizardState,
 } from './wizardPersistence.js'
+import { normalizeMetadataLocation } from '../types/index.js'
 
 function getPreviewStateStorageKey(search = window.location.search) {
   const params = new URLSearchParams(search)
@@ -36,6 +37,7 @@ const initialState = {
     productSource:  'ERP-System-v2',
     productType:    'Inventory',
     productCode:    '',
+    location:       '',
     team:           'data-platform',
     environment:    '',
     entityName:     '',
@@ -94,6 +96,15 @@ const initialState = {
   },
 }
 
+function normalizeMetadataState(metadata = {}) {
+  const nextMetadata = { ...initialState.metadata, ...(metadata || {}) }
+
+  return {
+    ...nextMetadata,
+    location: normalizeMetadataLocation(nextMetadata.location, nextMetadata.environment),
+  }
+}
+
 // ── Reducer ───────────────────────────────────────────────────────────────
 function wizardReducer(state, action) {
   switch (action.type) {
@@ -121,7 +132,7 @@ function wizardReducer(state, action) {
               ? payload.completedSteps
               : []
         ),
-        metadata: { ...initialState.metadata, ...(payload.metadata || {}) },
+        metadata: normalizeMetadataState(payload.metadata),
         source: { ...initialState.source, ...(payload.source || {}) },
         upload: { ...initialState.upload, ...(payload.upload || {}) },
         targetSchema: Array.isArray(payload.targetSchema) || (payload.targetSchema && typeof payload.targetSchema === 'object')
@@ -133,7 +144,13 @@ function wizardReducer(state, action) {
       }
     }
     case 'UPDATE_METADATA':
-      return { ...state, metadata: { ...state.metadata, ...action.payload } }
+      return {
+        ...state,
+        metadata: normalizeMetadataState({
+          ...state.metadata,
+          ...action.payload,
+        }),
+      }
     case 'UPDATE_SOURCE':
       return { ...state, source: { ...state.source, ...action.payload } }
     case 'UPDATE_UPLOAD':
@@ -176,6 +193,7 @@ export function WizardProvider({ children, user = null }) {
               return {
                 ...initialState,
                 ...wizardState,
+                metadata: normalizeMetadataState(wizardState.metadata),
                 readOnly: true,
                 theme: 'dark',
                 completedSteps: new Set(

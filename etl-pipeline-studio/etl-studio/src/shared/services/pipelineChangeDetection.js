@@ -1,3 +1,5 @@
+import { normalizeMetadataLocation } from '../types/index.js'
+
 function sortDeep(value) {
   if (Array.isArray(value)) {
     return value.map(sortDeep)
@@ -66,13 +68,16 @@ function normalizeFilterGroup(group = {}) {
 }
 
 export function buildPipelineChangeSignature(state = {}) {
+  const environment = state?.metadata?.environment || ''
+
   const signatureSource = {
     metadata: {
       productSource: state?.metadata?.productSource || '',
       productType: state?.metadata?.productType || '',
       productCode: state?.metadata?.productCode || '',
+      location: normalizeMetadataLocation(state?.metadata?.location, environment),
       team: state?.metadata?.team || '',
-      environment: state?.metadata?.environment || '',
+      environment,
       entityName: state?.metadata?.entityName || '',
     },
     source: {

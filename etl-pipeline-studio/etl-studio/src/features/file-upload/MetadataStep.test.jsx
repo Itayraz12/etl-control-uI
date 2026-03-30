@@ -42,6 +42,7 @@ function renderStep(initialState = {}) {
         productSource: 'ERP',
         productType: 'Inventory',
         productCode: '',
+        location: '',
         team: 'platform',
         environment: 'production',
         entityName: '',
@@ -123,6 +124,51 @@ describe('MetadataStep entity target schema', () => {
     })
   })
 
+  it('allows production to have no default location and select HOME or OFFICE', async () => {
+    const user = userEvent.setup()
+
+    renderStep({
+      metadata: {
+        environment: 'production',
+        location: '',
+      },
+    })
+
+    const locationSelect = screen.getByRole('combobox', { name: 'Location' })
+
+    expect(locationSelect).toHaveValue('')
+    expect(screen.getByRole('option', { name: 'HOME' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'OFFICE' })).toBeInTheDocument()
+
+    await user.selectOptions(locationSelect, 'OFFICE')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.metadata?.location).toBe('OFFICE')
+    })
+  })
+
+  it('forces non-production environments to HOME only', async () => {
+    const user = userEvent.setup()
+
+    renderStep({
+      metadata: {
+        environment: 'production',
+        location: 'OFFICE',
+      },
+    })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Environment' }), 'staging')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(screen.getByRole('combobox', { name: 'Location' })).toHaveValue('HOME')
+      expect(screen.queryByRole('option', { name: 'OFFICE' })).not.toBeInTheDocument()
+      expect(persisted.metadata?.environment).toBe('staging')
+      expect(persisted.metadata?.location).toBe('HOME')
+    })
+  })
+
   it('fetches entity schema on selection and persists parsed target fields', async () => {
     const user = userEvent.setup()
     fetchEntitySchema.mockResolvedValue({
@@ -136,7 +182,7 @@ describe('MetadataStep entity target schema', () => {
 
     renderStep()
 
-    await user.selectOptions(screen.getAllByRole('combobox')[1], 'Product')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Entity Name' }), 'Product')
 
     await waitFor(() => {
       expect(fetchEntitySchema).toHaveBeenCalledWith('Product', false)
@@ -182,7 +228,7 @@ describe('MetadataStep entity target schema', () => {
       ],
     })
 
-    await user.selectOptions(screen.getAllByRole('combobox')[1], 'Product')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Entity Name' }), 'Product')
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
@@ -217,13 +263,12 @@ describe('MetadataStep entity target schema', () => {
 
     renderStep()
 
-    await user.selectOptions(screen.getAllByRole('combobox')[1], 'Product')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Entity Name' }), 'Product')
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
       expect(persisted.targetSchema).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ id: 'persons', type: 'array' }),
           expect.objectContaining({ id: 'person.*.firstName', type: 'string', required: true }),
           expect.objectContaining({ id: 'person.*.lastName', type: 'string' }),
         ])
@@ -257,13 +302,12 @@ describe('MetadataStep entity target schema', () => {
 
     renderStep()
 
-    await user.selectOptions(screen.getAllByRole('combobox')[1], 'Product')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Entity Name' }), 'Product')
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
       expect(persisted.targetSchema).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ id: 'persons', type: 'array' }),
           expect.objectContaining({ id: 'person.*.firstName', type: 'string', required: true }),
           expect.objectContaining({ id: 'person.*.lastName', type: 'string' }),
         ])

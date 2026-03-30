@@ -8,6 +8,7 @@ const mockWizardState = {
     entityName: 'product',
     productSource: 'ERP',
     productType: 'Catalog',
+    location: '',
     environment: 'production',
     team: 'data-platform',
   },
@@ -99,6 +100,7 @@ describe('SummaryStep save draft behavior', () => {
     vi.useFakeTimers()
     mockWizardState.originalDraftYaml = ''
     mockWizardState.originalDraftSignature = ''
+    mockWizardState.metadata.location = ''
     mockActions.setNavigationMode.mockReset()
     mockActions.goTo.mockReset()
     mockSaveDraftConfiguration.mockClear()
@@ -137,6 +139,7 @@ describe('SummaryStep save draft behavior', () => {
 metadata:
   id: etl-existing
   entity: product
+  location: "OFFICE"
   productSource: ERP
   productType: Catalog
   environment: production
@@ -193,6 +196,8 @@ sink:
   })
 
   it('sends deploy request params and configurationYaml when saving and deploying', async () => {
+    mockWizardState.metadata.location = 'OFFICE'
+
     render(<SummaryStep />)
 
     await act(async () => {
@@ -209,6 +214,7 @@ sink:
       isDeploy: true,
       configurationYaml: expect.stringContaining('productType: Catalog'),
     }))
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('location: "OFFICE"')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('additionalInputs:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('additional_inputs:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('streamingContinuity: continuous')

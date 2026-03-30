@@ -250,6 +250,119 @@ sink:
     })
   })
 
+  it('keeps production location empty when YAML does not specify it', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+input:
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.metadata).toMatchObject({
+      environment: 'production',
+      location: '',
+    })
+  })
+
+  it('preserves explicit OFFICE location for production YAML', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  location: OFFICE
+  environment: production
+  owner: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+input:
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.metadata).toMatchObject({
+      environment: 'production',
+      location: 'OFFICE',
+    })
+  })
+
+  it('forces non-production YAML location to HOME', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  location: OFFICE
+  environment: staging
+  owner: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+input:
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'staging',
+    })
+
+    expect(state.metadata).toMatchObject({
+      environment: 'staging',
+      location: 'HOME',
+    })
+  })
+
   it('hydrates legacy snake_case additional_inputs mapping keys', () => {
     const yaml = `metadata:
   entity: Product

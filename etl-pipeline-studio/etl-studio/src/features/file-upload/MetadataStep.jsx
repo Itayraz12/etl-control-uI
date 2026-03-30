@@ -4,7 +4,13 @@ import { useUser } from '../../shared/store/userContext.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
 import { useMockMode } from '../../shared/store/mockModeContext.jsx'
 import { fetchEntitySchema } from '../../shared/services/configService.js'
-import { normalizeSourceSchema, ENVIRONMENTS } from '../../shared/types/index.js'
+import {
+  normalizeSourceSchema,
+  ENVIRONMENTS,
+  getAllowedMetadataLocations,
+  isProductionEnvironment,
+  normalizeMetadataLocation,
+} from '../../shared/types/index.js'
 import { Card, CardTitle, FormRow, FormGroup } from '../../shared/components/index.jsx'
 
 export default function MetadataStep() {
@@ -14,6 +20,10 @@ export default function MetadataStep() {
   const { useMock } = useMockMode()
   const { metadata } = state
   const src = state.source
+  const hasEnvironment = Boolean(String(metadata.environment ?? '').trim())
+  const isProduction = isProductionEnvironment(metadata.environment)
+  const allowedLocations = getAllowedMetadataLocations(metadata.environment)
+  const normalizedLocation = normalizeMetadataLocation(metadata.location, metadata.environment)
   const previousEntityRef = useRef(metadata.entityName)
   const [loadingSchema, setLoadingSchema] = useState(false)
   const [schemaError, setSchemaError] = useState('')
@@ -30,6 +40,12 @@ export default function MetadataStep() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.teamName])
+
+  useEffect(() => {
+    if (metadata.location !== normalizedLocation) {
+      actions.updateMetadata({ location: normalizedLocation })
+    }
+  }, [actions, metadata.location, normalizedLocation])
 
   useEffect(() => {
     const entityName = String(metadata.entityName ?? '').trim()
@@ -108,13 +124,35 @@ export default function MetadataStep() {
           </FormRow>
           <FormRow>
             <FormGroup label="Environment" required>
-              <select value={metadata.environment} onChange={e => u('environment', e.target.value)}>
+              <select
+                aria-label="Environment"
+                value={metadata.environment}
+                onChange={e => actions.updateMetadata({
+                  environment: e.target.value,
+                  location: normalizeMetadataLocation('', e.target.value),
+                })}
+              >
                 <option value="">select an environment...</option>
                 {ENVIRONMENTS.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </FormGroup>
+            <FormGroup label="Location" required={hasEnvironment}>
+              <select
+                aria-label="Location"
+                value={normalizedLocation}
+                disabled={!hasEnvironment}
+                onChange={e => u('location', normalizeMetadataLocation(e.target.value, metadata.environment))}
+              >
+                {(!hasEnvironment || isProduction) && <option value="">Select a location...</option>}
+                {allowedLocations.map(location => <option key={location} value={location}>{location}</option>)}
+              </select>
+              {!hasEnvironment && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>Select an environment to choose a location.</div>}
+              {hasEnvironment && !isProduction && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>Non-production environments are limited to HOME.</div>}
+            </FormGroup>
+          </FormRow>
+          <FormRow>
             <FormGroup label="Entity Name" required>
-              <select value={metadata.entityName} onChange={e => u('entityName', e.target.value)}>
+              <select aria-label="Entity Name" value={metadata.entityName} onChange={e => u('entityName', e.target.value)}>
                 <option value="">Select an entity...</option>
                 {entities.map(ent => (
                   <option key={ent.id} value={ent.type}>{ent.name} ({ent.type})</option>

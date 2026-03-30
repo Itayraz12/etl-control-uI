@@ -257,6 +257,27 @@ describe('ETLManagementScreen table layout stability', () => {
     })
   }, 10000)
 
+  it('starts a new configuration with an empty location selection', async () => {
+    const user = userEvent.setup()
+
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Inventory')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /new configuration/i }))
+
+    expect(mockActions.loadState).toHaveBeenCalledWith(expect.objectContaining({
+      navigationMode: 'etl-config',
+      currentStep: 0,
+      metadata: expect.objectContaining({
+        location: '',
+        environment: '',
+      }),
+    }))
+  })
+
   it('does not render a left warning border for version mismatch rows', async () => {
     render(<ETLManagementScreen />)
 

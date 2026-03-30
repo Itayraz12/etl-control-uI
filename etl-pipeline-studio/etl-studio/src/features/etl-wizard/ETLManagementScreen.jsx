@@ -795,6 +795,7 @@ export default function ETLManagementScreen() {
         productSource: '',
         productType: '',
         productCode: '',
+        location: '',
         environment: '',
         entityName: '',
         tags: '',

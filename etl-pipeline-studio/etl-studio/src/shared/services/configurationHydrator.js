@@ -1,5 +1,5 @@
 import { parse } from 'yaml'
-import { FIELD_TYPES, normalizeSourceSchema } from '../types/index.js'
+import { FIELD_TYPES, normalizeMetadataLocation, normalizeSourceSchema } from '../types/index.js'
 import { MOCK_FILTER_OPERATORS } from './configService.js'
 
 const VALID_ENVS = new Set(['dev', 'staging', 'production'])
@@ -462,6 +462,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       productSource: asString(metadata.productSource ?? metadata.product_source, fallback.source),
       productType: asString(metadata.productType ?? metadata.product_type, fallback.productType),
       productCode: asString(metadata.productCode ?? metadata.product_code),
+      location: normalizeMetadataLocation(metadata.location, environment),
       team: asString(fallback.teamName || metadata.owner || metadata.team),
       environment,
       entityName: asString(metadata.entity),

@@ -2,6 +2,35 @@
 
 export const FIELD_TYPES = ['string', 'number', 'boolean', 'date', 'object', 'array', 'null']
 export const ENVIRONMENTS = ['dev', 'staging', 'production']
+export const METADATA_LOCATIONS = ['HOME', 'OFFICE']
+
+export function isProductionEnvironment(value) {
+  return String(value ?? '').trim().toLowerCase() === 'production'
+}
+
+export function getAllowedMetadataLocations(environment) {
+  const normalizedEnvironment = String(environment ?? '').trim().toLowerCase()
+
+  if (normalizedEnvironment === 'production') return METADATA_LOCATIONS
+  if (normalizedEnvironment) return ['HOME']
+  return []
+}
+
+export function normalizeMetadataLocation(value, environment) {
+  const normalizedEnvironment = String(environment ?? '').trim().toLowerCase()
+  const normalizedValue = String(value ?? '').trim().toUpperCase()
+  const canonicalValue = normalizedValue === 'OFFIC' ? 'OFFICE' : normalizedValue
+
+  if (normalizedEnvironment === 'production') {
+    return METADATA_LOCATIONS.includes(canonicalValue) ? canonicalValue : ''
+  }
+
+  if (normalizedEnvironment) {
+    return 'HOME'
+  }
+
+  return ''
+}
 
 /**
  * @typedef {'string'|'number'|'boolean'|'date'|'object'|'array'|'null'} FieldType
@@ -37,6 +66,7 @@ export const ENVIRONMENTS = ['dev', 'staging', 'production']
  * @typedef {Object} MetadataState
  * @property {string} productSource
  * @property {string} productType
+ * @property {string} location
  * @property {string} team
  * @property {'dev'|'staging'|'production'} environment
  * @property {string} entityName
