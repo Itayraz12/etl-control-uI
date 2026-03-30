@@ -31,13 +31,13 @@ general:
 input:
   delimited:
     columnDelimiter: ";"
-  mapping:
-    - name: id
-      type: string
-    - name: productName
-      type: string
-    - name: price
-      type: number
+    mapping:
+      - name: id
+        type: string
+      - name: productName
+        type: string
+      - name: price
+        type: number
 output:
   mapping:
     - inName: id
@@ -114,13 +114,13 @@ general:
 input:
   delimited:
     columnDelimiter: ";"
-  mapping:
-    - name: id
-      type: string
-    - name: productName
-      type: string
-    - name: price
-      type: number
+    mapping:
+      - name: id
+        type: string
+      - name: productName
+        type: string
+      - name: price
+        type: number
 output:
   mapping:
     - inName: id
@@ -219,9 +219,11 @@ source:
 general:
   format: JSON
 input:
-  mapping:
-    - name: id
-      type: string
+  convert:
+    splitByPath: "$.items"
+    mapping:
+      - name: id
+        type: string
 output:
   mapping:
     - inName: id
@@ -244,6 +246,7 @@ sink:
       kafkaTopic: 'source_products_raw',
       kafkaOffset: 'latest',
       kafkaKeys: 'user-001, order-456',
+      jsonSplit: '$.items',
     })
   })
 
@@ -300,9 +303,9 @@ general:
 input:
   delimited:
     columnDelimiter: ";"
-  mapping:
-    - name: id
-      type: string
+    mapping:
+      - name: id
+        type: string
 output:
   mapping:
     - inName: id

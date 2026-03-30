@@ -465,7 +465,15 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const output = parsed.output || {}
   const general = parsed.general || {}
   const input = parsed.input || {}
-  const inputFields = normalizeSourceSchema(input.mapping || input.mappings || parsed.inputFields)
+  const inputFields = normalizeSourceSchema(
+    input.convert?.mapping
+    || input.convert?.mappings
+    || input.delimited?.mapping
+    || input.delimited?.mappings
+    || input.mapping
+    || input.mappings
+    || parsed.inputFields
+  )
   const schema = parsed.schema || {}
   const sink = parsed.sink || {}
   const environment = normalizeEnvironment(metadata.environment ?? fallback.environment)
@@ -508,7 +516,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       format: sourceFormat,
       csvDelimiter,
       rowDelimiter,
-      jsonSplit: asString(sourceConfig.split_key ?? source.split_key),
+      jsonSplit: asString(input.convert?.splitByPath ?? input.convert?.split_by_path ?? sourceConfig.split_key ?? source.split_key),
       streamingContinuity: asString(dataStreamInfo.streamingContinuity ?? dataStreamInfo.streaming_continuity, 'continuous'),
       recordsPerDay: asString(dataStreamInfo.avgRecordsAmount ?? dataStreamInfo.avg_records_amount, 'millions'),
     },

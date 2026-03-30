@@ -106,6 +106,7 @@ describe('SummaryStep save draft behavior', () => {
     mockWizardState.source.format = 'JSON'
     mockWizardState.source.csvDelimiter = undefined
     mockWizardState.source.rowDelimiter = ''
+    mockWizardState.source.jsonSplit = ''
     mockWizardState.source.kafkaOffset = 'earliest'
     mockWizardState.source.kafkaKeys = 'sku-key, inventory-key'
     mockActions.setNavigationMode.mockReset()
@@ -162,9 +163,10 @@ source:
     offset: earliest
     filter: "sku-key, inventory-key"
 input:
-  mapping:
-    - name: sku
-      type: string
+  convert:
+    mapping:
+      - name: sku
+        type: string
 general:
   format: JSON
 
@@ -248,6 +250,7 @@ sink:
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('source:\n  kafka:\n    topic: catalog-topic')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('offset: earliest')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('filter: "sku-key, inventory-key"')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('input:\n  convert:\n    mapping:\n      - name: sku')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('source:\n  type: kafka')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('source:\n  format: JSON')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('keyFilter:')
@@ -277,7 +280,24 @@ sink:
 
     const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
     expect(yaml).toContain('general:\n  format: CSV')
+    expect(yaml).toContain('input:\n  delimited:\n    columnDelimiter: ";"\n    mapping:\n      - name: sku')
     expect(yaml).toContain('split:')
     expect(yaml).toContain('delimiter: "\\\\r\\\\n"')
+  })
+
+  it('serializes JSON split key under input.convert.splitByPath', async () => {
+    mockWizardState.source.format = 'JSON'
+    mockWizardState.source.jsonSplit = '$.items'
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save & deploy/i }))
+      await Promise.resolve()
+    })
+
+    const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
+    expect(yaml).toContain('input:\n  convert:\n    splitByPath: "$.items"\n    mapping:\n      - name: sku')
+    expect(yaml).not.toContain('split_key:')
   })
 })

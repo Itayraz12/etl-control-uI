@@ -250,7 +250,7 @@ export default function SummaryStep() {
     }
 
     // Find source and target field types
-    const inputMappingYaml = formatInputFieldsYamlSection(sourceSchema)
+    const nestedInputMappingYaml = formatInputFieldsYamlSection(sourceSchema, '    ')
     const columnDelimiter = state.source.csvDelimiter == null || state.source.csvDelimiter === ''
       ? ','
       : String(state.source.csvDelimiter)
@@ -270,18 +270,19 @@ export default function SummaryStep() {
         if (state.source.kafkaKeys) details.push(`    filter: ${quoteYamlDoubleQuoted(String(state.source.kafkaKeys).trim())}`)
       }
 
-      if (state.source.jsonSplit) {
-        details.push(`    split_key: ${state.source.jsonSplit}`)
-      }
-
       return [`  ${sourceType}:`, ...details].join('\n')
     })()
-    const inputSectionYaml = `input:
-${state.source.format === 'CSV' ? `  delimited:
-    columnDelimiter: ${quoteYamlDoubleQuoted(columnDelimiter)}
-
-` : ''}${inputMappingYaml ? `${inputMappingYaml}
-` : ''}`
+    const inputSectionYaml = state.source.format === 'CSV'
+      ? `input:
+  delimited:
+    columnDelimiter: ${quoteYamlDoubleQuoted(columnDelimiter)}${nestedInputMappingYaml ? `
+${nestedInputMappingYaml}` : ''}
+`
+      : `input:
+  convert:${state.source.jsonSplit ? `
+    splitByPath: ${quoteYamlDoubleQuoted(String(state.source.jsonSplit).trim())}` : ''}${nestedInputMappingYaml ? `
+${nestedInputMappingYaml}` : ''}
+`
 
     const getFieldType = (fieldName, isTarget = false) => {
       const schema = isTarget ? targetSchema : sourceSchema
