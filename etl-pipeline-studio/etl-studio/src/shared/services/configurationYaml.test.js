@@ -206,6 +206,42 @@ sink:
     })
   })
 
+  it('hydrates canonical genomeEntity metadata key', () => {
+    const yaml = `metadata:
+  genomeEntity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+input:
+  mapping:
+    - name: id
+      type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.metadata).toMatchObject({
+      entityName: 'Product',
+    })
+  })
+
   it('hydrates CSV row delimiter from general.split.delimiter', () => {
     const yaml = `metadata:
   entity: Product

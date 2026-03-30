@@ -474,7 +474,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       location: normalizeMetadataLocation(metadata.location, environment),
       team: asString(fallback.teamName || metadata.owner || metadata.team),
       environment,
-      entityName: asString(metadata.entity),
+      entityName: asString(metadata.genomeEntity ?? metadata.entity),
       tags: '',
       schemaVersion: '',
     },
