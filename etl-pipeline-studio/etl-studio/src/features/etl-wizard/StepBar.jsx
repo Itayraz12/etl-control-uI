@@ -1,11 +1,13 @@
 import { STEPS } from '../../shared/types/index.js'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
+import { useConfig } from '../../shared/store/configContext.jsx'
 import { canNavigateToWizardStep, getFieldMappingValidation } from '../../shared/services/wizardValidation.js'
 
 export default function StepBar() {
   const { state, actions } = useWizard()
+  const { transformers } = useConfig()
   const { currentStep, completedSteps } = state
-  const fieldMappingValidation = getFieldMappingValidation(state)
+  const fieldMappingValidation = getFieldMappingValidation(state, undefined, transformers)
 
   return (
     <div style={{
@@ -17,7 +19,7 @@ export default function StepBar() {
           const isOptionalFiltersStep = i === 3
           const isDone = completedSteps.has(i) || (isOptionalFiltersStep && currentStep > i)
           const isActive = i === currentStep
-          const canClick = canNavigateToWizardStep(i, state)
+          const canClick = canNavigateToWizardStep(i, state, undefined, transformers)
           const isIncompleteFieldMapping =
             i === 4 &&
             !fieldMappingValidation.isValid &&

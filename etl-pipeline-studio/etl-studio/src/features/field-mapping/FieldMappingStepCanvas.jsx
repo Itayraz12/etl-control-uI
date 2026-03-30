@@ -2,38 +2,27 @@ import { useState, useRef, useEffect } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
 import { resolveSourceSchema, resolveTargetSchema } from '../../shared/types/index.js'
+import {
+  findTransformer,
+  getMissingRequiredTransformerProps,
+  getTransformerPropsSchema,
+} from '../../shared/services/transformerValidation.js'
 
 // TRANSFORMER_PROPS_SCHEMA is now derived from each transformer's propsSchema field.
-// Helper: resolve a transformer by either its backend _id or its YAML/display name.
-function findTransformer(transformers, transformerRef) {
-  if (!transformerRef || transformerRef === 'none') return null
-  return transformers.find(t => t._id === transformerRef || t.name === transformerRef) || null
-}
-
 function normalizeTransformerRef(transformers, transformerRef) {
   return findTransformer(transformers, transformerRef)?._id || transformerRef || 'none'
 }
 
 // Helper: look up the propsSchema array for a transformer by its _id or name.
 function getPropsSchema(transformers, transformerRef) {
-  const t = findTransformer(transformers, transformerRef)
-  console.log('[getPropsSchema] ref:', transformerRef, '→ found:', t?.name, 'propsSchema:', JSON.stringify(t?.propsSchema))
-  return t?.propsSchema || []
-}
-
-/**
- * Returns true when any required property of the transformer is missing or blank.
- * Used to highlight transformer nodes in red on the canvas.
- */
-function isMissingRequiredPropValue(value) {
-  if (value === 0 || value === false) return false
-  if (typeof value === 'string') return value.trim() === ''
-  return !value
+  const schema = getTransformerPropsSchema(transformers, transformerRef)
+  const transformer = findTransformer(transformers, transformerRef)
+  console.log('[getPropsSchema] ref:', transformerRef, '→ found:', transformer?.name, 'propsSchema:', JSON.stringify(schema))
+  return schema
 }
 
 function getMissingRequiredProps(transformers, transformerRef, savedProps = {}) {
-  const schema = getPropsSchema(transformers, transformerRef)
-  return schema.filter(p => p.required && isMissingRequiredPropValue(savedProps[p.key]))
+  return getMissingRequiredTransformerProps(transformers, transformerRef, savedProps)
 }
 
 function hasMissingRequiredProps(transformers, transformerRef, savedProps = {}) {

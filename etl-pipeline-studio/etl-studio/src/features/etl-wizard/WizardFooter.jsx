@@ -2,16 +2,31 @@ import { useState } from 'react'
 import { Btn, ModalDialog } from '../../shared/components/index.jsx'
 import { STEPS } from '../../shared/types/index.js'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
+import { useConfig } from '../../shared/store/configContext.jsx'
 import { getFieldMappingValidation, isWizardStepValid } from '../../shared/services/wizardValidation.js'
 
 export default function WizardFooter() {
   const { state, actions } = useWizard()
+  const { transformers } = useConfig()
   const { currentStep, readOnly } = state
   const [mappingValidationModal, setMappingValidationModal] = useState(false)
   const isFirst = currentStep === 0
   const isLast = currentStep === STEPS.length - 1
-  const canContinue = isWizardStepValid(currentStep, state)
-  const fieldMappingValidation = getFieldMappingValidation(state)
+  const canContinue = isWizardStepValid(currentStep, state, undefined, transformers)
+  const fieldMappingValidation = getFieldMappingValidation(state, undefined, transformers)
+  const missingTargetFieldsMessage = fieldMappingValidation.unmappedRequiredTargets.length > 0
+    ? `Missing fields: ${fieldMappingValidation.unmappedRequiredTargets.map(field => field.name || field.id).join(', ')}`
+    : ''
+  const missingTransformerFieldsMessage = fieldMappingValidation.invalidTransformers.length > 0
+    ? `Incomplete transformers: ${fieldMappingValidation.invalidTransformers.map(item => `${item.transformerName} (${item.missingRequiredProps.map(prop => prop.label || prop.key).join(', ')})`).join('; ')}`
+    : ''
+  const mappingValidationMessage = [
+    !fieldMappingValidation.hasMappings
+      ? 'At least one valid field mapping is required before you continue to the next step.'
+      : 'Field mapping validation found incomplete configuration. Resolve the items below before you continue.',
+    missingTargetFieldsMessage,
+    missingTransformerFieldsMessage,
+  ].filter(Boolean).join('\n\n')
 
   function handleContinue() {
     if (currentStep === 4 && !fieldMappingValidation.isValid) {
@@ -92,9 +107,7 @@ export default function WizardFooter() {
         title="Field mapping is incomplete"
         icon="⚠️"
         tone="warning"
-        message={fieldMappingValidation.hasMappings
-          ? `Not all required target fields are mapped yet. Complete the missing mappings before you continue.${fieldMappingValidation.unmappedRequiredTargets.length > 0 ? `\n\nMissing fields: ${fieldMappingValidation.unmappedRequiredTargets.map(field => field.name || field.id).join(', ')}` : ''}`
-          : 'At least one valid field mapping is required before you continue to the next step.'}
+        message={mappingValidationMessage}
         footer={
           <div style={{ display: 'flex', gap: '8px' }}>
             <Btn v="secondary" onClick={() => setMappingValidationModal(false)}>Back</Btn>
