@@ -284,6 +284,7 @@ output:
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('avgRecordsAmount: millions')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('streaming_continuity:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('avg_records_amount:')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml.trimEnd()).not.toMatch(/}\s*$/)
     expect(mockSubscribeToDeploymentProgress).toHaveBeenCalledWith('dep-1', expect.any(Object))
   })
 

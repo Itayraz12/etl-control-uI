@@ -435,7 +435,7 @@ filters:
 ${state.filters.map(group => formatFilterYamlItem(formatFilterGroup(group))).join('\n')}` : ''}
 ${sinkAdditionalConfigYaml ? `
 ${sinkAdditionalConfigYaml}` : ''}
-  }`
+`
   }
 
   const yaml = generateYaml()
