@@ -814,6 +814,19 @@ export default function FieldMappingStep() {
     ))
     }
 
+    const toggleAllTargetNodeSaknay = () => {
+    const targetNodes = nodesRef.current.filter(node => node.type === 'target')
+    if (targetNodes.length === 0) return
+
+    const shouldEnableSaknay = targetNodes.some(node => !(node.sendToSaknay ?? true))
+
+    applyNodes(prev => prev.map(node =>
+      node.type === 'target'
+        ? { ...node, sendToSaknay: shouldEnableSaknay }
+        : node
+    ))
+    }
+
     const updateTargetNodeMeta = (nodeId, patch) => {
     applyNodes(prev => prev.map(node =>
       node.id === nodeId && node.type === 'target'
@@ -1261,6 +1274,11 @@ export default function FieldMappingStep() {
   const stageWidth = nodes.length > 0 ? Math.max(1000, Math.max(...nodes.map(n => n.x + NODE_WIDTH)) + 200) : 1000
   const stageHeight = nodes.length > 0 ? Math.max(700, Math.max(...nodes.map(n => n.y + CANVAS_NODE_BOUND_HEIGHT)) + 200) : 700
   const zoomPercentage = Math.round(zoom * 100)
+  const canvasTargetNodes = nodes.filter(node => node.type === 'target')
+  const hasCanvasTargetNodes = canvasTargetNodes.length > 0
+  const areAllCanvasTargetNodesSaknayEnabled = hasCanvasTargetNodes && canvasTargetNodes.every(node => node.sendToSaknay ?? true)
+  const shouldEnableAllCanvasTargetSaknay = !areAllCanvasTargetNodesSaknayEnabled
+  const bulkTargetSaknayButtonLabel = shouldEnableAllCanvasTargetSaknay ? '✓ Enable All Saknay' : '⊘ Disable All Saknay'
 
   const handleZoomIn = () => setZoom(currentZoom => clampZoom(currentZoom + ZOOM_STEP))
   const handleZoomOut = () => setZoom(currentZoom => clampZoom(currentZoom - ZOOM_STEP))
@@ -1452,6 +1470,27 @@ export default function FieldMappingStep() {
                   +
                 </button>
               </div>
+              <button
+                type="button"
+                aria-label={shouldEnableAllCanvasTargetSaknay ? 'Enable Saknay for all target fields' : 'Disable Saknay for all target fields'}
+                data-testid="bulk-target-saknay-toggle"
+                onClick={toggleAllTargetNodeSaknay}
+                disabled={isReadOnly || !hasCanvasTargetNodes}
+                style={{
+                  padding: '6px 12px',
+                  border: `1px solid ${shouldEnableAllCanvasTargetSaknay ? 'rgba(34,197,94,0.45)' : 'rgba(239,68,68,0.45)'}`,
+                  background: shouldEnableAllCanvasTargetSaknay ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)',
+                  color: shouldEnableAllCanvasTargetSaknay ? 'var(--success)' : 'var(--danger)',
+                  borderRadius: '6px',
+                  cursor: isReadOnly || !hasCanvasTargetNodes ? 'not-allowed' : 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  transition: 'all 0.2s',
+                  opacity: isReadOnly || !hasCanvasTargetNodes ? 0.45 : 1,
+                }}
+              >
+                {bulkTargetSaknayButtonLabel}
+              </button>
               <button
                 onClick={alignNodes}
                 disabled={isReadOnly}

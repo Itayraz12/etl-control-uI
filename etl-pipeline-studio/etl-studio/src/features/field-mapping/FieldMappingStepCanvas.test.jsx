@@ -777,6 +777,82 @@ describe('FieldMappingStep transformer modal regression', () => {
     })
   })
 
+  it('bulk toggles Saknay for all target fields shown on the canvas and persists every target metadata value', async () => {
+    const user = userEvent.setup()
+
+    renderWithPersistedMappings([
+      {
+        src: 'productName',
+        tgt: 'name',
+        srcNodeId: 'src-productName',
+        tgtNodeId: 'tgt-name',
+        srcPos: { x: 40, y: 30 },
+        tgtPos: { x: 650, y: 30 },
+        srcMetadata: { sendToSaknay: true, expression: '' },
+        tgtMetadata: { sendToSaknay: true, expression: '' },
+        transformer: 'none',
+        transformerInputType: 'any',
+        transformerOutputType: 'any',
+        transformerProps: {},
+        extraInputs: [],
+      },
+      {
+        src: 'price',
+        tgt: 'unitPrice',
+        srcNodeId: 'src-price',
+        tgtNodeId: 'tgt-unitPrice',
+        srcPos: { x: 40, y: 140 },
+        tgtPos: { x: 650, y: 140 },
+        srcMetadata: { sendToSaknay: true, expression: '' },
+        tgtMetadata: { sendToSaknay: false, expression: '' },
+        transformer: 'none',
+        transformerInputType: 'any',
+        transformerOutputType: 'any',
+        transformerProps: {},
+        extraInputs: [],
+      },
+    ], {
+      schema: [
+        { id: 'productName', name: 'productName', path: 'productName', type: 'string' },
+        { id: 'price', name: 'price', path: 'price', type: 'number' },
+      ],
+      fileName: 'sample.json',
+      fileType: 'application/json',
+      fileSize: 123,
+    }, [
+      { id: 'name', name: 'name', path: 'name', type: 'string', required: false },
+      { id: 'unitPrice', name: 'unitPrice', path: 'unitPrice', type: 'number', required: false },
+    ])
+
+    await waitFor(() => {
+      expect(screen.getByTestId('target-saknay-toggle-tgt-name')).toHaveAttribute('title', 'Send to Saknay: Yes')
+      expect(screen.getByTestId('target-saknay-toggle-tgt-unitPrice')).toHaveAttribute('title', 'Send to Saknay: No')
+    })
+
+    const bulkToggle = screen.getByRole('button', { name: 'Enable Saknay for all target fields' })
+    expect(bulkToggle).toHaveTextContent('Enable All Saknay')
+
+    await user.click(bulkToggle)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('target-saknay-toggle-tgt-name')).toHaveAttribute('title', 'Send to Saknay: Yes')
+      expect(screen.getByTestId('target-saknay-toggle-tgt-unitPrice')).toHaveAttribute('title', 'Send to Saknay: Yes')
+
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.mappings?.map(mapping => mapping.tgtMetadata?.sendToSaknay)).toEqual([true, true])
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Disable Saknay for all target fields' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('target-saknay-toggle-tgt-name')).toHaveAttribute('title', 'Send to Saknay: No')
+      expect(screen.getByTestId('target-saknay-toggle-tgt-unitPrice')).toHaveAttribute('title', 'Send to Saknay: No')
+
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.mappings?.map(mapping => mapping.tgtMetadata?.sendToSaknay)).toEqual([false, false])
+    })
+  })
+
   it('shows an exp badge on target nodes only when the expression is not empty', async () => {
     renderWithPersistedState({
       tgtMetadata: { sendToSaknay: true, expression: 'price * 1.2' },
