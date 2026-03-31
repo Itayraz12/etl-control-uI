@@ -13,6 +13,7 @@ import { formatInputFieldsYamlSection } from '../../shared/services/configuratio
 import { formatFilterYamlItem } from '../../shared/services/configurationYaml.js'
 import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js'
 import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js'
+import { useSummaryFooter } from './summaryFooterContext.jsx'
 
 function FlinkFlow({ sourceType, mappings, filters, sink }) {
   const nodes = []
@@ -92,6 +93,7 @@ function YamlPreview({ yaml }) {
 export default function SummaryStep() {
   const { state, actions } = useWizard()
   const { transformers } = useConfig()
+  const summaryFooter = useSummaryFooter()
   const sourceSchema = resolveSourceSchema(state.upload)
   const targetSchema = resolveTargetSchema(state.targetSchema)
   const hasSaknayTargets = state.mappings.some(mapping => Boolean(mapping?.tgt) && (mapping?.tgtMetadata?.sendToSaknay ?? true))
@@ -696,6 +698,36 @@ ${sinkAdditionalConfigYaml}` : ''}
     }
   }
 
+  useEffect(() => {
+    if (!summaryFooter?.setSummaryFooterActions) {
+      return undefined
+    }
+
+    if (state.readOnly || submitted) {
+      summaryFooter.setSummaryFooterActions(null)
+      return () => summaryFooter.setSummaryFooterActions(null)
+    }
+
+    summaryFooter.setSummaryFooterActions({
+      saveDraftLabel: savingDraft ? 'Saving…' : '💾 Save Draft',
+      deployLabel: deployDisabled ? '🚀 Saving & Deploying...' : '🚀 Save & Deploy',
+      saveDraftDisabled: savingDraft || deployDisabled,
+      deployDisabled,
+      onSaveDraft: handleSaveDraft,
+      onDeploy: handleCreatePipeline,
+    })
+
+    return () => summaryFooter.setSummaryFooterActions(null)
+  }, [
+    summaryFooter,
+    state.readOnly,
+    submitted,
+    savingDraft,
+    deployDisabled,
+    handleCreatePipeline,
+    handleSaveDraft,
+  ])
+
   if (submitted) {
     const pipelineId = `ETL-${Date.now().toString(36).toUpperCase()}`
     const grafanaLink = `https://grafana.etl-studio.io/d/pipeline-${pipelineId.toLowerCase()}?source=${state.metadata.productSource}&type=${state.metadata.productType}&refresh=30s`
@@ -855,8 +887,8 @@ ${sinkAdditionalConfigYaml}` : ''}
         </Card>
       </div>
 
-      {/* Sticky footer buttons — hidden in read-only / view-only mode */}
-      {!state.readOnly && (
+      {/* Sticky footer buttons — fallback when the shared wizard footer host is unavailable */}
+      {!state.readOnly && !summaryFooter?.setSummaryFooterActions && (
         <div style={{
           borderTop: '1px solid var(--border)',
           background: 'var(--surf)',

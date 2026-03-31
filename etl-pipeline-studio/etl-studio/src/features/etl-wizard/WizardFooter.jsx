@@ -4,14 +4,17 @@ import { STEPS } from '../../shared/types/index.js'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
 import { getFieldMappingValidation, isWizardStepValid } from '../../shared/services/wizardValidation.js'
+import { useSummaryFooter } from '../summary/summaryFooterContext.jsx'
 
 export default function WizardFooter() {
   const { state, actions } = useWizard()
   const { transformers } = useConfig()
+  const summaryFooter = useSummaryFooter()
   const { currentStep, readOnly } = state
   const [mappingValidationModal, setMappingValidationModal] = useState(false)
   const isFirst = currentStep === 0
   const isLast = currentStep === STEPS.length - 1
+  const summaryFooterActions = isLast ? summaryFooter?.summaryFooterActions : null
   const canContinue = isWizardStepValid(currentStep, state, undefined, transformers)
   const fieldMappingValidation = getFieldMappingValidation(state, undefined, transformers)
   const missingTargetFieldsMessage = fieldMappingValidation.unmappedRequiredTargets.length > 0
@@ -85,17 +88,35 @@ export default function WizardFooter() {
       <div style={{
         background: 'var(--surf)', borderTop: '1px solid var(--border)',
         padding: '14px 30px', display: 'flex', alignItems: 'center',
-        gap: 12, flexShrink: 0,
+        gap: 12, flexShrink: 0, flexWrap: 'wrap',
       }}>
         {currentStep > 0 && (
           <Btn v="secondary" onClick={() => actions.goBack(currentStep)}>
             ← Back
           </Btn>
         )}
-        <div style={{ flex: 1 }} />
         <span style={{ fontSize: 12, color: 'var(--muted)' }}>
           Step {currentStep + 1} of {STEPS.length} — {STEPS[currentStep].label}
         </span>
+        <div style={{ flex: 1 }} />
+        {summaryFooterActions && (
+          <>
+            <Btn
+              v="secondary"
+              onClick={summaryFooterActions.onSaveDraft}
+              disabled={summaryFooterActions.saveDraftDisabled}
+            >
+              {summaryFooterActions.saveDraftLabel}
+            </Btn>
+            <Btn
+              v="success"
+              onClick={summaryFooterActions.onDeploy}
+              disabled={summaryFooterActions.deployDisabled}
+            >
+              {summaryFooterActions.deployLabel}
+            </Btn>
+          </>
+        )}
         {!isLast && (
           <Btn v="primary" onClick={handleContinue} disabled={currentStep !== 4 && !canContinue}>
             Continue →

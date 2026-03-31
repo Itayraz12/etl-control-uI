@@ -18,6 +18,10 @@ const actions = {
   goNext: vi.fn(),
 }
 
+const summaryFooterState = {
+  summaryFooterActions: null,
+}
+
 vi.mock('../../shared/store/wizardStore.jsx', () => ({
   useWizard: () => ({
     state: wizardState,
@@ -37,12 +41,18 @@ vi.mock('../../shared/store/configContext.jsx', () => ({
   }),
 }))
 
+vi.mock('../summary/summaryFooterContext.jsx', () => ({
+  useSummaryFooter: () => summaryFooterState,
+}))
+
 describe('WizardFooter', () => {
   beforeEach(() => {
     wizardState.currentStep = 1
+    wizardState.readOnly = false
     wizardState.upload = { done: false, schema: [], fileName: '', fileType: '', fileSize: 0 }
     wizardState.mappings = []
     wizardState.targetSchema = []
+    summaryFooterState.summaryFooterActions = null
     actions.goBack.mockClear()
     actions.goNext.mockClear()
   })
@@ -76,5 +86,35 @@ describe('WizardFooter', () => {
 
     expect(screen.getByText('Field mapping is incomplete')).toBeInTheDocument()
     expect(screen.getByText(/Incomplete transformers: RequiredTransformer \(Logic\)/i)).toBeInTheDocument()
+  })
+
+  it('shows summary save actions inline on the last-step footer row', async () => {
+    const user = userEvent.setup()
+    const onSaveDraft = vi.fn()
+    const onDeploy = vi.fn()
+
+    wizardState.currentStep = 6
+    summaryFooterState.summaryFooterActions = {
+      saveDraftLabel: '💾 Save Draft',
+      deployLabel: '🚀 Save & Deploy',
+      saveDraftDisabled: false,
+      deployDisabled: false,
+      onSaveDraft,
+      onDeploy,
+    }
+
+    render(<WizardFooter />)
+
+    expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument()
+    expect(screen.getByText('Step 7 of 7 — Summary')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save draft/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save & deploy/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /continue/i })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /save draft/i }))
+    await user.click(screen.getByRole('button', { name: /save & deploy/i }))
+
+    expect(onSaveDraft).toHaveBeenCalledTimes(1)
+    expect(onDeploy).toHaveBeenCalledTimes(1)
   })
 })

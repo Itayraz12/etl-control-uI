@@ -6,6 +6,7 @@ import TopNav      from '../features/etl-wizard/TopNav.jsx'
 import StepBar     from '../features/etl-wizard/StepBar.jsx'
 import WizardShell from '../features/etl-wizard/WizardShell.jsx'
 import WizardFooter from '../features/etl-wizard/WizardFooter.jsx'
+import { SummaryFooterProvider } from '../features/summary/summaryFooterContext.jsx'
 import ETLManagementScreen from '../features/etl-wizard/ETLManagementScreen.jsx'
 import LoginPage from '../features/etl-wizard/LoginPage.jsx';
 
@@ -82,8 +83,10 @@ function AppContent() {
       }}>
         <TopNav />
         <StepBar />
-        <WizardShell />
-        <WizardFooter />
+        <SummaryFooterProvider>
+          <WizardShell />
+          <WizardFooter />
+        </SummaryFooterProvider>
       </div>
     )
   }

@@ -1,9 +1,13 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SummaryStep from './SummaryStep.jsx'
+import WizardFooter from '../etl-wizard/WizardFooter.jsx'
+import { SummaryFooterProvider } from './summaryFooterContext.jsx'
 import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js'
 
 const mockWizardState = {
+  currentStep: 6,
+  readOnly: false,
   metadata: {
     entityName: 'product',
     productSource: 'ERP',
@@ -53,6 +57,8 @@ const mockWizardState = {
 const mockActions = {
   setNavigationMode: vi.fn(),
   goTo: vi.fn(),
+  goBack: vi.fn(),
+  goNext: vi.fn(),
 }
 
 const mockSaveDraftConfiguration = vi.fn(() => Promise.resolve({ success: true }))
@@ -100,6 +106,8 @@ vi.mock('../../shared/services/deploymentsService.js', () => ({
 describe('SummaryStep save draft behavior', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    mockWizardState.currentStep = 6
+    mockWizardState.readOnly = false
     mockWizardState.originalDraftYaml = ''
     mockWizardState.originalDraftSignature = ''
     mockWizardState.metadata.location = ''
@@ -117,6 +125,8 @@ describe('SummaryStep save draft behavior', () => {
     mockWizardState.sink.sinkKafkaAdditionalProperties = []
     mockActions.setNavigationMode.mockReset()
     mockActions.goTo.mockReset()
+    mockActions.goBack.mockReset()
+    mockActions.goNext.mockReset()
     mockSaveDraftConfiguration.mockClear()
     mockFetchDeploymentSteps.mockClear()
     mockDeployFromYaml.mockClear()
@@ -146,6 +156,19 @@ describe('SummaryStep save draft behavior', () => {
     })
 
     expect(mockActions.setNavigationMode).toHaveBeenCalledWith('etl-management')
+  })
+
+  it('renders summary save actions in the shared footer row when hosted by the summary footer provider', () => {
+    render(
+      <SummaryFooterProvider>
+        <SummaryStep />
+        <WizardFooter />
+      </SummaryFooterProvider>
+    )
+
+    expect(screen.getByText('Step 7 of 7 — Summary')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /save draft/i })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /save & deploy/i })).toHaveLength(1)
   })
 
   it('shows a no-change popup and skips deployment when the edited YAML is unchanged', async () => {
