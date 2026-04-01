@@ -22,13 +22,14 @@ describe('deploymentsService', () => {
       team: 'data-platform',
       environment: 'production',
       isDeploy: true,
+      isSavedVersion: true,
       configurationYaml: 'pipeline: test',
     })).resolves.toEqual({
       success: true,
       deploymentId: 'run-123',
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/deployments/deploy?productType=Catalog&source=ERP&team=data-platform&environment=production&isDeploy=true', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/deployments/deploy?productType=Catalog&source=ERP&team=data-platform&environment=production&isDeploy=true&isSavedVersion=true', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: 'pipeline: test',
@@ -47,13 +48,14 @@ describe('deploymentsService', () => {
       team: 'data-platform',
       environment: 'staging',
       isDeploy: false,
+      isSavedVersion: false,
       configurationYaml: 'pipeline: upgrade',
     })).resolves.toEqual({
       success: true,
       deploymentId: 'run-upgrade-1',
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/deployments/deploy?productType=Inventory&source=CRM&team=data-platform&environment=staging&isDeploy=false', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/deployments/deploy?productType=Inventory&source=CRM&team=data-platform&environment=staging&isDeploy=false&isSavedVersion=false', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: 'pipeline: upgrade',
@@ -72,12 +74,14 @@ describe('deploymentsService', () => {
       team: 'data-platform',
       environment: 'production',
       isDeploy: true,
+      isSavedVersion: true,
       configurationYaml: 'pipeline: test',
     })).resolves.toEqual({
       success: false,
       error: 'The deployment API endpoint was not found. Verify that the backend server is running and that POST /api/backend/deployments/deploy is available. Backend response: No static resource api/backend/deployments/deploy.',
     })
   })
+
 
   it('includes a newly saved local draft in the management deployments list', async () => {
     upsertSavedDraftDeployment({

@@ -40,6 +40,8 @@ describe('StepBar', () => {
     wizardState.currentStep = 4
     wizardState.completedSteps = new Set([0, 1, 2])
     wizardState.mappings = []
+    wizardState.filters = []
+    wizardState.source = { sourceType: 'kafka', kafkaEnv: 'production', kafkaTopic: 'source_products_raw', kafkaOffset: 'earliest' }
     mockSetStep.mockClear()
   })
 
@@ -73,5 +75,62 @@ describe('StepBar', () => {
 
     expect(fieldMappingCircle).toHaveTextContent('5')
     expect(fieldMappingCircle).toHaveStyle({ background: '#ef6c4d' })
+  })
+
+  it('does not mark the Filters tab red on Summary when no filters are defined', () => {
+    wizardState.currentStep = 6
+    wizardState.completedSteps = new Set([0, 1, 2, 3, 4, 5])
+    wizardState.filters = []
+
+    render(<StepBar />)
+
+    const filtersLabel = screen.getByText('Filters')
+    const filtersCircle = filtersLabel.parentElement?.querySelector('div')
+
+    expect(filtersLabel).not.toHaveStyle({ color: '#ef6c4d' })
+    expect(filtersCircle).not.toHaveStyle({ background: '#ef6c4d' })
+  })
+
+  it('marks the Filters tab red on Summary when a filter is incomplete', () => {
+    wizardState.currentStep = 6
+    wizardState.completedSteps = new Set([0, 1, 2, 3, 4, 5])
+    wizardState.filters = [
+      {
+        id: 'group-1',
+        logic: 'AND',
+        rules: [{ id: 'rule-1', field: 'sourceName', op: 'eq', value: '' }],
+        subgroups: [],
+      },
+    ]
+
+    render(<StepBar />)
+
+    const filtersLabel = screen.getByText('Filters')
+    const filtersCircle = filtersLabel.parentElement?.querySelector('div')
+
+    expect(filtersLabel).toHaveStyle({ color: '#ef6c4d' })
+    expect(filtersCircle).toHaveTextContent('4')
+    expect(filtersCircle).toHaveStyle({ background: '#ef6c4d' })
+  })
+
+  it('clears the red tab state once the summary validation passes', () => {
+    wizardState.currentStep = 6
+    wizardState.completedSteps = new Set([0, 1, 2, 3, 4, 5])
+    wizardState.filters = [
+      {
+        id: 'group-1',
+        logic: 'AND',
+        rules: [{ id: 'rule-1', field: 'sourceName', op: 'eq', value: 'ABC' }],
+        subgroups: [],
+      },
+    ]
+
+    render(<StepBar />)
+
+    const filtersLabel = screen.getByText('Filters')
+    const filtersCircle = filtersLabel.parentElement?.querySelector('div')
+
+    expect(filtersLabel).not.toHaveStyle({ color: '#ef6c4d' })
+    expect(filtersCircle).not.toHaveStyle({ background: '#ef6c4d' })
   })
 })

@@ -39,6 +39,14 @@ describe('SourceUploadStep', () => {
     window.history.pushState({}, '', '/')
   })
 
+  it('keeps the detected schema empty before any sample is uploaded', () => {
+    renderStep()
+
+    expect(screen.queryByText('Detected Schema')).not.toBeInTheDocument()
+    expect(screen.getByText('Drop a sample file here')).toBeInTheDocument()
+    expect(screen.queryByText(/fields detected/i)).not.toBeInTheDocument()
+  })
+
   it('opens the native file picker when clicking Upload sample', async () => {
     const user = userEvent.setup()
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
@@ -80,6 +88,33 @@ describe('SourceUploadStep', () => {
     expect(clickSpy).not.toHaveBeenCalled()
     expect(fetchSchemaByExample).not.toHaveBeenCalled()
     clickSpy.mockRestore()
+  })
+
+  it('stays idle when persisted upload state is marked done but contains no inferred schema', () => {
+    localStorage.setItem('etl-studio-wizard-draft', JSON.stringify({
+      navigationMode: 'etl-config',
+      currentStep: 2,
+      completedSteps: [0, 1],
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: 'source_products_raw',
+        format: 'JSON',
+      },
+      upload: {
+        done: true,
+        schema: [],
+        fileName: '',
+        fileType: '',
+        fileSize: 0,
+      },
+    }))
+
+    renderStep()
+
+    expect(screen.queryByText('Detected Schema')).not.toBeInTheDocument()
+    expect(screen.queryByText('Sample uploaded')).not.toBeInTheDocument()
+    expect(screen.getByText('Drop a sample file here')).toBeInTheDocument()
   })
 
   it('parses a JSON Schema response and persists the inferred source fields', async () => {

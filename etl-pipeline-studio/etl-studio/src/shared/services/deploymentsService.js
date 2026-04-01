@@ -146,6 +146,7 @@ export async function deployFromYaml({
   team,
   environment = 'production',
   isDeploy = true,
+  isSavedVersion = true,
   configurationYaml,
 }) {
   try {
@@ -156,6 +157,7 @@ export async function deployFromYaml({
       environment,
     }, {
       isDeploy: Boolean(isDeploy),
+      isSavedVersion: Boolean(isSavedVersion),
     })
     const url = `${API_BASE}/backend/deployments/deploy?${params.toString()}`
     console.log('[deploymentsService] deployFromYaml →', url)

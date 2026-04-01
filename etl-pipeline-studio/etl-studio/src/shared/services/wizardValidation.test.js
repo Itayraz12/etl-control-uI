@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canNavigateToWizardStep, getFieldMappingValidation, isWizardStepValid } from './wizardValidation.js'
+import { canNavigateToWizardStep, canDeployFromSummaryChecklist, getFieldMappingValidation, getFilterValidation, getSummaryFailingStepIndexes, getSummaryValidations, isWizardStepValid } from './wizardValidation.js'
 
 const transformers = [
   {
@@ -20,13 +20,15 @@ const transformers = [
 ]
 
 function buildState(overrides = {}) {
-  return {
+  const baseState = {
     currentStep: 1,
     completedSteps: new Set(),
     metadata: {
       productSource: 'ERP',
       productType: 'Inventory',
+      location: 'OFFICE',
       environment: 'production',
+      team: 'data-platform',
       entityName: 'Product',
     },
     source: {
@@ -34,6 +36,9 @@ function buildState(overrides = {}) {
       kafkaEnv: 'production',
       kafkaTopic: 'source_products_raw',
       kafkaOffset: 'earliest',
+      format: 'JSON',
+      streamingContinuity: 'continuous',
+      recordsPerDay: 'millions',
     },
     upload: {
       done: false,
@@ -44,8 +49,29 @@ function buildState(overrides = {}) {
     targetSchema: [],
     sink: {
       sinkType: '',
+      sinkKafkaEnv: 'production',
     },
+  }
+
+  return {
+    ...baseState,
     ...overrides,
+    metadata: {
+      ...baseState.metadata,
+      ...(overrides.metadata || {}),
+    },
+    source: {
+      ...baseState.source,
+      ...(overrides.source || {}),
+    },
+    upload: {
+      ...baseState.upload,
+      ...(overrides.upload || {}),
+    },
+    sink: {
+      ...baseState.sink,
+      ...(overrides.sink || {}),
+    },
   }
 }
 
@@ -94,6 +120,76 @@ describe('canNavigateToWizardStep', () => {
 
     expect(isWizardStepValid(1, state)).toBe(false)
     expect(canNavigateToWizardStep(2, state)).toBe(false)
+  })
+
+  it('treats metadata as invalid when required metadata properties are missing', () => {
+    const state = buildState({
+      metadata: {
+        productSource: 'ERP',
+        productType: '',
+        environment: 'production',
+        entityName: '',
+        team: '',
+        location: '',
+      },
+    })
+
+    expect(isWizardStepValid(0, state)).toBe(false)
+
+    const metadataValidation = getSummaryValidations(state, undefined, transformers).find(item => item.key === 'metadataConfigured')
+
+    expect(metadataValidation.type).toBe('err')
+    expect(metadataValidation.text).toContain('product type')
+    expect(metadataValidation.text).toContain('team')
+    expect(metadataValidation.text).toContain('location')
+    expect(metadataValidation.text).toContain('entity name')
+  })
+
+  it('treats source config as invalid when required source properties are missing', () => {
+    const state = buildState({
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: '',
+        kafkaOffset: '',
+        format: '',
+        streamingContinuity: 'continuous',
+        recordsPerDay: 'millions',
+      },
+    })
+
+    expect(isWizardStepValid(1, state)).toBe(false)
+
+    const sourceValidation = getSummaryValidations(state, undefined, transformers).find(item => item.key === 'sourceConfigured')
+
+    expect(sourceValidation.type).toBe('err')
+    expect(sourceValidation.text).toContain('message / file format')
+    expect(sourceValidation.text).toContain('topic')
+    expect(sourceValidation.text).toContain('offset')
+  })
+
+  it('treats sink config as invalid when required sink properties are missing', () => {
+    const state = buildState({
+      metadata: {
+        productSource: 'ERP',
+        productType: 'Inventory',
+        environment: '',
+        entityName: 'Product',
+        team: 'data-platform',
+        location: '',
+      },
+      sink: {
+        sinkType: 'kafka',
+        sinkKafkaEnv: '',
+      },
+    })
+
+    expect(isWizardStepValid(5, state)).toBe(false)
+
+    const sinkValidation = getSummaryValidations(state, undefined, transformers).find(item => item.key === 'sinkConfigured')
+
+    expect(sinkValidation.type).toBe('err')
+    expect(sinkValidation.text).toContain('bootstrap environment')
   })
 
   it('allows completed future steps to remain clickable after loading an edited deployment', () => {
@@ -181,5 +277,187 @@ describe('canNavigateToWizardStep', () => {
     expect(validation.invalidTransformers[0].chainIndex).toBe(1)
     expect(validation.invalidTransformers[0].transformerName).toBe('Constant')
     expect(validation.invalidTransformers[0].missingRequiredProps.map(prop => prop.key)).toEqual(['value'])
+  })
+
+  it('maps failing summary validations to their owning step indexes', () => {
+    const state = buildState({
+      currentStep: 6,
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: 'source_products_raw',
+        kafkaOffset: '',
+      },
+      filters: [],
+      sink: { sinkType: '' },
+      mappings: [],
+    })
+
+    expect(Array.from(getSummaryFailingStepIndexes(state, undefined, transformers)).sort((a, b) => a - b)).toEqual([1, 4, 5])
+    expect(canDeployFromSummaryChecklist(state, undefined, transformers)).toBe(false)
+  })
+
+  it('treats an empty filter list as valid for the summary checklist', () => {
+    const state = buildState({
+      currentStep: 6,
+      metadata: {
+        productSource: 'ERP',
+        productType: 'Inventory',
+        environment: 'production',
+        entityName: 'Product',
+        team: 'data-platform',
+        location: 'OFFICE',
+      },
+      filters: [],
+      sink: { sinkType: 'kafka', sinkKafkaEnv: 'production' },
+      targetSchema: [{ id: 'targetName', name: 'Target Name', required: true }],
+      mappings: [{ src: 'id', tgt: 'targetName' }],
+    })
+
+    const filterValidation = getFilterValidation(state.filters)
+    const summaryFilterValidation = getSummaryValidations(state, undefined, transformers).find(item => item.key === 'filtersConfigured')
+
+    expect(filterValidation.isValid).toBe(true)
+    expect(filterValidation.hasFilters).toBe(false)
+    expect(summaryFilterValidation.type).toBe('ok')
+    expect(summaryFilterValidation.text).toContain('all records will pass')
+    expect(Array.from(getSummaryFailingStepIndexes(state, undefined, transformers))).not.toContain(3)
+    expect(canDeployFromSummaryChecklist(state, undefined, transformers)).toBe(true)
+  })
+
+  it('fails the summary checklist when a filter rule is incomplete', () => {
+    const state = buildState({
+      currentStep: 6,
+      metadata: {
+        productSource: 'ERP',
+        productType: 'Inventory',
+        environment: 'production',
+        entityName: 'Product',
+        team: 'data-platform',
+        location: 'OFFICE',
+      },
+      filters: [
+        {
+          id: 'group-1',
+          logic: 'AND',
+          rules: [{ id: 'rule-1', field: 'id', op: 'eq', value: '' }],
+          subgroups: [],
+        },
+      ],
+      sink: { sinkType: 'kafka', sinkKafkaEnv: 'production' },
+      targetSchema: [{ id: 'targetName', name: 'Target Name', required: true }],
+      mappings: [{ src: 'id', tgt: 'targetName' }],
+    })
+
+    const filterValidation = getFilterValidation(state.filters)
+    const summaryFilterValidation = getSummaryValidations(state, undefined, transformers).find(item => item.key === 'filtersConfigured')
+
+    expect(filterValidation.isValid).toBe(false)
+    expect(summaryFilterValidation.type).toBe('err')
+    expect(summaryFilterValidation.text).toContain('Filters incomplete')
+    expect(summaryFilterValidation.text).toContain('value')
+    expect(Array.from(getSummaryFailingStepIndexes(state, undefined, transformers))).toContain(3)
+    expect(canDeployFromSummaryChecklist(state, undefined, transformers)).toBe(false)
+  })
+
+  it('fails the summary checklist when a complex filter operator properties are not fully configured', () => {
+    const state = buildState({
+      currentStep: 6,
+      metadata: {
+        productSource: 'ERP',
+        productType: 'Inventory',
+        environment: 'production',
+        entityName: 'Product',
+        team: 'data-platform',
+        location: 'OFFICE',
+      },
+      filters: [
+        {
+          id: 'group-1',
+          logic: 'AND',
+          rules: [{ id: 'rule-1', field: 'id', op: 'between', value: '1' }],
+          subgroups: [],
+        },
+      ],
+      sink: { sinkType: 'kafka', sinkKafkaEnv: 'production' },
+      targetSchema: [{ id: 'targetName', name: 'Target Name', required: true }],
+      mappings: [{ src: 'id', tgt: 'targetName' }],
+    })
+
+    const summaryFilterValidation = getSummaryValidations(state, undefined, transformers).find(item => item.key === 'filtersConfigured')
+
+    expect(summaryFilterValidation.type).toBe('err')
+    expect(summaryFilterValidation.text).toContain('properties')
+    expect(canDeployFromSummaryChecklist(state, undefined, transformers)).toBe(false)
+  })
+
+  it('includes missing required transformer properties in the summary checklist', () => {
+    const state = buildState({
+      currentStep: 6,
+      metadata: {
+        productSource: 'ERP',
+        productType: 'Inventory',
+        environment: 'production',
+        entityName: 'Product',
+        team: 'data-platform',
+        location: 'OFFICE',
+      },
+      filters: [
+        {
+          id: 'group-1',
+          logic: 'AND',
+          rules: [{ id: 'rule-1', field: 'id', op: 'eq', value: '42' }],
+          subgroups: [],
+        },
+      ],
+      sink: { sinkType: 'kafka', sinkKafkaEnv: 'production' },
+      targetSchema: [{ id: 'targetName', name: 'Target Name', required: true }],
+      mappings: [
+        {
+          src: 'id',
+          tgt: 'targetName',
+          transformer: 'tf-required',
+          transformerProps: { logic: ' ' },
+          transformerChainDetailed: [{ id: 'tf-required', props: { logic: ' ' } }],
+        },
+      ],
+    })
+
+    const transformerValidation = getSummaryValidations(state, undefined, transformers).find(item => item.key === 'transformersConfigured')
+
+    expect(transformerValidation.type).toBe('err')
+    expect(transformerValidation.text).toContain('RequiredTransformer')
+    expect(transformerValidation.text).toContain('Logic')
+    expect(Array.from(getSummaryFailingStepIndexes(state, undefined, transformers))).toContain(4)
+    expect(canDeployFromSummaryChecklist(state, undefined, transformers)).toBe(false)
+  })
+
+  it('returns only ok summary validations once each owning step is valid', () => {
+    const state = buildState({
+      currentStep: 6,
+      filters: [
+        {
+          id: 'group-1',
+          logic: 'AND',
+          rules: [{ id: 'rule-1', field: 'id', op: 'eq', value: '42' }],
+          subgroups: [],
+        },
+      ],
+      sink: { sinkType: 'kafka' },
+      metadata: {
+        productSource: 'ERP',
+        productType: 'Inventory',
+        environment: 'production',
+        entityName: 'Product',
+        team: 'data-platform',
+        location: 'OFFICE',
+      },
+      targetSchema: [{ id: 'targetName', name: 'Target Name', required: true }],
+      mappings: [{ src: 'id', tgt: 'targetName' }],
+    })
+
+    expect(getSummaryValidations(state, undefined, transformers).every(item => item.type === 'ok')).toBe(true)
+    expect(Array.from(getSummaryFailingStepIndexes(state, undefined, transformers))).toEqual([])
+    expect(canDeployFromSummaryChecklist(state, undefined, transformers)).toBe(true)
   })
 })

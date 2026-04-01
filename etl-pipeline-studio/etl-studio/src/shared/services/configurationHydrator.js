@@ -475,10 +475,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
     || parsed.inputFields
   )
   const schema = parsed.schema || {}
-  const outputKafka = output.kafka && typeof output.kafka === 'object' && !Array.isArray(output.kafka)
-    ? output.kafka
-    : null
-  const sink = outputKafka || parsed.sink || {}
+  const sink = parsed.sink || {}
   const environment = normalizeEnvironment(metadata.environment ?? fallback.environment)
   const { sourceType, sourceConfig } = resolveSourceDefinition(source)
   const sourceFormatToken = asString(general.format ?? general.inputFormat ?? general.outputFormat ?? source.format, 'JSON').trim()
@@ -488,7 +485,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
     : sourceFormatToken.toUpperCase()
   const csvDelimiter = asString(input.delimited?.columnDelimiter ?? sourceConfig.csvDelimiter ?? source.csvDelimiter ?? ',', ',')
   const rowDelimiter = asString(general.split?.delimiter ?? sourceConfig.rowDelimiter ?? source.rowDelimiter)
-  const sinkType = outputKafka ? 'kafka' : normalizeSinkType(sink.type)
+  const sinkType = normalizeSinkType(sink.type)
   const sourceTopic = asString(sourceConfig.topic ?? source.topic)
   const sinkTopic = asString(sink.topic)
   const hasGeneralShadowFlag = Object.prototype.hasOwnProperty.call(general, 'isShadowEnabled')

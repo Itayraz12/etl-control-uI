@@ -27,6 +27,7 @@ const initialState = {
   completedSteps: new Set(),
   originalDraftYaml: '',
   originalDraftSignature: '',
+  deploymentContext: null,
   // When true, all wizard inputs/buttons are locked (opened from saved-version preview)
   readOnly: false,
   // Theme preference

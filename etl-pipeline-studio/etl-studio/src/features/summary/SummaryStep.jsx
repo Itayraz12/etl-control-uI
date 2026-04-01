@@ -13,6 +13,7 @@ import { formatInputFieldsYamlSection } from '../../shared/services/configuratio
 import { formatFilterYamlItem } from '../../shared/services/configurationYaml.js'
 import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js'
 import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js'
+import { canDeployFromSummaryChecklist, getSummaryValidations } from '../../shared/services/wizardValidation.js'
 import { useSummaryFooter } from './summaryFooterContext.jsx'
 
 function FlinkFlow({ sourceType, mappings, filters, sink }) {
@@ -96,6 +97,7 @@ export default function SummaryStep() {
   const summaryFooter = useSummaryFooter()
   const sourceSchema = resolveSourceSchema(state.upload)
   const targetSchema = resolveTargetSchema(state.targetSchema)
+  const srcMeta = SOURCE_TYPES.find(t => t.id === state.source.sourceType)
   const hasSaknayTargets = state.mappings.some(mapping => Boolean(mapping?.tgt) && (mapping?.tgtMetadata?.sendToSaknay ?? true))
   const [submitted, setSubmitted] = useState(false)
   const [copying, setCopying] = useState(false)
@@ -166,9 +168,7 @@ export default function SummaryStep() {
 
   useEffect(() => () => { sseCleanupRef.current?.() }, [])
 
-  const srcMeta = SOURCE_TYPES.find(t => t.id === state.source.sourceType)
   const requiredTargetFieldIds = targetSchema.filter(field => field.required).map(field => field.id)
-  const reqMapped = state.mappings.filter(m => requiredTargetFieldIds.includes(m.tgt)).length
   const unmappedRequired = requiredTargetFieldIds.filter(f => !state.mappings.some(m => m.tgt === f))
 
   const getMappingSources = (mapping) => [
@@ -457,21 +457,8 @@ ${sinkAdditionalConfigYaml}` : ''}
     || !originalPipelineSignature
     || originalPipelineSignature !== currentPipelineSignature
 
-  const validations = [
-    { type: unmappedRequired.length === 0 ? 'ok' : 'err',  text: `Required fields mapped (${reqMapped}/${requiredTargetFieldIds.length || 0})` },
-    { type: state.mappings.length > 0 ? 'ok' : 'warn', text: `${state.mappings.length} field mapping(s) defined` },
-    {
-      type: state.source.sourceType === 'kafka'
-        ? (state.source.kafkaTopic && state.source.kafkaOffset ? 'ok' : 'err')
-        : (state.source.sourceType ? 'ok' : 'warn'),
-      text: state.source.sourceType === 'kafka'
-        ? `Source configured: ${srcMeta?.name || 'unknown'}${state.source.kafkaOffset ? ` (offset: ${state.source.kafkaOffset})` : ' (offset missing)'}`
-        : `Source configured: ${srcMeta?.name || 'unknown'}`,
-    },
-    { type: state.metadata.productSource ? 'ok' : 'err', text: `Metadata: product source "${state.metadata.productSource}"` },
-    { type: state.filters.length > 0 ? 'ok' : 'warn', text: `${state.filters.reduce((a, g) => a + g.rules.length, 0)} filter rule(s) active` },
-    { type: state.sink.sinkType ? 'ok' : 'err', text: `Sink configured: ${state.sink.sinkType || 'none'}` },
-  ]
+  const validations = getSummaryValidations(state, targetSchema, transformers)
+  const canDeployFromChecklist = canDeployFromSummaryChecklist(state, targetSchema, transformers)
 
   const handleCreatePipeline = async () => {
     // Validate required fields
@@ -712,7 +699,7 @@ ${sinkAdditionalConfigYaml}` : ''}
       saveDraftLabel: savingDraft ? 'Saving…' : '💾 Save Draft',
       deployLabel: deployDisabled ? '🚀 Saving & Deploying...' : '🚀 Save & Deploy',
       saveDraftDisabled: savingDraft || deployDisabled,
-      deployDisabled,
+      deployDisabled: deployDisabled || !canDeployFromChecklist,
       onSaveDraft: handleSaveDraft,
       onDeploy: handleCreatePipeline,
     })
@@ -724,6 +711,7 @@ ${sinkAdditionalConfigYaml}` : ''}
     submitted,
     savingDraft,
     deployDisabled,
+    canDeployFromChecklist,
     handleCreatePipeline,
     handleSaveDraft,
   ])
@@ -899,7 +887,7 @@ ${sinkAdditionalConfigYaml}` : ''}
           flexShrink: 0,
         }}>
           <Btn v="secondary" onClick={handleSaveDraft} disabled={savingDraft || deployDisabled}>{savingDraft ? 'Saving…' : '💾 Save Draft'}</Btn>
-          <Btn v="success" onClick={handleCreatePipeline} disabled={deployDisabled}>{deployDisabled ? '🚀 Saving & Deploying...' : '🚀 Save & Deploy'}</Btn>
+          <Btn v="success" onClick={handleCreatePipeline} disabled={deployDisabled || !canDeployFromChecklist}>{deployDisabled ? '🚀 Saving & Deploying...' : '🚀 Save & Deploy'}</Btn>
         </div>
       )}
 

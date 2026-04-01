@@ -21,7 +21,7 @@ This document provides a comprehensive reference for all REST API endpoints used
 - `GET /deployments` - List all ETL deployments
 - `POST /deployments` - Create new deployment
 - `GET /deployments/:id` - Get deployment details
-- `POST /backend/deployments/stop` - Stop/cancel deployment
+- `DELETE /deployments/:id` - Stop/cancel deployment
 
 #### Data Processing (1 endpoint)
 - `POST /process` - Execute data transformation pipeline
@@ -650,7 +650,7 @@ DELETE /api/backend/deployments/delete?productType=Catalog&source=CRM&team=data-
 }
 ```
 
-**Usage Location:** `src/shared/services/deploymentsService.js:deleteDeployment()`
+**Usage Location:** `src/shared/services/deploymentsService.js:stopDeployment()`
 
 **Implementation Notes:**
 - Returns 409 Conflict if attempting to delete pending deployments

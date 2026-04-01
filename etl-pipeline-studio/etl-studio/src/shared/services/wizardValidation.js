@@ -1,5 +1,210 @@
-import { resolveTargetSchema } from '../types/index.js'
+import { SOURCE_TYPES, normalizeMetadataLocation, resolveTargetSchema } from '../types/index.js'
+import { MOCK_FILTER_OPERATORS } from './configService.js'
 import { findTransformer, getMissingRequiredTransformerProps } from './transformerValidation.js'
+
+export const SUMMARY_VALIDATION_STEP_INDEXES = {
+  requiredFieldsMapped: 4,
+  hasMappings: 4,
+  transformersConfigured: 4,
+  sourceConfigured: 1,
+  metadataConfigured: 0,
+  filtersConfigured: 3,
+  sinkConfigured: 5,
+}
+
+function hasRequiredValue(value) {
+  if (value === 0 || value === false) return true
+  if (typeof value === 'string') return value.trim() !== ''
+  return value != null && Boolean(value)
+}
+
+function formatMissingRequiredFieldsText(missingFields = []) {
+  return missingFields.length > 0
+    ? `Missing required fields: ${missingFields.join(', ')}`
+    : ''
+}
+
+function getMissingMetadataRequiredFields(metadata = {}, source = {}) {
+  const missingFields = []
+  const normalizedLocation = normalizeMetadataLocation(metadata.location, metadata.environment)
+
+  if (!hasRequiredValue(metadata.productSource)) missingFields.push('product source')
+  if (!hasRequiredValue(metadata.productType)) missingFields.push('product type')
+  if (!hasRequiredValue(metadata.team)) missingFields.push('team')
+  if (!hasRequiredValue(metadata.environment)) missingFields.push('environment')
+  if (hasRequiredValue(metadata.environment) && !hasRequiredValue(normalizedLocation)) missingFields.push('location')
+  if (!hasRequiredValue(metadata.entityName)) missingFields.push('entity name')
+  if (!hasRequiredValue(source.streamingContinuity)) missingFields.push('streaming continuity')
+  if (!hasRequiredValue(source.recordsPerDay)) missingFields.push('avg records per day')
+
+  return missingFields
+}
+
+function getMissingSourceRequiredFields(source = {}, metadata = {}) {
+  const missingFields = []
+  const sourceType = String(source.sourceType || '').trim().toLowerCase()
+
+  if (!hasRequiredValue(source.sourceType)) {
+    missingFields.push('source type')
+    return missingFields
+  }
+
+  if (!hasRequiredValue(source.format)) missingFields.push('message / file format')
+
+  if (sourceType === 'kafka') {
+    if (!hasRequiredValue(source.kafkaEnv || metadata.environment)) missingFields.push('environment')
+    if (!hasRequiredValue(source.kafkaTopic)) missingFields.push('topic')
+    if (!hasRequiredValue(source.kafkaOffset)) missingFields.push('offset')
+  }
+
+  if (sourceType === 'rabbitmq') {
+    if (!hasRequiredValue(source.rmqIp)) missingFields.push('ip')
+    if (!hasRequiredValue(source.rmqPort)) missingFields.push('port')
+    if (!hasRequiredValue(source.rmqUsername)) missingFields.push('username')
+    if (!hasRequiredValue(source.rmqPassword)) missingFields.push('password')
+    if (!hasRequiredValue(source.rmqQueue)) missingFields.push('queue')
+  }
+
+  return missingFields
+}
+
+function getMissingSinkRequiredFields(sink = {}, metadata = {}) {
+  const missingFields = []
+  const sinkType = String(sink.sinkType || '').trim().toLowerCase()
+
+  if (!hasRequiredValue(sink.sinkType)) {
+    missingFields.push('sink type')
+    return missingFields
+  }
+
+  if (sinkType === 'kafka') {
+    if (!hasRequiredValue(sink.sinkKafkaEnv || metadata.environment)) missingFields.push('bootstrap environment')
+  }
+
+  if (sinkType === 'rabbitmq') {
+    if (!hasRequiredValue(sink.sinkRmqVhost)) missingFields.push('vhost')
+    if (!hasRequiredValue(sink.sinkRmqPort)) missingFields.push('port')
+    if (!hasRequiredValue(sink.sinkRmqQueue)) missingFields.push('queue name')
+  }
+
+  return missingFields
+}
+
+function getFilterOperatorDefinition(filterOperators = MOCK_FILTER_OPERATORS, operatorId) {
+  if (!operatorId) return null
+  return filterOperators.find(operator => operator?.id === operatorId || operator?.name === operatorId) || null
+}
+
+function parseFilterRuleValue(value) {
+  if (!value || typeof value !== 'string') return null
+
+  try {
+    const parsedValue = JSON.parse(value)
+    return parsedValue && typeof parsedValue === 'object' && !Array.isArray(parsedValue)
+      ? parsedValue
+      : null
+  } catch {
+    return null
+  }
+}
+
+function getMissingFilterRuleFields(rule = {}, filterOperators = MOCK_FILTER_OPERATORS) {
+  const missingFields = []
+  const operatorId = String(rule?.op || '').trim()
+
+  if (!hasRequiredValue(rule?.field)) missingFields.push('field')
+  if (!hasRequiredValue(operatorId)) missingFields.push('operator')
+  if (missingFields.length > 0) return missingFields
+
+  if (operatorId.includes('null')) return missingFields
+
+  const operatorDefinition = getFilterOperatorDefinition(filterOperators, operatorId)
+  const complexProperties = Array.isArray(operatorDefinition?.additionalProperties?.properties)
+    ? operatorDefinition.additionalProperties.properties
+    : []
+
+  if (complexProperties.length > 0) {
+    const parsedValue = parseFilterRuleValue(rule?.value)
+
+    if (!parsedValue) {
+      return ['properties']
+    }
+
+    complexProperties.forEach(property => {
+      const propertyValue = parsedValue[property.key] ?? property.default
+      if (!hasRequiredValue(propertyValue)) {
+        missingFields.push(property.label || property.key)
+      }
+    })
+
+    return missingFields
+  }
+
+  if (!hasRequiredValue(rule?.value)) missingFields.push('value')
+  return missingFields
+}
+
+function countFilterRules(groups = []) {
+  return groups.reduce((count, group) => (
+    count
+    + (Array.isArray(group?.rules) ? group.rules.length : 0)
+    + countFilterRules(Array.isArray(group?.subgroups) ? group.subgroups : [])
+  ), 0)
+}
+
+function validateFilterGroup(group = {}, filterOperators = MOCK_FILTER_OPERATORS, path = 'group 1') {
+  const rules = Array.isArray(group?.rules) ? group.rules : []
+  const subgroups = Array.isArray(group?.subgroups) ? group.subgroups : []
+  const missingFields = []
+  const invalidRules = []
+  const invalidSubgroups = []
+
+  if (!['AND', 'OR'].includes(String(group?.logic || '').toUpperCase())) {
+    missingFields.push('logic')
+  }
+
+  if ((rules.length + subgroups.length) === 0) {
+    missingFields.push('condition')
+  }
+
+  rules.forEach((rule, index) => {
+    const missingRuleFields = getMissingFilterRuleFields(rule, filterOperators)
+    if (missingRuleFields.length > 0) {
+      invalidRules.push({
+        path: `${path} rule ${index + 1}`,
+        missingFields: missingRuleFields,
+      })
+    }
+  })
+
+  subgroups.forEach((subgroup, index) => {
+    const subgroupValidation = validateFilterGroup(subgroup, filterOperators, `${path}.${index + 1}`)
+    if (!subgroupValidation.isValid) {
+      invalidSubgroups.push(subgroupValidation)
+    }
+  })
+
+  return {
+    path,
+    missingFields,
+    invalidRules,
+    invalidSubgroups,
+    isValid: missingFields.length === 0 && invalidRules.length === 0 && invalidSubgroups.length === 0,
+  }
+}
+
+export function getFilterValidation(filters = [], filterOperators = MOCK_FILTER_OPERATORS) {
+  const normalizedFilters = Array.isArray(filters) ? filters : []
+  const groupValidations = normalizedFilters.map((group, index) => validateFilterGroup(group, filterOperators, `group ${index + 1}`))
+  const invalidGroups = groupValidations.filter(groupValidation => !groupValidation.isValid)
+
+  return {
+    hasFilters: normalizedFilters.length > 0,
+    ruleCount: countFilterRules(normalizedFilters),
+    invalidGroups,
+    isValid: invalidGroups.length === 0,
+  }
+}
 
 export function getResolvedTargetSchema(state) {
   return resolveTargetSchema(state?.targetSchema)
@@ -87,21 +292,121 @@ export function getFieldMappingValidation(state, targetSchema = getResolvedTarge
   }
 }
 
+export function getSummaryValidations(state, targetSchema = getResolvedTargetSchema(state), transformers = []) {
+  const source = state?.source || {}
+  const metadata = state?.metadata || {}
+  const filters = Array.isArray(state?.filters) ? state.filters : []
+  const sink = state?.sink || {}
+  const fieldMappingValidation = getFieldMappingValidation(state, targetSchema, transformers)
+  const filterValidation = getFilterValidation(filters)
+  const srcMeta = SOURCE_TYPES.find(t => t.id === source.sourceType)
+  const missingMetadataFields = getMissingMetadataRequiredFields(metadata, source)
+  const missingSourceFields = getMissingSourceRequiredFields(source, metadata)
+  const missingSinkFields = getMissingSinkRequiredFields(sink, metadata)
+  const invalidTransformerSummary = fieldMappingValidation.invalidTransformers
+    .map(item => `${item.transformerName} (${item.missingRequiredProps.map(prop => prop.label || prop.key).join(', ')})`)
+    .join('; ')
+  const requiredTargetFieldIds = targetSchema.filter(field => field?.required).map(field => field.id)
+  const reqMapped = Array.isArray(state?.mappings)
+    ? state.mappings.filter(mapping => requiredTargetFieldIds.includes(mapping?.tgt)).length
+    : 0
+
+  return [
+    {
+      key: 'requiredFieldsMapped',
+      stepIndex: SUMMARY_VALIDATION_STEP_INDEXES.requiredFieldsMapped,
+      type: fieldMappingValidation.unmappedRequiredTargets.length === 0 ? 'ok' : 'err',
+      text: `Required fields mapped (${reqMapped}/${requiredTargetFieldIds.length || 0})`,
+    },
+    {
+      key: 'hasMappings',
+      stepIndex: SUMMARY_VALIDATION_STEP_INDEXES.hasMappings,
+      type: fieldMappingValidation.hasMappings ? 'ok' : 'warn',
+      text: `${Array.isArray(state?.mappings) ? state.mappings.length : 0} field mapping(s) defined`,
+    },
+    {
+      key: 'transformersConfigured',
+      stepIndex: SUMMARY_VALIDATION_STEP_INDEXES.transformersConfigured,
+      type: fieldMappingValidation.invalidTransformers.length === 0 ? 'ok' : 'err',
+      text: fieldMappingValidation.invalidTransformers.length === 0
+        ? 'All required transformer properties configured'
+        : `Incomplete transformer configuration: ${invalidTransformerSummary}`,
+    },
+    {
+      key: 'sourceConfigured',
+      stepIndex: SUMMARY_VALIDATION_STEP_INDEXES.sourceConfigured,
+      type: missingSourceFields.length === 0 ? 'ok' : 'err',
+      text: missingSourceFields.length === 0
+        ? `Source configured: ${srcMeta?.name || 'unknown'}${source.sourceType === 'kafka' && source.kafkaOffset ? ` (offset: ${source.kafkaOffset})` : ''}`
+        : `Source configuration incomplete. ${formatMissingRequiredFieldsText(missingSourceFields)}`,
+    },
+    {
+      key: 'metadataConfigured',
+      stepIndex: SUMMARY_VALIDATION_STEP_INDEXES.metadataConfigured,
+      type: missingMetadataFields.length === 0 ? 'ok' : 'err',
+      text: missingMetadataFields.length === 0
+        ? `Metadata configured: ${metadata.productSource || ''} / ${metadata.productType || ''}`
+        : `Metadata incomplete. ${formatMissingRequiredFieldsText(missingMetadataFields)}`,
+    },
+    {
+      key: 'filtersConfigured',
+      stepIndex: SUMMARY_VALIDATION_STEP_INDEXES.filtersConfigured,
+      type: filterValidation.isValid ? 'ok' : 'err',
+      text: !filterValidation.hasFilters
+        ? '0 filter rule(s) active (all records will pass)'
+        : filterValidation.isValid
+          ? `${filterValidation.ruleCount} filter rule(s) active`
+          : `Filters incomplete. ${filterValidation.invalidGroups.map(group => {
+            const groupIssues = []
+            if (group.missingFields.length > 0) {
+              groupIssues.push(`${group.path}: ${group.missingFields.join(', ')}`)
+            }
+            group.invalidRules.forEach(rule => {
+              groupIssues.push(`${rule.path}: ${rule.missingFields.join(', ')}`)
+            })
+            group.invalidSubgroups.forEach(subgroup => {
+              if (subgroup.missingFields.length > 0) {
+                groupIssues.push(`${subgroup.path}: ${subgroup.missingFields.join(', ')}`)
+              }
+              subgroup.invalidRules.forEach(rule => {
+                groupIssues.push(`${rule.path}: ${rule.missingFields.join(', ')}`)
+              })
+            })
+            return groupIssues.join('; ')
+          }).filter(Boolean).join('; ')}`,
+    },
+    {
+      key: 'sinkConfigured',
+      stepIndex: SUMMARY_VALIDATION_STEP_INDEXES.sinkConfigured,
+      type: missingSinkFields.length === 0 ? 'ok' : 'err',
+      text: missingSinkFields.length === 0
+        ? `Sink configured: ${sink.sinkType || 'none'}`
+        : `Sink configuration incomplete. ${formatMissingRequiredFieldsText(missingSinkFields)}`,
+    },
+  ]
+}
+
+export function canDeployFromSummaryChecklist(state, targetSchema = getResolvedTargetSchema(state), transformers = []) {
+  return getSummaryValidations(state, targetSchema, transformers).every(item => item.type === 'ok')
+}
+
+export function getSummaryFailingStepIndexes(state, targetSchema = getResolvedTargetSchema(state), transformers = []) {
+  return new Set(
+    getSummaryValidations(state, targetSchema, transformers)
+      .filter(item => item.type !== 'ok')
+      .map(item => item.stepIndex)
+  )
+}
+
 export function isWizardStepValid(stepIndex, state, targetSchema = getResolvedTargetSchema(state), transformers = []) {
   const { metadata = {}, source = {}, upload = {}, sink = {} } = state || {}
 
   if (stepIndex === 0) {
-    return Boolean(metadata.productSource && metadata.productType && metadata.environment && metadata.entityName)
+    return getMissingMetadataRequiredFields(metadata, source).length === 0
   }
 
   if (stepIndex === 1) {
-    if (!source.sourceType) return false
-
-    if (source.sourceType === 'kafka') {
-      return Boolean(source.kafkaEnv && source.kafkaTopic && source.kafkaOffset)
-    }
-
-    return true
+    return getMissingSourceRequiredFields(source, metadata).length === 0
   }
 
   if (stepIndex === 2) {
@@ -117,7 +422,7 @@ export function isWizardStepValid(stepIndex, state, targetSchema = getResolvedTa
   }
 
   if (stepIndex === 5) {
-    return Boolean(sink.sinkType)
+    return getMissingSinkRequiredFields(sink, metadata).length === 0
   }
 
   if (stepIndex === 6) {

@@ -177,6 +177,47 @@ function buildPreviewUrl(deploymentId, previewSource) {
   return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
 }
 
+function tokenizeVersion(value) {
+  return String(value || '')
+    .trim()
+    .match(/[A-Za-z]+|\d+/g) || []
+}
+
+export function compareDeploymentVersions(leftVersion, rightVersion) {
+  const leftTokens = tokenizeVersion(leftVersion)
+  const rightTokens = tokenizeVersion(rightVersion)
+  const maxLength = Math.max(leftTokens.length, rightTokens.length)
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const leftToken = leftTokens[index]
+    const rightToken = rightTokens[index]
+
+    if (leftToken === undefined && rightToken === undefined) return 0
+    if (leftToken === undefined) return -1
+    if (rightToken === undefined) return 1
+
+    const leftIsNumber = /^\d+$/.test(leftToken)
+    const rightIsNumber = /^\d+$/.test(rightToken)
+
+    if (leftIsNumber && rightIsNumber) {
+      const leftNumber = Number(leftToken)
+      const rightNumber = Number(rightToken)
+      if (leftNumber !== rightNumber) return leftNumber > rightNumber ? 1 : -1
+      continue
+    }
+
+    const comparison = leftToken.localeCompare(rightToken, undefined, { sensitivity: 'base' })
+    if (comparison !== 0) return comparison > 0 ? 1 : -1
+  }
+
+  return 0
+}
+
+function isSavedVersionNewer(savedVersion, deployedVersion) {
+  if (!savedVersion || !deployedVersion) return false
+  return compareDeploymentVersions(savedVersion, deployedVersion) > 0
+}
+
 export default function ETLManagementScreen() {
   const [deployments, setDeployments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -188,6 +229,7 @@ export default function ETLManagementScreen() {
   const [screenError, setScreenError] = useState('');
   const [screenNotice, setScreenNotice] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [deployVersionDialog, setDeployVersionDialog] = useState(null);
   const [errorModal, setErrorModal] = useState(null);
   const [successInfo, setSuccessInfo] = useState(null);   // success overlay data
   const [successCopied, setSuccessCopied] = useState(false);
@@ -358,7 +400,7 @@ export default function ETLManagementScreen() {
     )));
   };
 
-  const runManagementDeploymentAction = async (deploymentRow, mode) => {
+  const runManagementDeploymentAction = async (deploymentRow, mode, { isSavedVersion = false } = {}) => {
     const actionCopy = MANAGEMENT_DEPLOYMENT_COPY[mode] || MANAGEMENT_DEPLOYMENT_COPY.deploy;
     const isDeploy = mode !== 'upgrade';
     const id = deploymentRow.id;
@@ -394,8 +436,9 @@ export default function ETLManagementScreen() {
     const environment = deploymentRow.environment || 'production';
     let yamlText;
     try {
-      console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] fetching YAML for`, deploymentRow.productType, '/', deploymentRow.productSource);
-      yamlText = await fetchDraftConfiguration({
+      console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] fetching ${isSavedVersion ? 'saved' : 'deployed'} YAML for`, deploymentRow.productType, '/', deploymentRow.productSource);
+      const fetchYaml = isSavedVersion ? fetchSavedDraftYaml : fetchDraftConfiguration
+      yamlText = await fetchYaml({
         productType: deploymentRow.productType,
         source: deploymentRow.productSource,
         team: teamName,
@@ -420,6 +463,7 @@ export default function ETLManagementScreen() {
       team: teamName,
       environment,
       isDeploy,
+      isSavedVersion,
       configurationYaml: yamlText,
     });
     console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] deployFromYaml result:`, JSON.stringify(result));
@@ -488,7 +532,9 @@ export default function ETLManagementScreen() {
         deployment.updateStep(steps.length - 1, { status: 'done' });
         deployment.setIsComplete(true);
         updateDeploymentRowStatus(deploymentRow, 'running', {
-          deployedVersion: deploymentRow.savedVersion ?? deploymentRow.deployedVersion,
+          deployedVersion: isSavedVersion
+            ? (deploymentRow.savedVersion ?? deploymentRow.deployedVersion)
+            : deploymentRow.deployedVersion,
         });
         try { await refreshDeployments(); } catch (e) {
           console.warn(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] refresh failed:`, e);
@@ -526,7 +572,23 @@ export default function ETLManagementScreen() {
   };
 
   const handleDeploy = async (deploymentRow) => {
-    await runManagementDeploymentAction(deploymentRow, 'deploy');
+    const hasDeployedVersion = String(deploymentRow?.deployedVersion ?? '').trim() !== ''
+
+    if (!hasDeployedVersion) {
+      await runManagementDeploymentAction(deploymentRow, 'deploy', { isSavedVersion: true });
+      return;
+    }
+
+    if (isSavedVersionNewer(deploymentRow.savedVersion, deploymentRow.deployedVersion)) {
+      setDeployVersionDialog({
+        deploymentRow,
+        title: 'Choose version to deploy',
+        message: `Select which version to deploy for ${deploymentRow.productSource} / ${deploymentRow.productType}.`,
+      });
+      return;
+    }
+
+    await runManagementDeploymentAction(deploymentRow, 'deploy', { isSavedVersion: false });
   };
 
   const handleDelete = async (deploymentRow) => {
@@ -1520,6 +1582,98 @@ export default function ETLManagementScreen() {
           onConfirm={confirmDialog?.onConfirm}
           onCancel={() => setConfirmDialog(null)}
         />
+
+        <ModalDialog
+          isOpen={Boolean(deployVersionDialog)}
+          title={deployVersionDialog?.title}
+          message={deployVersionDialog?.message}
+          icon="🚀"
+          tone="accent"
+          cancelLabel="Cancel"
+          onCancel={() => setDeployVersionDialog(null)}
+          footer={<Btn v="ghost" onClick={() => setDeployVersionDialog(null)}>Cancel</Btn>}
+        >
+          <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+            <button
+              type="button"
+              aria-label="Deploy saved version"
+              onClick={async () => {
+                const target = deployVersionDialog?.deploymentRow
+                setDeployVersionDialog(null)
+                if (target) {
+                  await runManagementDeploymentAction(target, 'deploy', { isSavedVersion: true })
+                }
+              }}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                width: '100%',
+                gap: 16,
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: '1px solid rgba(79,110,247,0.45)',
+                background: 'rgba(79,110,247,0.08)',
+                fontSize: 13,
+                color: 'var(--text)',
+                cursor: 'pointer',
+                transition: 'background 0.15s, border-color 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(79,110,247,0.14)'
+                e.currentTarget.style.borderColor = 'var(--accent)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(79,110,247,0.08)'
+                e.currentTarget.style.borderColor = 'rgba(79,110,247,0.45)'
+              }}
+            >
+              <span style={{ color: 'var(--muted)' }}>Saved version</span>
+              <span style={{ fontFamily: 'var(--mono)', color: 'var(--accent)', fontWeight: 600 }}>
+                {deployVersionDialog?.deploymentRow?.savedVersion || '—'}
+              </span>
+            </button>
+            <button
+              type="button"
+              aria-label="Deploy deployed version"
+              onClick={async () => {
+                const target = deployVersionDialog?.deploymentRow
+                setDeployVersionDialog(null)
+                if (target) {
+                  await runManagementDeploymentAction(target, 'deploy', { isSavedVersion: false })
+                }
+              }}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                width: '100%',
+                gap: 16,
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+                background: 'var(--bg)',
+                fontSize: 13,
+                color: 'var(--text)',
+                cursor: 'pointer',
+                transition: 'background 0.15s, border-color 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+                e.currentTarget.style.borderColor = 'var(--accent)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'var(--bg)'
+                e.currentTarget.style.borderColor = 'var(--border)'
+              }}
+            >
+              <span style={{ color: 'var(--muted)' }}>Deployed version</span>
+              <span style={{ fontFamily: 'var(--mono)', color: 'var(--text)', fontWeight: 600 }}>
+                {deployVersionDialog?.deploymentRow?.deployedVersion || '—'}
+              </span>
+            </button>
+          </div>
+        </ModalDialog>
 
         {/* Deployment error popup — mirrors SummaryStep behaviour */}
         <ModalDialog

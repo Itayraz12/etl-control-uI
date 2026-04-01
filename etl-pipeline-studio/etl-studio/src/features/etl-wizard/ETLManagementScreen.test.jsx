@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ETLManagementScreen, { getManagementSearchTerms, matchesManagementSearch } from './ETLManagementScreen.jsx'
+import ETLManagementScreen, { compareDeploymentVersions, getManagementSearchTerms, matchesManagementSearch } from './ETLManagementScreen.jsx'
 
 const mockFetchDraftConfiguration = vi.fn(() => Promise.resolve('pipeline: yaml'))
 const mockFetchSavedDraftYaml = vi.fn(() => Promise.resolve('saved: yaml'))
@@ -370,6 +370,12 @@ describe('ETLManagementScreen table layout stability', () => {
     expect(matchesManagementSearch(baseMockDeployments[1], '2026-03-13')).toBe(true)
   })
 
+  it('compares dotted deployment versions numerically', () => {
+    expect(compareDeploymentVersions('3.1.0', '3.0.9')).toBeGreaterThan(0)
+    expect(compareDeploymentVersions('2.0.0', '2.0.0')).toBe(0)
+    expect(compareDeploymentVersions('1.9.9', '2.0.0')).toBeLessThan(0)
+  })
+
   it('matches separate filter words across different columns in the same row', async () => {
     const user = userEvent.setup()
     render(<ETLManagementScreen />)
@@ -543,9 +549,97 @@ describe('ETLManagementScreen table layout stability', () => {
         team: 'data-platform',
         environment: 'production',
         isDeploy: false,
+        isSavedVersion: false,
         configurationYaml: 'pipeline: yaml',
       })
       expect(mockSubscribeToDeploymentProgress).toHaveBeenCalledWith('dep-run-1', expect.any(Object))
+    })
+  })
+
+  it('shows a deploy version choice modal when a newer saved version exists and deploys the chosen deployed version', async () => {
+    const user = userEvent.setup()
+    mockDeployments = structuredClone(baseMockDeployments).map((deployment) => (
+      deployment.id === 'dep-3'
+        ? { ...deployment, deploymentStatus: 'stopped' }
+        : deployment
+    ))
+
+    render(<ETLManagementScreen />)
+
+    const pricingCell = await screen.findByText('Pricing')
+    const pricingRow = pricingCell.closest('tr')
+
+    expect(pricingRow).toBeTruthy()
+
+    await user.click(within(pricingRow).getByRole('button', { name: 'Deploy pipeline' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Choose version to deploy')).toBeInTheDocument()
+      expect(screen.getByText('Saved version')).toBeInTheDocument()
+      expect(screen.getByText('Deployed version')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Deploy deployed version' }))
+
+    await waitFor(() => {
+      expect(mockFetchDraftConfiguration).toHaveBeenCalledWith({
+        productType: 'Pricing',
+        source: 'PIM',
+        team: 'data-platform',
+        environment: 'production',
+      }, false)
+      expect(mockFetchSavedDraftYaml).not.toHaveBeenCalled()
+      expect(mockDeployFromYaml).toHaveBeenCalledWith({
+        productType: 'Pricing',
+        source: 'PIM',
+        team: 'data-platform',
+        environment: 'production',
+        isDeploy: true,
+        isSavedVersion: false,
+        configurationYaml: 'pipeline: yaml',
+      })
+    })
+  })
+
+  it('can deploy the saved version from the version choice modal when a newer saved version exists', async () => {
+    const user = userEvent.setup()
+    mockDeployments = structuredClone(baseMockDeployments).map((deployment) => (
+      deployment.id === 'dep-3'
+        ? { ...deployment, deploymentStatus: 'stopped' }
+        : deployment
+    ))
+
+    render(<ETLManagementScreen />)
+
+    const pricingCell = await screen.findByText('Pricing')
+    const pricingRow = pricingCell.closest('tr')
+
+    expect(pricingRow).toBeTruthy()
+
+    await user.click(within(pricingRow).getByRole('button', { name: 'Deploy pipeline' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Choose version to deploy')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Deploy saved version' }))
+
+    await waitFor(() => {
+      expect(mockFetchSavedDraftYaml).toHaveBeenCalledWith({
+        productType: 'Pricing',
+        source: 'PIM',
+        team: 'data-platform',
+        environment: 'production',
+      }, false)
+      expect(mockDeployFromYaml).toHaveBeenCalledWith({
+        productType: 'Pricing',
+        source: 'PIM',
+        team: 'data-platform',
+        environment: 'production',
+        isDeploy: true,
+        isSavedVersion: true,
+        configurationYaml: 'saved: yaml',
+      })
     })
   })
 
@@ -643,13 +737,20 @@ describe('ETLManagementScreen table layout stability', () => {
     await user.click(deployButton)
 
     await waitFor(() => {
+      expect(mockFetchSavedDraftYaml).toHaveBeenCalledWith({
+        productType: 'Catalog',
+        source: 'CRM',
+        team: 'data-platform',
+        environment: 'staging',
+      }, false)
       expect(mockDeployFromYaml).toHaveBeenCalledWith({
         productType: 'Catalog',
         source: 'CRM',
         team: 'data-platform',
         environment: 'staging',
         isDeploy: true,
-        configurationYaml: 'pipeline: yaml',
+        isSavedVersion: true,
+        configurationYaml: 'saved: yaml',
       })
       expect(screen.getByText('Kafka broker was unavailable')).toBeInTheDocument()
       expect(screen.getByText('1 failed')).toBeInTheDocument()
@@ -657,6 +758,7 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByRole('button', { name: 'Got it' })).toBeInTheDocument()
     })
   })
+
 
   it('renders saved and deployed version hints as floating tooltips above the last table row', async () => {
     const user = userEvent.setup()

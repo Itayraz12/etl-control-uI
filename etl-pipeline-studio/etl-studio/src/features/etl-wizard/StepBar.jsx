@@ -1,13 +1,17 @@
 import { STEPS } from '../../shared/types/index.js'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
-import { canNavigateToWizardStep, getFieldMappingValidation } from '../../shared/services/wizardValidation.js'
+import { canNavigateToWizardStep, getFieldMappingValidation, getSummaryFailingStepIndexes } from '../../shared/services/wizardValidation.js'
 
 export default function StepBar() {
   const { state, actions } = useWizard()
   const { transformers } = useConfig()
   const { currentStep, completedSteps } = state
   const fieldMappingValidation = getFieldMappingValidation(state, undefined, transformers)
+  const shouldShowSummaryFailures = currentStep === 6 || completedSteps.has(6)
+  const summaryFailingStepIndexes = shouldShowSummaryFailures
+    ? getSummaryFailingStepIndexes(state, undefined, transformers)
+    : new Set()
 
   return (
     <div style={{
@@ -24,6 +28,8 @@ export default function StepBar() {
             i === 4 &&
             !fieldMappingValidation.isValid &&
             (fieldMappingValidation.hasMappings || completedSteps.has(4))
+          const isSummaryFailingStep = summaryFailingStepIndexes.has(i)
+          const isFailingStep = isIncompleteFieldMapping || isSummaryFailingStep
 
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
@@ -40,16 +46,16 @@ export default function StepBar() {
                   width: 26, height: 26, borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 11, fontWeight: 700, flexShrink: 0,
-                  background: isIncompleteFieldMapping ? '#ef6c4d' : isDone ? 'var(--success)' : isActive ? 'var(--accent)' : 'var(--surf2)',
-                  border: `2px solid ${isIncompleteFieldMapping ? '#ef6c4d' : isDone ? 'var(--success)' : isActive ? 'var(--accent)' : 'var(--border)'}`,
-                  color: (isDone || isActive || isIncompleteFieldMapping) ? '#fff' : canClick ? 'var(--text)' : 'var(--muted)',
+                  background: isFailingStep ? '#ef6c4d' : isDone ? 'var(--success)' : isActive ? 'var(--accent)' : 'var(--surf2)',
+                  border: `2px solid ${isFailingStep ? '#ef6c4d' : isDone ? 'var(--success)' : isActive ? 'var(--accent)' : 'var(--border)'}`,
+                  color: (isDone || isActive || isFailingStep) ? '#fff' : canClick ? 'var(--text)' : 'var(--muted)',
                 }}>
-                  {isDone && !isIncompleteFieldMapping ? '✓' : i + 1}
+                  {isDone && !isFailingStep ? '✓' : i + 1}
                 </div>
                 <span style={{
                   fontSize: 12,
-                  color: isActive ? 'var(--accent)' : isIncompleteFieldMapping ? '#ef6c4d' : isDone ? 'var(--success)' : canClick ? 'var(--text)' : 'var(--muted)',
-                  fontWeight: isActive ? 700 : isIncompleteFieldMapping ? 600 : 400,
+                  color: isFailingStep ? '#ef6c4d' : isActive ? 'var(--accent)' : isDone ? 'var(--success)' : canClick ? 'var(--text)' : 'var(--muted)',
+                  fontWeight: isActive || isFailingStep ? 700 : 400,
                 }}>
                   {s.label}
                 </span>
@@ -61,7 +67,7 @@ export default function StepBar() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: isIncompleteFieldMapping ? '#ef6c4d' : isDone ? 'var(--success)' : 'var(--border)',
+                   color: isFailingStep ? '#ef6c4d' : isDone ? 'var(--success)' : 'var(--border)',
                   fontSize: 14,
                   fontWeight: 700,
                   flexShrink: 0,
