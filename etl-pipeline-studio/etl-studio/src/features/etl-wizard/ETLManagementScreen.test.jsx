@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ETLManagementScreen, { compareDeploymentVersions, getManagementSearchTerms, matchesManagementSearch } from './ETLManagementScreen.jsx'
@@ -92,6 +92,7 @@ const baseMockDeployments = [
 ]
 
 let mockDeployments = []
+const mockCopyTextToClipboard = vi.fn(() => Promise.resolve(true))
 
 vi.mock('../../shared/store/wizardStore.jsx', () => ({
   useWizard: () => ({
@@ -135,12 +136,17 @@ vi.mock('../../shared/services/configurationHydrator.js', () => ({
   hydrateWizardStateFromYaml: (...args) => mockHydrateWizardStateFromYaml(...args),
 }))
 
+vi.mock('../../shared/services/clipboard.js', () => ({
+  copyTextToClipboard: (...args) => mockCopyTextToClipboard(...args),
+}))
+
 vi.mock('../../shared/hooks/useDeploymentProgress.js', () => ({
   useDeploymentProgress: () => mockDeploymentProgress,
 }))
 
 describe('ETLManagementScreen table layout stability', () => {
   beforeEach(() => {
+    vi.useRealTimers()
     mockDeployments = structuredClone(baseMockDeployments)
     Object.values(mockActions).forEach(fn => fn.mockReset())
     mockFetchDraftConfiguration.mockClear()
@@ -189,6 +195,8 @@ describe('ETLManagementScreen table layout stability', () => {
       return { success: true }
     })
     mockHydrateWizardStateFromYaml.mockClear()
+    mockCopyTextToClipboard.mockReset()
+    mockCopyTextToClipboard.mockResolvedValue(true)
     localStorage.clear()
     window.open = vi.fn()
     mockDeploymentProgress.isOpen = false
@@ -758,6 +766,84 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByRole('button', { name: 'Got it' })).toBeInTheDocument()
     })
   })
+
+  it('copies the Grafana link from the deployed success overlay with the async clipboard API', async () => {
+    const user = userEvent.setup()
+
+    mockDeployments = structuredClone(baseMockDeployments).map((deployment) => (
+      deployment.id === 'dep-2'
+        ? { ...deployment, deploymentStatus: 'stopped' }
+        : deployment
+    ))
+
+    render(<ETLManagementScreen />)
+
+    const catalogCell = await screen.findByText('Catalog')
+    const catalogRow = catalogCell.closest('tr')
+    expect(catalogRow).toBeTruthy()
+
+    await user.click(within(catalogRow).getByRole('button', { name: 'Deploy pipeline' }))
+
+    await waitFor(() => {
+      expect(mockSubscribeToDeploymentProgress).toHaveBeenCalledWith('dep-run-1', expect.any(Object))
+    })
+
+    const progressCallbacks = mockSubscribeToDeploymentProgress.mock.calls.at(-1)[1]
+
+    await act(async () => {
+      await progressCallbacks.onComplete()
+    })
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 600))
+    })
+
+    const copyButton = await screen.findByRole('button', { name: /copy/i })
+    await user.click(copyButton)
+
+    expect(mockCopyTextToClipboard).toHaveBeenCalledWith(expect.stringContaining('https://grafana.etl-studio.io/d/pipeline-'))
+    expect(await screen.findByRole('button', { name: /copied/i })).toBeInTheDocument()
+  }, 10000)
+
+  it('shows a copy failure dialog for the deployed success overlay when clipboard access is blocked in OCP', async () => {
+    const user = userEvent.setup()
+    mockCopyTextToClipboard.mockRejectedValueOnce(new Error('NotAllowedError'))
+
+    mockDeployments = structuredClone(baseMockDeployments).map((deployment) => (
+      deployment.id === 'dep-2'
+        ? { ...deployment, deploymentStatus: 'stopped' }
+        : deployment
+    ))
+
+    render(<ETLManagementScreen />)
+
+    const catalogCell = await screen.findByText('Catalog')
+    const catalogRow = catalogCell.closest('tr')
+    expect(catalogRow).toBeTruthy()
+
+    await user.click(within(catalogRow).getByRole('button', { name: 'Deploy pipeline' }))
+
+    await waitFor(() => {
+      expect(mockSubscribeToDeploymentProgress).toHaveBeenCalledWith('dep-run-1', expect.any(Object))
+    })
+
+    const progressCallbacks = mockSubscribeToDeploymentProgress.mock.calls.at(-1)[1]
+
+    await act(async () => {
+      await progressCallbacks.onComplete()
+    })
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 600))
+    })
+
+    const copyButton = await screen.findByRole('button', { name: /copy/i })
+    await user.click(copyButton)
+
+    expect(mockCopyTextToClipboard).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('Copy Failed')).toBeInTheDocument()
+    expect(screen.getByText('Clipboard access is blocked in this environment. Please copy the Grafana dashboard link manually.')).toBeInTheDocument()
+  }, 10000)
 
 
   it('renders saved and deployed version hints as floating tooltips above the last table row', async () => {

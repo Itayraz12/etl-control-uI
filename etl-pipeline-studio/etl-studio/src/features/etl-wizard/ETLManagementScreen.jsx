@@ -5,6 +5,7 @@ import * as deploymentsService from '../../shared/services/deploymentsService.js
 import { fetchDeploymentSteps, subscribeToDeploymentProgress, deployFromYaml }
   from '../../shared/services/deploymentsService.js';
 import { fetchDraftConfiguration, fetchSavedDraftYaml } from '../../shared/services/configService.js';
+import { copyTextToClipboard } from '../../shared/services/clipboard.js';
 import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js';
 import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js';
 import { serializeWizardState } from '../../shared/store/wizardPersistence.js';
@@ -242,6 +243,20 @@ export default function ETLManagementScreen() {
   // Use team name from user context
   const teamName = user?.teamName || 'default';
   const activeDeploymentCopy = MANAGEMENT_DEPLOYMENT_COPY[activeDeploymentAction] || MANAGEMENT_DEPLOYMENT_COPY.deploy;
+
+  const handleSuccessOverlayCopy = async (text) => {
+    try {
+      await copyTextToClipboard(text);
+      setSuccessCopied(true);
+      setTimeout(() => setSuccessCopied(false), 2000);
+    } catch {
+      setErrorModal({
+        icon: '⚠️',
+        title: 'Copy Failed',
+        message: 'Clipboard access is blocked in this environment. Please copy the Grafana dashboard link manually.',
+      });
+    }
+  };
 
   const deployment = useDeploymentProgress({
     autoAdvance: false,  // steps are driven by SSE events (or mock simulation)
@@ -1773,11 +1788,7 @@ export default function ETLManagementScreen() {
                 </div>
               </div>
               <button
-                onClick={() => {
-                  navigator.clipboard.writeText(successInfo.grafanaLink);
-                  setSuccessCopied(true);
-                  setTimeout(() => setSuccessCopied(false), 2000);
-                }}
+                onClick={() => handleSuccessOverlayCopy(successInfo.grafanaLink)}
                 style={{
                   padding: '8px 12px',
                   background: successCopied ? 'var(--success)' : 'var(--accent)',
