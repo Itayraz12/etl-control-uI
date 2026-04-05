@@ -66,6 +66,22 @@ const mockFetchDeploymentSteps = vi.fn(() => Promise.resolve([{ id: 'validate', 
 const mockDeployFromYaml = vi.fn(() => Promise.resolve({ success: true, deploymentId: 'dep-1' }))
 const mockSubscribeToDeploymentProgress = vi.fn(() => vi.fn())
 let mockTransformers = []
+const originalClipboard = navigator.clipboard
+const originalExecCommand = document.execCommand
+
+function setClipboardApi(writeText) {
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText },
+  })
+}
+
+function setExecCommandMock(mockImpl) {
+  Object.defineProperty(document, 'execCommand', {
+    configurable: true,
+    value: mockImpl,
+  })
+}
 
 function setPassingValidationChecklist() {
   mockWizardState.metadata.location = 'OFFICE'
@@ -160,11 +176,30 @@ describe('SummaryStep save draft behavior', () => {
     mockDeployFromYaml.mockClear()
     mockSubscribeToDeploymentProgress.mockClear()
     mockTransformers = []
+    setClipboardApi(vi.fn().mockResolvedValue(undefined))
+    setExecCommandMock(vi.fn(() => true))
   })
 
   afterEach(() => {
     vi.runOnlyPendingTimers()
     vi.useRealTimers()
+    if (originalClipboard === undefined) {
+      delete navigator.clipboard
+    } else {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+
+    if (originalExecCommand === undefined) {
+      delete document.execCommand
+    } else {
+      Object.defineProperty(document, 'execCommand', {
+        configurable: true,
+        value: originalExecCommand,
+      })
+    }
   })
 
   it('saves the draft and navigates to management after the success popup closes', async () => {
@@ -176,6 +211,7 @@ describe('SummaryStep save draft behavior', () => {
     })
 
     expect(mockSaveDraftConfiguration).toHaveBeenCalledTimes(1)
+    expect(mockSaveDraftConfiguration.mock.calls[0][0].yaml).not.toMatch(/\n\s*\n/)
 
     expect(screen.getByText('Draft Saved')).toBeInTheDocument()
 
@@ -475,5 +511,61 @@ output:
         fontWeight: '400',
       })
     })
+  })
+
+  it('copies the YAML preview with the async clipboard API when available', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    setClipboardApi(writeText)
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /copy yaml/i }))
+      await Promise.resolve()
+    })
+
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('genomeEntity: product'))
+    expect(writeText.mock.calls[0][0]).not.toMatch(/\n\s*\n/)
+    expect(screen.getByRole('button', { name: /copied/i })).toBeInTheDocument()
+  })
+
+  it('falls back to document.execCommand when clipboard API writes are blocked', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('NotAllowedError'))
+    const execCommand = vi.fn(() => true)
+
+    setClipboardApi(writeText)
+    setExecCommandMock(execCommand)
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /copy yaml/i }))
+      await Promise.resolve()
+    })
+
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(execCommand).toHaveBeenCalledWith('copy')
+    expect(screen.getByRole('button', { name: /copied/i })).toBeInTheDocument()
+    expect(screen.queryByText('Copy Failed')).not.toBeInTheDocument()
+  })
+
+  it('shows a copy failure dialog when both clipboard strategies fail', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('NotAllowedError'))
+    const execCommand = vi.fn(() => false)
+
+    setClipboardApi(writeText)
+    setExecCommandMock(execCommand)
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /copy yaml/i }))
+      await Promise.resolve()
+    })
+
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(execCommand).toHaveBeenCalledWith('copy')
+    expect(screen.getByText('Copy Failed')).toBeInTheDocument()
+    expect(screen.getByText('Clipboard access is blocked in this environment. Please copy the YAML preview manually.')).toBeInTheDocument()
   })
 })

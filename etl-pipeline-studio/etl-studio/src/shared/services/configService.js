@@ -1,6 +1,7 @@
 import { MOCK_SCHEMA, normalizeSourceSchema, TARGET_FIELDS } from '../types/index.js'
 import { upsertSavedDraftDeployment } from './deploymentsService.js'
 import { API_BASE } from './appConfig.js'
+import { compactYamlDocument } from './configurationYaml.js'
 
 // ── Config Service ─────────────────────────────────────────────────────────
 // Loads transformers, filters and entities either from the backend API or
@@ -597,10 +598,7 @@ export async function saveDraftConfiguration({ productType, source, team, enviro
   url.searchParams.set('team', team ?? '')
   url.searchParams.set('environment', environment ?? '')
 
-  const cleanYaml = (yaml ?? '')
-    .split('\n')
-    .filter(line => line.trim() !== '')
-    .join('\n')
+  const cleanYaml = compactYamlDocument(yaml)
 
   const response = await fetch(url.toString(), {
     method: 'POST',

@@ -1,9 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { formatTransformationYamlItem, quoteYamlDoubleQuoted, formatInputFieldsYamlSection, formatKeyValueYamlSection } from './configurationYaml.js'
+import { compactYamlDocument, formatTransformationYamlItem, quoteYamlDoubleQuoted, formatInputFieldsYamlSection, formatKeyValueYamlSection } from './configurationYaml.js'
 import { formatFilterYamlItem } from './configurationYaml.js'
 import { hydrateWizardStateFromYaml } from './configurationHydrator.js'
 
 describe('configuration YAML helpers', () => {
+  it('removes blank lines and trailing whitespace from YAML documents', () => {
+    const yaml = `metadata:  
+
+  productType: Catalog
+    
+source:
+  kafka:
+    topic: catalog-topic
+
+`
+
+    expect(compactYamlDocument(yaml)).toBe(`metadata:
+  productType: Catalog
+source:
+  kafka:
+    topic: catalog-topic`)
+  })
+
   it('wraps transformation expressions in double quotes and escapes embedded quotes', () => {
     // New format: TransformerName([fields],[props]) -> (type, output)
     const expression = 'ConvertMulti([id,productName,price],[logic: a:b:c?120|c:d:e?130, defaultValue: "0", case_sensitive: true]) -> (string, name)'

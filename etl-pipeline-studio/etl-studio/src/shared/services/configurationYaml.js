@@ -10,6 +10,16 @@ export function quoteYamlDoubleQuoted(value = '') {
   return `"${escaped}"`
 }
 
+export function compactYamlDocument(yaml = '') {
+  return String(yaml ?? '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map(line => line.replace(/[ \t]+$/g, ''))
+    .filter(line => line.trim() !== '')
+    .join('\n')
+    .trim()
+}
+
 export function formatTransformationYamlItem(expression = '') {
   return `  - ${quoteYamlDoubleQuoted(expression)}`
 }

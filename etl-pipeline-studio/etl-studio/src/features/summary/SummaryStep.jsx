@@ -8,9 +8,10 @@ import { MOCK_FILTER_OPERATORS, saveDraftConfiguration } from '../../shared/serv
 import { fetchDeploymentSteps, deployFromYaml, subscribeToDeploymentProgress }
   from '../../shared/services/deploymentsService.js'
 import { setDeploymentStatus } from '../../shared/services/deploymentsService.js'
-import { formatTransformationYamlItem, quoteYamlDoubleQuoted, formatKeyValueYamlSection } from '../../shared/services/configurationYaml.js'
+import { compactYamlDocument, formatTransformationYamlItem, quoteYamlDoubleQuoted, formatKeyValueYamlSection } from '../../shared/services/configurationYaml.js'
 import { formatInputFieldsYamlSection } from '../../shared/services/configurationYaml.js'
 import { formatFilterYamlItem } from '../../shared/services/configurationYaml.js'
+import { copyTextToClipboard } from '../../shared/services/clipboard.js'
 import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js'
 import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js'
 import { canDeployFromSummaryChecklist, getSummaryValidations } from '../../shared/services/wizardValidation.js'
@@ -114,6 +115,34 @@ export default function SummaryStep() {
 
     if (shouldNavigateToManagement) {
       actions.setNavigationMode('etl-management')
+    }
+  }
+
+  const showCopyFailure = (contentLabel) => {
+    setErrorModal({
+      icon: '⚠️',
+      title: 'Copy Failed',
+      message: `Clipboard access is blocked in this environment. Please copy the ${contentLabel} manually.`,
+    })
+  }
+
+  const handleCopyYaml = async () => {
+    try {
+      await copyTextToClipboard(yaml)
+      setCopying(true)
+      setTimeout(() => setCopying(false), 1500)
+    } catch {
+      showCopyFailure('YAML preview')
+    }
+  }
+
+  const handleCopyGrafanaLink = async (grafanaLink) => {
+    try {
+      await copyTextToClipboard(grafanaLink)
+      setCopiedDash(true)
+      setTimeout(() => setCopiedDash(false), 2000)
+    } catch {
+      showCopyFailure('Grafana dashboard link')
     }
   }
 
@@ -439,7 +468,7 @@ ${sinkAdditionalConfigYaml}` : ''}
 `
   }
 
-  const yaml = generateYaml()
+  const yaml = compactYamlDocument(generateYaml())
   const currentPipelineSignature = buildPipelineChangeSignature(state)
   const originalPipelineSignature = state.originalDraftSignature || (
     state.originalDraftYaml
@@ -719,12 +748,6 @@ ${sinkAdditionalConfigYaml}` : ''}
   if (submitted) {
     const pipelineId = `ETL-${Date.now().toString(36).toUpperCase()}`
     const grafanaLink = `https://grafana.etl-studio.io/d/pipeline-${pipelineId.toLowerCase()}?source=${state.metadata.productSource}&type=${state.metadata.productType}&refresh=30s`
-    
-    const copyGrafanaLink = () => {
-      navigator.clipboard.writeText(grafanaLink)
-      setCopiedDash(true)
-      setTimeout(() => setCopiedDash(false), 2000)
-    }
 
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
@@ -771,7 +794,7 @@ ${sinkAdditionalConfigYaml}` : ''}
                 </div>
               </div>
               <button
-                onClick={copyGrafanaLink}
+                    onClick={() => handleCopyGrafanaLink(grafanaLink)}
                 style={{
                   padding: '8px 12px',
                   background: copiedDash ? 'var(--success)' : 'var(--accent)',
@@ -861,12 +884,7 @@ ${sinkAdditionalConfigYaml}` : ''}
         <Card>
           <CardTitle>
             📄 YAML Preview
-            <Btn sm v="ghost" onClick={() => {
-              navigator.clipboard.writeText(yaml).then(() => {
-                setCopying(true)
-                setTimeout(() => setCopying(false), 1500)
-              })
-            }}
+            <Btn sm v="ghost" onClick={handleCopyYaml}
               style={{ marginLeft: 'auto' }}>
               {copying ? '✓ Copied' : '📋 Copy YAML'}
             </Btn>
