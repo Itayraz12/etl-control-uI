@@ -168,6 +168,27 @@ describe('canNavigateToWizardStep', () => {
     expect(sourceValidation.text).toContain('offset')
   })
 
+  it('treats CSV source config as invalid when the column delimiter is missing', () => {
+    const state = buildState({
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: 'source_products_raw',
+        kafkaOffset: 'earliest',
+        format: 'CSV',
+        csvDelimiter: '',
+      },
+    })
+
+    expect(isWizardStepValid(1, state)).toBe(false)
+
+    const sourceValidation = getSummaryValidations(state, undefined, transformers).find(item => item.key === 'sourceConfigured')
+
+    expect(sourceValidation.type).toBe('err')
+    expect(sourceValidation.text).toContain('column delimiter')
+    expect(canDeployFromSummaryChecklist(state, undefined, transformers)).toBe(false)
+  })
+
   it('treats sink config as invalid when required sink properties are missing', () => {
     const state = buildState({
       metadata: {

@@ -122,6 +122,30 @@ describe('SourceConfigStep Kafka test connection', () => {
     })
   })
 
+  it('renders the CSV column delimiter as an empty required field with a comma placeholder', () => {
+    renderStep({ format: 'CSV', csvDelimiter: '' })
+
+    const columnDelimiterInput = screen.getByRole('textbox', { name: 'Column Delimiter' })
+    expect(columnDelimiterInput).toHaveValue('')
+    expect(columnDelimiterInput).toBeRequired()
+    expect(columnDelimiterInput).toHaveAttribute('placeholder', ',')
+  })
+
+  it('persists the CSV column delimiter from source format settings', async () => {
+    const user = userEvent.setup()
+
+    renderStep({ format: 'CSV', csvDelimiter: '' })
+
+    const columnDelimiterInput = screen.getByRole('textbox', { name: 'Column Delimiter' })
+    await user.type(columnDelimiterInput, ';')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.source?.format).toBe('CSV')
+      expect(persisted.source?.csvDelimiter).toBe(';')
+    })
+  })
+
   it('calls the Kafka test endpoint and shows a success icon for the source config', async () => {
     const user = userEvent.setup()
     testKafkaConnection.mockResolvedValue({ success: true, message: 'Kafka source reachable' })

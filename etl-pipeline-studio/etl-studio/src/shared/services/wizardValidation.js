@@ -50,6 +50,9 @@ function getMissingSourceRequiredFields(source = {}, metadata = {}) {
   }
 
   if (!hasRequiredValue(source.format)) missingFields.push('message / file format')
+  if (String(source.format || '').trim().toUpperCase() === 'CSV' && !hasRequiredValue(source.csvDelimiter)) {
+    missingFields.push('column delimiter')
+  }
 
   if (sourceType === 'kafka') {
     if (!hasRequiredValue(source.kafkaEnv || metadata.environment)) missingFields.push('environment')

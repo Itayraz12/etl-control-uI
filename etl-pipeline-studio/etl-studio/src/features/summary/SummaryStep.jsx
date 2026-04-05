@@ -290,8 +290,8 @@ export default function SummaryStep() {
 
     // Find source and target field types
     const nestedInputMappingYaml = formatInputFieldsYamlSection(sourceSchema, '    ')
-    const columnDelimiter = state.source.csvDelimiter == null || state.source.csvDelimiter === ''
-      ? ','
+    const columnDelimiter = state.source.csvDelimiter == null
+      ? ''
       : String(state.source.csvDelimiter)
     const rowDelimiter = state.source.rowDelimiter == null ? '' : String(state.source.rowDelimiter)
     const sourceSectionYaml = (() => {
