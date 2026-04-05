@@ -41,7 +41,7 @@ function renderStep(initialSource = {}, initialMetadata = {}, options = {}) {
       source: {
         sourceType: 'kafka',
         kafkaEnv: 'production',
-        kafkaTopic: 'source_products_raw',
+        kafkaTopic: '',
         kafkaOffset: '',
         kafkaKeys: '',
         format: 'JSON',
@@ -91,6 +91,14 @@ describe('SourceConfigStep Kafka test connection', () => {
     expect(offsetSelect).toHaveValue('')
     expect(screen.getByRole('option', { name: 'earliest' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'latest' })).toBeInTheDocument()
+  })
+
+  it('shows Kafka topic as an empty required field by default', () => {
+    renderStep()
+
+    const topicInput = screen.getByRole('textbox', { name: 'Topic' })
+    expect(topicInput).toHaveValue('')
+    expect(topicInput).toBeRequired()
   })
 
   it('persists the selected Kafka offset', async () => {
@@ -150,7 +158,7 @@ describe('SourceConfigStep Kafka test connection', () => {
     const user = userEvent.setup()
     testKafkaConnection.mockResolvedValue({ success: true, message: 'Kafka source reachable' })
 
-    renderStep()
+    renderStep({ kafkaTopic: 'source_products_raw' })
 
     await user.click(screen.getByRole('button', { name: /test connection/i }))
 
@@ -208,12 +216,12 @@ describe('SourceConfigStep Kafka test connection', () => {
     const user = userEvent.setup()
     testKafkaConnection.mockResolvedValue({ success: true, message: 'Kafka source reachable' })
 
-    renderStep()
+    renderStep({ kafkaTopic: 'source_products_raw' })
 
     await user.click(screen.getByRole('button', { name: /test connection/i }))
     expect(await screen.findByLabelText('Kafka connection test succeeded')).toBeInTheDocument()
 
-    const topicInput = screen.getByDisplayValue('source_products_raw')
+    const topicInput = screen.getByRole('textbox', { name: 'Topic' })
     await user.clear(topicInput)
     await user.type(topicInput, 'source_products_retry')
 
@@ -226,7 +234,7 @@ describe('SourceConfigStep Kafka test connection', () => {
     const user = userEvent.setup()
     testKafkaConnection.mockRejectedValue(new Error('Source broker unreachable'))
 
-    renderStep()
+    renderStep({ kafkaTopic: 'source_products_raw' })
 
     await user.click(screen.getByRole('button', { name: /test connection/i }))
 

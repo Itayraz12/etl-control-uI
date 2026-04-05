@@ -482,6 +482,22 @@ output:
     expect(yaml).not.toContain('shadow_topic: auto')
   })
 
+  it('serializes empty kafka sink topic as an empty YAML value instead of N/A', async () => {
+    setPassingValidationChecklist()
+    mockWizardState.sink.sinkKafkaTopic = ''
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save & deploy/i }))
+      await Promise.resolve()
+    })
+
+    const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
+    expect(yaml).toContain('  kafka:\n    topic:')
+    expect(yaml).not.toContain('topic: N/A')
+  })
+
   it('highlights additionalConfig and nested kafka section keys in the YAML preview', () => {
     setPassingValidationChecklist()
     mockWizardState.sink.shadow = true

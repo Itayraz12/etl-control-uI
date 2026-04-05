@@ -75,7 +75,7 @@ function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
           </select>
         </FormGroup>
         <FormGroup label="Topic" required>
-          <input value={state.kafkaTopic || ''} onChange={e => u('kafkaTopic', e.target.value)} />
+          <input aria-label="Topic" required value={state.kafkaTopic || ''} onChange={e => u('kafkaTopic', e.target.value)} />
         </FormGroup>
       </FormRow>
       <FormRow>

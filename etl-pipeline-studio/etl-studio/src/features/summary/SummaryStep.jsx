@@ -403,7 +403,7 @@ ${nestedInputMappingYaml}` : ''}
       : ''
     const outputKafkaYaml = [
       '  kafka:',
-      `    topic: ${state.sink.sinkKafkaTopic || 'N/A'}`,
+      `    topic: ${String(state.sink.sinkKafkaTopic || '').trim()}`,
       ...(state.sink.shadow ? [`    shadow_topic: ${String(state.sink.shadowTopic || '').trim()}`] : []),
       ...(hasSaknayTargets ? [`    saknay_topic: ${String(state.sink.saknayTopic || '').trim()}`] : []),
     ].join('\n')
