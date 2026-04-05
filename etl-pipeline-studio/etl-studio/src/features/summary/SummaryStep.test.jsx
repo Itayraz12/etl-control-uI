@@ -403,22 +403,21 @@ output:
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('filter: "sku-key, inventory-key"')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('input:\n  convert:\n    mapping:\n      - name: sku')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('output:\n  mapping:')
-    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('  kafka:\n    topic: catalog-sink\n    saknay_topic: ')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('  kafka:\n    topic: catalog-sink\n    saknay_topic:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('additionalConfig:\n  "acks": "all"\n  "compression.type": "gzip"')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('additional_properties:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('\nsink:\n')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('source:\n  type: kafka')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('source:\n  format: JSON')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('keyFilter:')
-    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('general:\n  format: JSON')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('general:\n  inputFormat: JSON\n  outputFormat: JSON')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('isShadowEnabled: false')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('isSaknayEnabled: true')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('isAsgEnabled: false')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('\n  saknay: true')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('\n  shadow: true')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('\n  asg: true')
-    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('inputFormat:')
-    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('outputFormat:')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('\n  format: JSON')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('additionalInputs:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('additional_inputs:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('streamingContinuity: continuous')
@@ -443,7 +442,7 @@ output:
     })
 
     const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
-    expect(yaml).toContain('general:\n  format: CSV')
+    expect(yaml).toContain('general:\n  inputFormat: delimited\n  outputFormat: delimited')
     expect(yaml).toContain('input:\n  delimited:\n    columnDelimiter: ";"\n    mapping:\n      - name: sku')
     expect(yaml).toContain('split:')
     expect(yaml).toContain('delimiter: "\\\\r\\\\n"')
@@ -479,7 +478,7 @@ output:
     })
 
     const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
-    expect(yaml).toContain('  kafka:\n    topic: catalog-sink\n    shadow_topic: ')
+    expect(yaml).toContain('  kafka:\n    topic: catalog-sink\n    shadow_topic:')
     expect(yaml).not.toContain('shadow_topic: auto')
   })
 

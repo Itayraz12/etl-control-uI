@@ -219,6 +219,84 @@ output:
     })
   })
 
+  it('hydrates source format from general.inputFormat and outputFormat', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  kafka:
+    topic: source_products_raw
+general:
+  inputFormat: JSON
+  outputFormat: JSON
+input:
+  convert:
+    mapping:
+      - name: id
+        type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+  kafka:
+    topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.source).toMatchObject({
+      format: 'JSON',
+    })
+  })
+
+  it('hydrates source format from canonical delimited input/output format values', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  kafka:
+    topic: source_products_raw
+general:
+  inputFormat: delimited
+  outputFormat: delimited
+input:
+  delimited:
+    columnDelimiter: ";"
+    mapping:
+      - name: id
+        type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+  kafka:
+    topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.source).toMatchObject({
+      format: 'CSV',
+      csvDelimiter: ';',
+    })
+  })
+
   it('hydrates nested kafka source settings and general format', () => {
     const yaml = `metadata:
   entity: Product
