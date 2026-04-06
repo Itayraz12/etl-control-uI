@@ -44,6 +44,9 @@ describe('SourceUploadStep', () => {
 
     expect(screen.queryByText('Detected Schema')).not.toBeInTheDocument()
     expect(screen.getByText('Drop a sample file here')).toBeInTheDocument()
+    expect(screen.getByText('Drop a JSON or CSV file — the selected sample is sent to the backend for schema inference.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Pull from source config' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Sample origin:')).not.toBeInTheDocument()
     expect(screen.queryByText(/fields detected/i)).not.toBeInTheDocument()
   })
 
@@ -53,7 +56,6 @@ describe('SourceUploadStep', () => {
 
     renderStep()
 
-    expect(screen.queryByRole('button', { name: 'Pull from source config' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Upload sample' }))
 
