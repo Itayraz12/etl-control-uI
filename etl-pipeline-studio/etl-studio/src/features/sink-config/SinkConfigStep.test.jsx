@@ -1,8 +1,15 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SinkConfigStep from './SinkConfigStep.jsx'
 import { WizardProvider } from '../../shared/store/wizardStore.jsx'
+
+const testRabbitMqConnection = vi.fn()
+const PREVIEW_USER = { userId: 'alice', teamName: 'data-platform' }
+
+vi.mock('../../shared/services/rabbitmqService.js', () => ({
+  testRabbitMqConnection: (...args) => testRabbitMqConnection(...args),
+}))
 
 const WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
 const READ_ONLY_CSS = `
@@ -59,6 +66,7 @@ function renderStep(initialSink = {}, initialMappings = []) {
         asg: false,
         ...initialSink,
       },
+      readOnly: true,
       theme: 'dark',
     })
   )
@@ -71,52 +79,55 @@ function renderStep(initialSink = {}, initialMappings = []) {
 }
 
 function renderReadOnlyStep(initialSink = {}, initialMappings = []) {
+  window.history.pushState({}, '', '/?preview=true&deploymentId=dep-1&previewSource=saved')
   localStorage.setItem(
-    WIZARD_STORAGE_KEY,
+    'etl-deployment-preview:dep-1:saved',
     JSON.stringify({
-      navigationMode: 'etl-config',
-      currentStep: 5,
-      completedSteps: [0, 1, 2, 3, 4],
-      metadata: {
-        productSource: 'ERP',
-        productType: 'Inventory',
-        team: 'data-platform',
-        environment: 'production',
-        entityName: 'Product',
-        tags: '',
+      wizardState: {
+        navigationMode: 'etl-config',
+        currentStep: 5,
+        completedSteps: [0, 1, 2, 3, 4],
+        metadata: {
+          productSource: 'ERP',
+          productType: 'Inventory',
+          team: 'data-platform',
+          environment: 'production',
+          entityName: 'Product',
+          tags: '',
+        },
+        source: {
+          sourceType: 'kafka',
+          kafkaEnv: 'production',
+          kafkaTopic: 'source_products_raw',
+          format: 'JSON',
+          jsonSplit: '',
+          streamingContinuity: 'continuous',
+          recordsPerDay: 'millions',
+        },
+        upload: { done: true, schema: [], fileName: '', fileType: '', fileSize: 0 },
+        targetSchema: [],
+        mappings: initialMappings,
+        filters: [],
+        sink: {
+          sinkType: 'kafka',
+          sinkKafkaTopic: 'etl_products_v3',
+          sinkKafkaEnv: 'production',
+          sinkKafkaAdditionalPropertiesEnabled: false,
+          sinkKafkaAdditionalProperties: [],
+          shadow: false,
+          shadowTopic: '',
+          saknay: false,
+          saknayTopic: '',
+          asg: false,
+          ...initialSink,
+        },
+        theme: 'dark',
       },
-      source: {
-        sourceType: 'kafka',
-        kafkaEnv: 'production',
-        kafkaTopic: 'source_products_raw',
-        format: 'JSON',
-        jsonSplit: '',
-        streamingContinuity: 'continuous',
-        recordsPerDay: 'millions',
-      },
-      upload: { done: true, schema: [], fileName: '', fileType: '', fileSize: 0 },
-      targetSchema: [],
-      mappings: initialMappings,
-      filters: [],
-      sink: {
-        sinkType: 'kafka',
-        sinkKafkaTopic: 'etl_products_v3',
-        sinkKafkaEnv: 'production',
-        sinkKafkaAdditionalPropertiesEnabled: false,
-        sinkKafkaAdditionalProperties: [],
-        shadow: false,
-        shadowTopic: '',
-        saknay: false,
-        saknayTopic: '',
-        asg: false,
-        ...initialSink,
-      },
-      theme: 'dark',
     })
   )
 
   return render(
-    <WizardProvider>
+    <WizardProvider user={PREVIEW_USER}>
       <style>{READ_ONLY_CSS}</style>
       <div data-etl-ro="true">
         <SinkConfigStep />
@@ -128,6 +139,7 @@ function renderReadOnlyStep(initialSink = {}, initialMappings = []) {
 describe('SinkConfigStep Kafka additional properties', () => {
   beforeEach(() => {
     localStorage.clear()
+    testRabbitMqConnection.mockReset()
   })
 
   it('lets the user add, edit, and persist Kafka additional properties', async () => {
@@ -237,10 +249,104 @@ describe('SinkConfigStep Kafka additional properties', () => {
     expect(screen.queryByDisplayValue('legacy-topic')).not.toBeInTheDocument()
   })
 
-  it('does not render a test connection button in sink config', () => {
+  it('does not render a test connection button for the Kafka sink config', () => {
     renderStep()
 
     expect(screen.queryByRole('button', { name: /test connection/i })).not.toBeInTheDocument()
+  })
+
+  it('allows selecting the RabbitMQ sink card and shows the RabbitMQ connection test controls', async () => {
+    const user = userEvent.setup()
+    renderStep()
+
+    await user.click(screen.getByText('RabbitMQ'))
+
+    expect(screen.getByText('🐇 RabbitMQ Sink')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'VHOST' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'PORT' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Queue Name' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /test connection/i })).toBeInTheDocument()
+  })
+
+  it('calls the RabbitMQ sink test endpoint and shows a success icon', async () => {
+    const user = userEvent.setup()
+    testRabbitMqConnection.mockResolvedValue({ success: true, message: 'RabbitMQ sink reachable' })
+
+    renderStep({
+      sinkType: 'rabbitmq',
+      sinkRmqVhost: '/etl',
+      sinkRmqPort: '5672',
+      sinkRmqQueue: 'products.sink',
+      sinkRmqExchange: 'etl.exchange',
+    })
+
+    await user.click(screen.getByRole('button', { name: /test connection/i }))
+
+    await waitFor(() => {
+      expect(testRabbitMqConnection).toHaveBeenCalledWith({
+        vhost: '/etl',
+        port: '5672',
+        queue: 'products.sink',
+        exchange: 'etl.exchange',
+        environment: 'production',
+      })
+    })
+
+    expect(await screen.findByLabelText('RabbitMQ connection test succeeded')).toBeInTheDocument()
+    expect(screen.getByText('RabbitMQ sink reachable')).toBeInTheDocument()
+  })
+
+  it('clears the previous RabbitMQ sink connection result when sink inputs change', async () => {
+    const user = userEvent.setup()
+    testRabbitMqConnection.mockResolvedValue({ success: true, message: 'RabbitMQ sink reachable' })
+
+    renderStep({
+      sinkType: 'rabbitmq',
+      sinkRmqVhost: '/etl',
+      sinkRmqPort: '5672',
+      sinkRmqQueue: 'products.sink',
+    })
+
+    await user.click(screen.getByRole('button', { name: /test connection/i }))
+    expect(await screen.findByLabelText('RabbitMQ connection test succeeded')).toBeInTheDocument()
+
+    const queueInput = screen.getByRole('textbox', { name: 'Queue Name' })
+    await user.clear(queueInput)
+    await user.type(queueInput, 'products.retry')
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('RabbitMQ connection test succeeded')).not.toBeInTheDocument()
+    })
+  })
+
+  it('shows a validation error instead of calling the RabbitMQ sink API when required fields are missing', async () => {
+    const user = userEvent.setup()
+
+    renderStep({
+      sinkType: 'rabbitmq',
+      sinkRmqVhost: '',
+      sinkRmqPort: '5672',
+      sinkRmqQueue: '',
+    })
+
+    await user.click(screen.getByRole('button', { name: /test connection/i }))
+
+    expect(testRabbitMqConnection).not.toHaveBeenCalled()
+    expect(await screen.findByLabelText('RabbitMQ connection test failed')).toBeInTheDocument()
+    expect(screen.getByText('VHOST, port, and queue name are required to test the RabbitMQ connection.')).toBeInTheDocument()
+  })
+
+  it('disables RabbitMQ sink test connection in read-only mode', async () => {
+    renderReadOnlyStep({
+      sinkType: 'rabbitmq',
+      sinkRmqVhost: '/etl',
+      sinkRmqPort: '5672',
+      sinkRmqQueue: 'products.sink',
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /test connection/i })).toBeDisabled()
+    })
   })
 
   it('keeps SHADOW and ASG hints visible in read-only mode', () => {

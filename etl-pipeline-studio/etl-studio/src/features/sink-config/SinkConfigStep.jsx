@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { Card, CardTitle, FormRow, FormGroup, CfgPanel, Btn, InfoHint, Tooltip } from '../../shared/components/index.jsx'
 import { ENVIRONMENTS } from '../../shared/types/index.js'
+import { testRabbitMqConnection } from '../../shared/services/rabbitmqService.js'
 
 const SINK_TYPES = [
   { id: 'kafka', icon: '☕', name: 'Kafka',     sub: 'Streaming sink' },
@@ -41,10 +42,36 @@ function hasSaknayTargetMappings(mappings = []) {
   ))
 }
 
-function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets }) {
+function ConnectionTestStatus({ status, message, label }) {
+  if (status === 'loading') {
+    return <Tooltip content={message || `Testing ${label}...`}><span aria-label={`${label} in progress`} style={{ fontSize: 18 }}>⏳</span></Tooltip>
+  }
+
+  if (status === 'success') {
+    return <Tooltip content={message || `${label} succeeded.`}><span aria-label={`${label} succeeded`} style={{ fontSize: 18 }}>✅</span></Tooltip>
+  }
+
+  if (status === 'error') {
+    return <Tooltip content={message || `${label} failed.`}><span aria-label={`${label} failed`} style={{ fontSize: 18 }}>❌</span></Tooltip>
+  }
+
+  return null
+}
+
+function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets, readOnly = false }) {
   const hasCatalogOption = sink?.shadow || hasSaknayTargets
   const kafkaAdditionalProperties = normalizeKafkaAdditionalProperties(sink?.sinkKafkaAdditionalProperties)
   const isApssPropertiesEnabled = sink?.sinkKafkaAdditionalPropertiesEnabled ?? kafkaAdditionalProperties.length > 0
+  const [rabbitMqTestState, setRabbitMqTestState] = useState({ status: 'idle', message: '' })
+
+  useEffect(() => {
+    if (type !== 'rabbitmq') {
+      setRabbitMqTestState({ status: 'idle', message: '' })
+      return
+    }
+
+    setRabbitMqTestState({ status: 'idle', message: '' })
+  }, [type, sink?.sinkRmqVhost, sink?.sinkRmqPort, sink?.sinkRmqQueue, sink?.sinkRmqExchange, metadata?.environment])
 
   const updateKafkaAdditionalProperties = (nextEntries) => {
     u('sinkKafkaAdditionalProperties', normalizeKafkaAdditionalProperties(nextEntries))
@@ -69,6 +96,36 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets }) {
 
   const handleRemoveKafkaAdditionalProperty = (id) => {
     updateKafkaAdditionalProperties(kafkaAdditionalProperties.filter(entry => entry.id !== id))
+  }
+
+  const handleRabbitMqConnectionTest = async () => {
+    if (readOnly) return
+
+    const vhost = String(sink?.sinkRmqVhost || '').trim()
+    const port = String(sink?.sinkRmqPort || '').trim()
+    const queue = String(sink?.sinkRmqQueue || '').trim()
+    const exchange = String(sink?.sinkRmqExchange || '').trim()
+    const environment = String(metadata?.environment || '').trim()
+
+    if (!vhost || !port || !queue) {
+      setRabbitMqTestState({
+        status: 'error',
+        message: 'VHOST, port, and queue name are required to test the RabbitMQ connection.',
+      })
+      return
+    }
+
+    setRabbitMqTestState({ status: 'loading', message: 'Testing RabbitMQ connection...' })
+
+    try {
+      const result = await testRabbitMqConnection({ vhost, port, queue, exchange, environment })
+      setRabbitMqTestState({ status: 'success', message: result.message })
+    } catch (error) {
+      setRabbitMqTestState({
+        status: 'error',
+        message: error?.message || 'RabbitMQ connection test failed.',
+      })
+    }
   }
 
 
@@ -247,18 +304,34 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets }) {
     <CfgPanel title="🐇 RabbitMQ Sink">
       <FormRow>
         <FormGroup label="VHOST" required>
-          <input value={sink.sinkRmqVhost || ''} onChange={e => u('sinkRmqVhost', e.target.value)} placeholder="/" />
+          <input aria-label="VHOST" value={sink.sinkRmqVhost || ''} onChange={e => u('sinkRmqVhost', e.target.value)} placeholder="/" />
         </FormGroup>
         <FormGroup label="PORT" required>
-          <input value={sink.sinkRmqPort || ''} onChange={e => u('sinkRmqPort', e.target.value)} placeholder="5672" />
+          <input aria-label="PORT" value={sink.sinkRmqPort || ''} onChange={e => u('sinkRmqPort', e.target.value)} placeholder="5672" />
         </FormGroup>
       </FormRow>
       <FormGroup label="Queue Name" required>
-        <input value={sink.sinkRmqQueue || ''} onChange={e => u('sinkRmqQueue', e.target.value)} placeholder="products.sink" />
+        <input aria-label="Queue Name" value={sink.sinkRmqQueue || ''} onChange={e => u('sinkRmqQueue', e.target.value)} placeholder="products.sink" />
       </FormGroup>
       <FormGroup label="Exchange">
-        <input value={sink.sinkRmqExchange || ''} onChange={e => u('sinkRmqExchange', e.target.value)} placeholder="etl.exchange" />
+        <input aria-label="Exchange" value={sink.sinkRmqExchange || ''} onChange={e => u('sinkRmqExchange', e.target.value)} placeholder="etl.exchange" />
       </FormGroup>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <Btn v="primary" sm onClick={handleRabbitMqConnectionTest} disabled={readOnly || rabbitMqTestState.status === 'loading'}>
+          {rabbitMqTestState.status === 'loading' ? '⏳ Testing…' : '🔌 Test Connection'}
+        </Btn>
+        <ConnectionTestStatus status={rabbitMqTestState.status} message={rabbitMqTestState.message} label="RabbitMQ connection test" />
+        {rabbitMqTestState.status !== 'idle' && rabbitMqTestState.message && (
+          <span
+            style={{
+              fontSize: 12,
+              color: rabbitMqTestState.status === 'error' ? 'var(--danger)' : 'var(--muted)',
+            }}
+          >
+            {rabbitMqTestState.message}
+          </span>
+        )}
+      </div>
     </CfgPanel>
   )
   return null
@@ -285,7 +358,7 @@ export default function SinkConfigStep() {
           <CardTitle>🔀 Sink Configuration</CardTitle>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 18 }}>
             {SINK_TYPES.map(t => {
-              const isEnabled = ['kafka'].includes(t.id);
+              const isEnabled = ['kafka', 'rabbitmq'].includes(t.id);
               const sinkTypeCard = (
                 <div
                   key={t.id}
@@ -325,7 +398,7 @@ export default function SinkConfigStep() {
             );
             })}
           </div>
-          {sink.sinkType && <SinkConfigPanel type={sink.sinkType} sink={sink} u={u} metadata={metadata} hasSaknayTargets={hasSaknayTargets} />}
+          {sink.sinkType && <SinkConfigPanel type={sink.sinkType} sink={sink} u={u} metadata={metadata} hasSaknayTargets={hasSaknayTargets} readOnly={state.readOnly} />}
         </Card>
       </div>
     </div>

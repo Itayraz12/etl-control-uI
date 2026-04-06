@@ -515,7 +515,12 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       kafkaKeys: sourceType === 'kafka'
         ? normalizeKafkaKeys(sourceConfig.filter ?? sourceConfig.keyFilter ?? sourceConfig.kafkaKeys ?? sourceConfig.keys ?? source.filter ?? source.keyFilter ?? source.kafkaKeys ?? source.keys)
         : '',
+      rmqIp: sourceType === 'rabbitmq' ? asString(sourceConfig.ip ?? source.ip) : '',
+      rmqPort: sourceType === 'rabbitmq' ? asString(sourceConfig.port ?? source.port) : '',
+      rmqUsername: sourceType === 'rabbitmq' ? asString(sourceConfig.username ?? source.username) : '',
+      rmqPassword: sourceType === 'rabbitmq' ? asString(sourceConfig.password ?? source.password) : '',
       rmqQueue: sourceType === 'rabbitmq' ? asString(sourceConfig.queue ?? sourceTopic) : '',
+      rmqVhost: sourceType === 'rabbitmq' ? asString(sourceConfig.vhost ?? source.vhost ?? '/', '/') : '',
       format: sourceFormat,
       csvDelimiter,
       rowDelimiter,

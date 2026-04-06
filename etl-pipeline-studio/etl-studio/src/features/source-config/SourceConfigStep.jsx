@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Card, CardTitle, FormRow, FormGroup, CfgPanel, Btn, Tooltip } from '../../shared/components/index.jsx'
 import { SOURCE_TYPES, ENVIRONMENTS } from '../../shared/types/index.js'
 import { testKafkaConnection } from '../../shared/services/kafkaService.js'
+import { testRabbitMqConnection } from '../../shared/services/rabbitmqService.js'
 
 function KafkaConnectionStatus({ status, message }) {
   if (status === 'loading') {
@@ -20,11 +21,28 @@ function KafkaConnectionStatus({ status, message }) {
   return null
 }
 
+function RabbitMqConnectionStatus({ status, message }) {
+  if (status === 'loading') {
+    return <Tooltip content={message || 'Testing RabbitMQ connection...'}><span aria-label="RabbitMQ connection test in progress" style={{ fontSize: 18 }}>⏳</span></Tooltip>
+  }
+
+  if (status === 'success') {
+    return <Tooltip content={message || 'RabbitMQ connection succeeded.'}><span aria-label="RabbitMQ connection test succeeded" style={{ fontSize: 18 }}>✅</span></Tooltip>
+  }
+
+  if (status === 'error') {
+    return <Tooltip content={message || 'RabbitMQ connection test failed.'}><span aria-label="RabbitMQ connection test failed" style={{ fontSize: 18 }}>❌</span></Tooltip>
+  }
+
+  return null
+}
+
 function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
   const [keyFilterOpen, setKeyFilterOpen] = useState(false)
   const [kafkaTestState, setKafkaTestState] = useState({ status: 'idle', message: '' })
+  const [rabbitMqTestState, setRabbitMqTestState] = useState({ status: 'idle', message: '' })
   const TestBtn = () => (
-    <Btn v="primary" sm onClick={() => alert('Connection test simulated!')} disabled={readOnly}>
+    <Btn v="primary" sm disabled>
       🔌 Test Connection
     </Btn>
   )
@@ -37,6 +55,15 @@ function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
 
     setKafkaTestState({ status: 'idle', message: '' })
   }, [type, state.kafkaTopic, state.kafkaEnv, metadata?.environment])
+
+  useEffect(() => {
+    if (type !== 'rabbitmq') {
+      setRabbitMqTestState({ status: 'idle', message: '' })
+      return
+    }
+
+    setRabbitMqTestState({ status: 'idle', message: '' })
+  }, [type, state.rmqIp, state.rmqPort, state.rmqUsername, state.rmqPassword, state.rmqQueue, state.rmqVhost, metadata?.environment])
 
   const handleKafkaConnectionTest = async () => {
     if (readOnly) return
@@ -61,6 +88,46 @@ function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
       setKafkaTestState({
         status: 'error',
         message: error?.message || 'Kafka connection test failed.',
+      })
+    }
+  }
+
+  const handleRabbitMqConnectionTest = async () => {
+    if (readOnly) return
+
+    const ip = String(state.rmqIp || '').trim()
+    const port = String(state.rmqPort || '').trim()
+    const username = String(state.rmqUsername || '').trim()
+    const password = String(state.rmqPassword || '').trim()
+    const queue = String(state.rmqQueue || '').trim()
+    const vhost = String(state.rmqVhost || '').trim()
+    const environment = String(metadata?.environment || '').trim()
+
+    if (!ip || !port || !username || !password || !queue) {
+      setRabbitMqTestState({
+        status: 'error',
+        message: 'IP, port, username, password, and queue are required to test the RabbitMQ connection.',
+      })
+      return
+    }
+
+    setRabbitMqTestState({ status: 'loading', message: 'Testing RabbitMQ connection...' })
+
+    try {
+      const result = await testRabbitMqConnection({
+        ip,
+        port,
+        username,
+        password,
+        queue,
+        vhost,
+        environment,
+      })
+      setRabbitMqTestState({ status: 'success', message: result.message })
+    } catch (error) {
+      setRabbitMqTestState({
+        status: 'error',
+        message: error?.message || 'RabbitMQ connection test failed.',
       })
     }
   }
@@ -160,7 +227,22 @@ function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
       <FormGroup label="VHOST">
         <input value={state.rmqVhost || ''} onChange={e => u('rmqVhost', e.target.value)} placeholder="/" />
       </FormGroup>
-      <TestBtn />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <Btn v="primary" sm onClick={handleRabbitMqConnectionTest} disabled={readOnly || rabbitMqTestState.status === 'loading'}>
+          {rabbitMqTestState.status === 'loading' ? '⏳ Testing…' : '🔌 Test Connection'}
+        </Btn>
+        <RabbitMqConnectionStatus status={rabbitMqTestState.status} message={rabbitMqTestState.message} />
+        {rabbitMqTestState.status !== 'idle' && rabbitMqTestState.message && (
+          <span
+            style={{
+              fontSize: 12,
+              color: rabbitMqTestState.status === 'error' ? 'var(--danger)' : 'var(--muted)',
+            }}
+          >
+            {rabbitMqTestState.message}
+          </span>
+        )}
+      </div>
     </CfgPanel>
   )
 

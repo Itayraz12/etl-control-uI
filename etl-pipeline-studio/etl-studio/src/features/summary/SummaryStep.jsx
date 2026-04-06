@@ -309,6 +309,15 @@ export default function SummaryStep() {
         if (state.source.kafkaKeys) details.push(`    filter: ${quoteYamlDoubleQuoted(String(state.source.kafkaKeys).trim())}`)
       }
 
+      if (sourceType === 'rabbitmq') {
+        details.push(`    ip: ${String(state.source.rmqIp || '').trim()}`)
+        details.push(`    port: ${String(state.source.rmqPort || '').trim()}`)
+        details.push(`    username: ${String(state.source.rmqUsername || '').trim()}`)
+        details.push(`    password: ${String(state.source.rmqPassword || '').trim()}`)
+        details.push(`    queue: ${String(state.source.rmqQueue || '').trim()}`)
+        details.push(`    vhost: ${String(state.source.rmqVhost || '').trim()}`)
+      }
+
       return [`  ${sourceType}:`, ...details].join('\n')
     })()
     const inputSectionYaml = state.source.format === 'CSV'
@@ -505,12 +514,20 @@ ${sinkAdditionalConfigYaml}` : ''}
     }
     
     // Validate critical config
-    if (!state.source.sourceType || !state.source.kafkaTopic || (state.source.sourceType === 'kafka' && !state.source.kafkaOffset)) {
+    const sourceType = String(state.source.sourceType || '').trim().toLowerCase()
+    const isKafkaSourceIncomplete = sourceType === 'kafka'
+      && (!state.source.kafkaTopic || !state.source.kafkaOffset)
+    const isRabbitMqSourceIncomplete = sourceType === 'rabbitmq'
+      && (!state.source.rmqIp || !state.source.rmqPort || !state.source.rmqUsername || !state.source.rmqPassword || !state.source.rmqQueue)
+
+    if (!sourceType || isKafkaSourceIncomplete || isRabbitMqSourceIncomplete) {
       setErrorModal({
         icon: '⚠️',
         title: 'Source Configuration Incomplete',
-        message: state.source.sourceType === 'kafka'
+        message: sourceType === 'kafka'
           ? 'Please configure your Kafka source settings (type, topic, and offset) and try again.'
+          : sourceType === 'rabbitmq'
+            ? 'Please configure your RabbitMQ source settings (IP, port, username, password, and queue) and try again.'
           : 'Please configure your source settings (type and topic) and try again.',
       })
       return

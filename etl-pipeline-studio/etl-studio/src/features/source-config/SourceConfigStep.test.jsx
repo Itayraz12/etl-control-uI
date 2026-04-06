@@ -5,11 +5,16 @@ import SourceConfigStep from './SourceConfigStep.jsx'
 import { WizardProvider } from '../../shared/store/wizardStore.jsx'
 
 const testKafkaConnection = vi.fn()
+const testRabbitMqConnection = vi.fn()
 const WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
 const PREVIEW_USER = { userId: 'alice', teamName: 'platform' }
 
 vi.mock('../../shared/services/kafkaService.js', () => ({
   testKafkaConnection: (...args) => testKafkaConnection(...args),
+}))
+
+vi.mock('../../shared/services/rabbitmqService.js', () => ({
+  testRabbitMqConnection: (...args) => testRabbitMqConnection(...args),
 }))
 
 function seedPreviewState(wizardState) {
@@ -75,6 +80,7 @@ describe('SourceConfigStep Kafka test connection', () => {
   beforeEach(() => {
     localStorage.clear()
     testKafkaConnection.mockReset()
+    testRabbitMqConnection.mockReset()
     window.history.pushState({}, '', '/')
   })
 
@@ -252,6 +258,58 @@ describe('SourceConfigStep Kafka test connection', () => {
     expect(testKafkaConnection).not.toHaveBeenCalled()
     expect(await screen.findByLabelText('Kafka connection test failed')).toBeInTheDocument()
     expect(screen.getByText('Topic and environment are required to test the Kafka connection.')).toBeInTheDocument()
+  })
+
+  it('calls the RabbitMQ test endpoint and shows an inline success message instead of a popup', async () => {
+    const user = userEvent.setup()
+    testRabbitMqConnection.mockResolvedValue({ success: true, message: 'RabbitMQ source reachable' })
+
+    renderStep({
+      sourceType: 'rabbitmq',
+      rmqIp: '10.0.0.12',
+      rmqPort: '5672',
+      rmqUsername: 'guest',
+      rmqPassword: 'secret',
+      rmqQueue: 'products.ingest',
+      rmqVhost: '/etl',
+    })
+
+    await user.click(screen.getByRole('button', { name: /test connection/i }))
+
+    await waitFor(() => {
+      expect(testRabbitMqConnection).toHaveBeenCalledWith({
+        ip: '10.0.0.12',
+        port: '5672',
+        username: 'guest',
+        password: 'secret',
+        queue: 'products.ingest',
+        vhost: '/etl',
+        environment: 'production',
+      })
+    })
+
+    expect(await screen.findByLabelText('RabbitMQ connection test succeeded')).toBeInTheDocument()
+    expect(screen.getByText('RabbitMQ source reachable')).toBeInTheDocument()
+  })
+
+  it('shows a validation error instead of calling the RabbitMQ API when required fields are missing', async () => {
+    const user = userEvent.setup()
+
+    renderStep({
+      sourceType: 'rabbitmq',
+      rmqIp: '',
+      rmqPort: '5672',
+      rmqUsername: '',
+      rmqPassword: '',
+      rmqQueue: '',
+      rmqVhost: '/etl',
+    })
+
+    await user.click(screen.getByRole('button', { name: /test connection/i }))
+
+    expect(testRabbitMqConnection).not.toHaveBeenCalled()
+    expect(await screen.findByLabelText('RabbitMQ connection test failed')).toBeInTheDocument()
+    expect(screen.getByText('IP, port, username, password, and queue are required to test the RabbitMQ connection.')).toBeInTheDocument()
   })
 })
 

@@ -343,6 +343,57 @@ sink:
     })
   })
 
+  it('hydrates nested RabbitMQ source settings and general format', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  rabbitmq:
+    ip: 10.0.0.12
+    port: 5672
+    username: guest
+    password: secret
+    queue: products.ingest
+    vhost: /etl
+general:
+  inputFormat: JSON
+  outputFormat: JSON
+input:
+  convert:
+    mapping:
+      - name: id
+        type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+sink:
+  type: kafka
+  topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.source).toMatchObject({
+      sourceType: 'rabbitmq',
+      rmqIp: '10.0.0.12',
+      rmqPort: '5672',
+      rmqUsername: 'guest',
+      rmqPassword: 'secret',
+      rmqQueue: 'products.ingest',
+      rmqVhost: '/etl',
+      format: 'JSON',
+    })
+  })
+
   it('hydrates sink enablement flags from general is*Enabled keys', () => {
     const yaml = `metadata:
   entity: Product

@@ -465,6 +465,28 @@ output:
     expect(yaml).not.toContain('split_key:')
   })
 
+  it('serializes RabbitMQ source config values into the YAML when rabbitmq is selected', async () => {
+    setPassingValidationChecklist()
+    mockWizardState.source.sourceType = 'rabbitmq'
+    mockWizardState.source.rmqIp = '10.0.0.12'
+    mockWizardState.source.rmqPort = '5672'
+    mockWizardState.source.rmqUsername = 'guest'
+    mockWizardState.source.rmqPassword = 'secret'
+    mockWizardState.source.rmqQueue = 'products.ingest'
+    mockWizardState.source.rmqVhost = '/etl'
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save & deploy/i }))
+      await Promise.resolve()
+    })
+
+    const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
+    expect(yaml).toContain('source:\n  rabbitmq:\n    ip: 10.0.0.12\n    port: 5672\n    username: guest\n    password: secret\n    queue: products.ingest\n    vhost: /etl')
+    expect(yaml).not.toContain('source:\n  kafka:')
+  })
+
   it('serializes empty shadow_topic as an empty YAML value', async () => {
     setPassingValidationChecklist()
     mockWizardState.sink.shadow = true
