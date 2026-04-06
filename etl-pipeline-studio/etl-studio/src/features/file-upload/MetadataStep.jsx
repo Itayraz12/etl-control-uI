@@ -155,7 +155,7 @@ export default function MetadataStep() {
               <select aria-label="Entity Name" value={metadata.entityName} onChange={e => u('entityName', e.target.value)}>
                 <option value="">Select an entity...</option>
                 {entities.map(ent => (
-                  <option key={ent.id} value={ent.type}>{ent.name} ({ent.type})</option>
+                  <option key={ent.id} value={ent.type}>{ent.name}</option>
                 ))}
               </select>
               {loadingSchema && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>Loading entity schema…</div>}

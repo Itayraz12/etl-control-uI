@@ -88,6 +88,15 @@ describe('MetadataStep entity target schema', () => {
     fetchEntitySchema.mockReset()
   })
 
+  it('shows only the entity name in the entity dropdown options', () => {
+    renderStep()
+
+    expect(screen.getByRole('option', { name: 'ProductEntity' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'OrderEntity' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'ProductEntity (Product)' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'OrderEntity (Order)' })).not.toBeInTheDocument()
+  })
+
   it('renders Data Stream Info in metadata and persists its source settings', async () => {
     const user = userEvent.setup()
 
