@@ -9,5 +9,6 @@ afterEach(() => {
 
 beforeEach(() => {
   localStorage.clear()
+  document.documentElement.dataset.theme = 'dark'
 })
 

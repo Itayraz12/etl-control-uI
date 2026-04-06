@@ -8,6 +8,7 @@ import { buildPipelineChangeSignature } from '../../shared/services/pipelineChan
 const mockWizardState = {
   currentStep: 6,
   readOnly: false,
+  theme: 'dark',
   metadata: {
     entityName: 'product',
     productSource: 'ERP',
@@ -139,6 +140,7 @@ describe('SummaryStep save draft behavior', () => {
     vi.useFakeTimers()
     mockWizardState.currentStep = 6
     mockWizardState.readOnly = false
+    mockWizardState.theme = 'dark'
     mockWizardState.originalDraftYaml = ''
     mockWizardState.originalDraftSignature = ''
     mockWizardState.metadata.location = ''
@@ -547,6 +549,22 @@ output:
         color: 'rgb(125, 211, 252)',
         fontWeight: '400',
       })
+    })
+  })
+
+  it('uses a light YAML preview palette when the summary is in light mode', () => {
+    mockWizardState.theme = 'light'
+
+    render(<SummaryStep />)
+
+    expect(screen.getByTestId('yaml-preview')).toHaveStyle({
+      background: 'rgb(248, 250, 252)',
+      color: 'rgb(51, 65, 85)',
+    })
+
+    expect(screen.getByText('metadata:')).toHaveStyle({
+      color: 'rgb(29, 78, 216)',
+      fontWeight: '600',
     })
   })
 

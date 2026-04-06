@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
-import { FilterTabs, InfoHint, Tooltip } from './index.jsx'
+import { afterEach, describe, expect, it } from 'vitest'
+import { FilterTabs, FormHint, InfoHint, Tooltip } from './index.jsx'
+
+afterEach(() => {
+  document.documentElement.dataset.theme = 'dark'
+})
 
 describe('Tooltip placements', () => {
   it('renders InfoHint tooltips on the right side', () => {
@@ -32,6 +36,31 @@ describe('Tooltip placements', () => {
       bottom: 'calc(100% + 8px)',
       left: '50%',
       transform: 'translateX(-50%)',
+    })
+  })
+
+  it('uses a readable light-mode palette for tooltip and inline hint text', () => {
+    document.documentElement.dataset.theme = 'light'
+
+    render(
+      <>
+        <InfoHint text="Readable hint" />
+        <FormHint>Inline help text</FormHint>
+      </>
+    )
+
+    fireEvent.mouseEnter(screen.getByText('i'))
+
+    const tooltip = screen.getByRole('tooltip')
+    expect(tooltip).toHaveStyle({
+      color: '#1f2937',
+      boxShadow: '0 12px 28px rgba(15,23,42,0.12)',
+    })
+    expect(tooltip.style.background).toContain('linear-gradient')
+
+    expect(screen.getByText('Inline help text')).toHaveStyle({
+      color: '#475569',
+      background: 'rgba(148,163,184,0.12)',
     })
   })
 })

@@ -58,13 +58,32 @@ function FlinkFlow({ sourceType, mappings, filters, sink }) {
   )
 }
 
-function YamlPreview({ yaml }) {
+function getYamlPreviewPalette(theme = 'dark') {
+  return theme === 'light'
+    ? {
+        text: '#334155',
+        background: '#f8fafc',
+        comment: '#64748b',
+        section: '#1d4ed8',
+        value: '#0369a1',
+      }
+    : {
+        text: '#a3b4cd',
+        background: '#0d1117',
+        comment: '#586e75',
+        section: '#d0e0ff',
+        value: '#7dd3fc',
+      }
+}
+
+function YamlPreview({ yaml, theme = 'dark' }) {
   const lines = yaml.split('\n')
+  const palette = getYamlPreviewPalette(theme)
 
   return (
-    <pre style={{
+    <pre data-testid="yaml-preview" style={{
       fontFamily: 'var(--mono)', fontSize: 12, lineHeight: 1.75,
-      color: '#a3b4cd', background: '#0d1117', borderRadius: 8,
+      color: palette.text, background: palette.background, borderRadius: 8,
       padding: '14px 18px', overflowX: 'auto', margin: 0,
     }}>
       {lines.map((line, i) => {
@@ -80,7 +99,7 @@ function YamlPreview({ yaml }) {
         const isValue = (trimmed.includes(': ') || isEmptyProperty) && !isComment && !isSectionKey
         return (
           <span key={i} style={{
-            color: isComment ? '#586e75' : isSectionKey ? '#d0e0ff' : isValue ? '#7dd3fc' : '#a3b4cd',
+            color: isComment ? palette.comment : isSectionKey ? palette.section : isValue ? palette.value : palette.text,
             display: 'block',
             fontWeight: isSectionKey ? 600 : 400,
           }}>
@@ -909,7 +928,7 @@ ${sinkAdditionalConfigYaml}` : ''}
               {copying ? '✓ Copied' : '📋 Copy YAML'}
             </Btn>
           </CardTitle>
-          <YamlPreview yaml={yaml} />
+          <YamlPreview yaml={yaml} theme={state.theme || 'dark'} />
         </Card>
       </div>
 

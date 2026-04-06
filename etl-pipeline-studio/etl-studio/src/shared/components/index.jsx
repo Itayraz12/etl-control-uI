@@ -171,8 +171,40 @@ export function FormRow({ children }) {
   )
 }
 
+function getActiveTheme() {
+  if (typeof document === 'undefined') return 'dark'
+  return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
+}
+
+function getOverlayPalette(theme = getActiveTheme()) {
+  if (theme === 'light') {
+    return {
+      tooltipBackground: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98))',
+      tooltipArrowBackground: 'rgba(248,250,252,0.98)',
+      tooltipBorder: 'rgba(148,163,184,0.5)',
+      tooltipText: '#1f2937',
+      tooltipShadow: '0 12px 28px rgba(15,23,42,0.12)',
+      hintBackground: 'rgba(148,163,184,0.12)',
+      hintBorder: 'rgba(148,163,184,0.28)',
+      hintText: '#475569',
+    }
+  }
+
+  return {
+    tooltipBackground: 'linear-gradient(180deg, rgba(24,31,51,0.98), rgba(17,24,39,0.98))',
+    tooltipArrowBackground: 'rgba(17,24,39,0.98)',
+    tooltipBorder: 'rgba(99,102,241,0.22)',
+    tooltipText: '#e2e8f0',
+    tooltipShadow: '0 14px 36px rgba(0,0,0,0.35)',
+    hintBackground: 'rgba(15,23,42,.35)',
+    hintBorder: 'rgba(148,163,184,.15)',
+    hintText: '#64748b',
+  }
+}
+
 export function Tooltip({ children, content, placement = 'top', maxWidth = 260, triggerStyle = {}, bubbleStyle = {} }) {
   const [visible, setVisible] = useState(false)
+  const palette = getOverlayPalette()
 
   if (!content) return children
 
@@ -224,17 +256,17 @@ export function Tooltip({ children, content, placement = 'top', maxWidth = 260, 
           style={{
             position: 'absolute',
             ...bubblePlacementStyle,
-            background: 'linear-gradient(180deg, rgba(24,31,51,0.98), rgba(17,24,39,0.98))',
-            border: '1px solid rgba(99,102,241,0.22)',
+            background: palette.tooltipBackground,
+            border: `1px solid ${palette.tooltipBorder}`,
             borderRadius: 10,
             padding: '8px 11px',
             fontSize: 11,
             lineHeight: 1.55,
-            color: 'var(--text)',
+            color: palette.tooltipText,
             whiteSpace: 'normal',
             width: 'max-content',
             maxWidth,
-            boxShadow: '0 14px 36px rgba(0,0,0,0.35)',
+            boxShadow: palette.tooltipShadow,
             zIndex: 500,
             pointerEvents: 'none',
             backdropFilter: 'blur(10px)',
@@ -247,8 +279,8 @@ export function Tooltip({ children, content, placement = 'top', maxWidth = 260, 
             ...arrowPlacementStyle,
             width: 9,
             height: 9,
-            background: 'rgba(17,24,39,0.98)',
-            border: '1px solid rgba(99,102,241,0.22)',
+            background: palette.tooltipArrowBackground,
+            border: `1px solid ${palette.tooltipBorder}`,
           }} />
         </span>
       )}
@@ -281,14 +313,16 @@ export function InfoHint({ text }) {
 }
 
 export function FormHint({ children, style = {} }) {
+  const palette = getOverlayPalette()
+
   return (
     <div style={{
       marginTop: 6,
       padding: '7px 10px',
       borderRadius: 8,
-      border: '1px solid rgba(148,163,184,.15)',
-      background: 'rgba(15,23,42,.35)',
-      color: 'var(--muted)',
+      border: `1px solid ${palette.hintBorder}`,
+      background: palette.hintBackground,
+      color: palette.hintText,
       fontSize: 11,
       lineHeight: 1.5,
       ...style,
