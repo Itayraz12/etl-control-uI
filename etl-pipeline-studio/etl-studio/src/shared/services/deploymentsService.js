@@ -1,4 +1,5 @@
 import { API_BASE } from './appConfig.js'
+import { fetchWithUserId } from './requestHeaders.js'
 
 // Backend service for deployments data
 
@@ -161,7 +162,7 @@ export async function deployFromYaml({
     })
     const url = `${API_BASE}/backend/deployments/deploy?${params.toString()}`
     console.log('[deploymentsService] deployFromYaml →', url)
-    const response = await fetch(url, {
+    const response = await fetchWithUserId(url, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: configurationYaml,
@@ -226,7 +227,7 @@ const FALLBACK_DEPLOYMENT_STEPS = [
  */
 export async function fetchDeploymentSteps(useMock = false) {
   try {
-    const response = await fetch(`${API_BASE}/backend/deployments/steps`)
+    const response = await fetchWithUserId(`${API_BASE}/backend/deployments/steps`)
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const data = await response.json()
     if (Array.isArray(data) && data.length > 0) {
@@ -582,7 +583,7 @@ export async function fetchDeployments(teamName = 'default', useMock = false) {
       const url = `${API_BASE}/backend/deployments?teamName=${encodeURIComponent(teamName)}`;
       console.log('🔵 Fetching deployments from:', url);
 
-      const response = await fetch(url);
+      const response = await fetchWithUserId(url);
       console.log('🟢 Response received:', response);
       console.log('   Status:', response.status);
       console.log('   OK:', response.ok);
@@ -723,7 +724,7 @@ export async function stopDeployment(target, useMock = false) {
       console.log('🔵 Stopping deployment:', id || `${deployment.productSource}/${deployment.productType}`);
       console.log('   URL:', url);
 
-      const response = await fetch(url, { method: 'POST' });
+      const response = await fetchWithUserId(url, { method: 'POST' });
       console.log('🟢 Stop response received:', response);
       console.log('   Status:', response.status);
       console.log('   OK:', response.ok);
@@ -792,7 +793,7 @@ export async function deleteDeployment(target, useMock = false, isPermanent = fa
       console.log('🔵 Deleting deployment:', id || `${deployment.productSource}/${deployment.productType}`);
       console.log('   URL:', url);
 
-      const response = await fetch(url, { method: 'DELETE' });
+      const response = await fetchWithUserId(url, { method: 'DELETE' });
       console.log('🟢 Delete response received:', response);
       console.log('   Status:', response.status);
       console.log('   OK:', response.ok);
@@ -855,7 +856,7 @@ export async function restoreDeployment(id, useMock = false) {
 
   try {
     const url = `${API_BASE}/backend/deployments/${id}/restore`
-    const response = await fetch(url, { method: 'POST' })
+    const response = await fetchWithUserId(url, { method: 'POST' })
 
     if (!response.ok) {
       throw new Error(`Restore failed with status: ${response.status}`)
@@ -895,7 +896,7 @@ export async function fetchDeploymentConfig(id, useMock = false) {
       console.log('🔵 Fetching deployment config:', id);
       console.log('   URL:', url);
 
-      const response = await fetch(url);
+      const response = await fetchWithUserId(url);
       console.log('🟢 Config response received:', response);
       console.log('   Status:', response.status);
       console.log('   OK:', response.ok);

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { deleteDeployment, deployFromYaml, fetchDeployments, permanentlyDeleteDeployment, setDeploymentStatus, stopDeployment, upsertSavedDraftDeployment } from './deploymentsService.js'
+import { writePersistedActiveUser } from '../store/userSessionPersistence.js'
 
 describe('deploymentsService', () => {
   const fetchMock = vi.fn()
@@ -8,6 +9,7 @@ describe('deploymentsService', () => {
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
     localStorage.clear()
+    writePersistedActiveUser({ userId: 'user-123', teamName: 'data-platform' })
   })
 
   it('returns the backend payload when deployment starts successfully', async () => {
@@ -31,7 +33,7 @@ describe('deploymentsService', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/deployments/deploy?productType=Catalog&source=ERP&team=data-platform&environment=production&isDeploy=true&isSavedVersion=true', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'text/plain', 'X-user-ID': 'user-123' },
       body: 'pipeline: test',
     })
   })
@@ -57,7 +59,7 @@ describe('deploymentsService', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/deployments/deploy?productType=Inventory&source=CRM&team=data-platform&environment=staging&isDeploy=false&isSavedVersion=false', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'text/plain', 'X-user-ID': 'user-123' },
       body: 'pipeline: upgrade',
     })
   })
@@ -156,7 +158,7 @@ describe('deploymentsService', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8080/api/backend/deployments/delete?productType=Catalog&source=CRM&team=data-platform&environment=staging&isPermanent=false',
-      { method: 'DELETE' },
+      { method: 'DELETE', headers: { 'X-user-ID': 'user-123' } },
     )
   })
 
@@ -176,7 +178,7 @@ describe('deploymentsService', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8080/api/backend/deployments/delete?productType=Legacy&source=Archive&team=data-platform&environment=production&isPermanent=true',
-      { method: 'DELETE' },
+      { method: 'DELETE', headers: { 'X-user-ID': 'user-123' } },
     )
   })
 
@@ -196,7 +198,21 @@ describe('deploymentsService', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8080/api/backend/deployments/stop?productType=Inventory&source=ERP&team=data-platform&environment=production',
-      { method: 'POST' },
+      { method: 'POST', headers: { 'X-user-ID': 'user-123' } },
+    )
+  })
+
+  it('includes X-user-ID when fetching deployments from the backend', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await fetchDeployments('data-platform', false)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8080/api/backend/deployments?teamName=data-platform',
+      { headers: { 'X-user-ID': 'user-123' } },
     )
   })
 

@@ -2,6 +2,7 @@ import { MOCK_SCHEMA, normalizeSourceSchema, TARGET_FIELDS } from '../types/inde
 import { upsertSavedDraftDeployment } from './deploymentsService.js'
 import { API_BASE } from './appConfig.js'
 import { compactYamlDocument } from './configurationYaml.js'
+import { fetchWithUserId } from './requestHeaders.js'
 
 // ── Config Service ─────────────────────────────────────────────────────────
 // Loads transformers, filters and entities either from the backend API or
@@ -236,7 +237,7 @@ export const MOCK_ENTITIES = [
 // ── Fetch helpers ─────────────────────────────────────────────────────────
 
 async function fetchJson(url) {
-  const res = await fetch(url)
+  const res = await fetchWithUserId(url)
   if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`)
   return res.json()
 }
@@ -272,7 +273,7 @@ export async function fetchEntitySchema(entityName, useMock = true) {
     return normalizeSourceSchema(TARGET_FIELDS)
   }
 
-  const response = await fetch(`${API_BASE}/backend/schema/entity/${encodeURIComponent(entityName ?? '')}`, {
+  const response = await fetchWithUserId(`${API_BASE}/backend/schema/entity/${encodeURIComponent(entityName ?? '')}`, {
     headers: {
       Accept: 'application/json, text/plain',
     },
@@ -319,7 +320,7 @@ export async function fetchSchemaByExample({ example, fileName = '', contentType
     }
   }
 
-  const response = await fetch(`${API_BASE}/backend/schemaByExample`, {
+  const response = await fetchWithUserId(`${API_BASE}/backend/schemaByExample`, {
     method: 'POST',
     headers: {
       'Content-Type': contentType || 'text/plain',
@@ -494,7 +495,7 @@ sink:
   url.searchParams.set('team', team ?? '')
   url.searchParams.set('environment', environment ?? '')
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithUserId(url.toString(), {
     headers: {
       Accept: 'application/yaml, text/yaml, text/plain, application/json',
     },
@@ -572,7 +573,7 @@ sink:
   url.searchParams.set('team', team ?? '')
   url.searchParams.set('environment', environment ?? '')
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithUserId(url.toString(), {
     headers: {
       Accept: 'application/yaml, text/yaml, text/plain, application/json',
     },
@@ -600,7 +601,7 @@ export async function saveDraftConfiguration({ productType, source, team, enviro
 
   const cleanYaml = compactYamlDocument(yaml)
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithUserId(url.toString(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

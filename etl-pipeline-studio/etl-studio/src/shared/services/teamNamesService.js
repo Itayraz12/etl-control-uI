@@ -1,4 +1,5 @@
 import { API_BASE } from './appConfig.js'
+import { fetchWithUserId } from './requestHeaders.js'
 
 function normalizeTeamName(value) {
   if (value == null) return ''
@@ -19,7 +20,7 @@ export function normalizeTeamNames(payload) {
 }
 
 export async function fetchTeamNames() {
-  const response = await fetch(`${API_BASE}/backend/teamNames`)
+  const response = await fetchWithUserId(`${API_BASE}/backend/teamNames`)
   if (!response.ok) {
     throw new Error(`Failed to fetch team names: HTTP ${response.status}`)
   }

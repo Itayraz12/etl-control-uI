@@ -1,4 +1,5 @@
 import { API_BASE } from './appConfig.js'
+import { fetchWithUserId } from './requestHeaders.js'
 
 const KAFKA_TEST_CONNECTION_PATH = `${API_BASE}/backend/kafka/test-connection`
 
@@ -49,7 +50,7 @@ export async function testKafkaConnection({ topic, environment }) {
     throw new Error('Topic and environment are required.')
   }
 
-  const response = await fetch(buildKafkaTestConnectionUrl({
+  const response = await fetchWithUserId(buildKafkaTestConnectionUrl({
     topic: normalizedTopic,
     environment: normalizedEnvironment,
   }), {

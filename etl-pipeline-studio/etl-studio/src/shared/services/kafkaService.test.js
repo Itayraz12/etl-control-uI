@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildKafkaTestConnectionUrl, testKafkaConnection } from './kafkaService.js'
+import { writePersistedActiveUser } from '../store/userSessionPersistence.js'
 
 describe('kafkaService', () => {
   const fetchMock = vi.fn()
@@ -7,6 +8,8 @@ describe('kafkaService', () => {
   beforeEach(() => {
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
+    localStorage.clear()
+    writePersistedActiveUser({ userId: 'user-123', teamName: 'data-platform' })
   })
 
   it('builds the Kafka connection test URL with encoded request params', () => {
@@ -34,6 +37,7 @@ describe('kafkaService', () => {
       method: 'GET',
       headers: {
         Accept: 'application/json, text/plain',
+        'X-user-ID': 'user-123',
       },
     })
   })
