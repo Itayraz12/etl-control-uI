@@ -149,6 +149,7 @@ describe('SourceUploadStep', () => {
         example: '{"customerId":"1","amount":10}',
         fileName: 'sample.json',
         contentType: 'application/json',
+        sourceFormat: 'JSON',
       }, false)
     })
 

@@ -39,6 +39,7 @@ export default function SourceUploadStep() {
         example,
         fileName: file.name,
         contentType: file.type || (file.name.toLowerCase().endsWith('.json') ? 'application/json' : 'text/plain'),
+        sourceFormat: state.source?.format,
       }, useMock)
       const schemaPayload = schemaResponse?.schema ?? schemaResponse
       const schema = normalizeSourceSchema(schemaPayload)

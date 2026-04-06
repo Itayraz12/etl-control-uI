@@ -267,6 +267,13 @@ export function extractSchemaNameFromExamplePayload(payload, fallback = '') {
   return asString(candidate, fallback).trim() || asString(fallback)
 }
 
+export function buildSchemaByExampleUrl({ sourceFormat } = {}) {
+  const normalizedSourceFormat = String(sourceFormat ?? '').trim()
+  return normalizedSourceFormat
+    ? `${API_BASE}/backend/schemaByExample/${encodeURIComponent(normalizedSourceFormat)}`
+    : `${API_BASE}/backend/schemaByExample`
+}
+
 export async function fetchEntitySchema(entityName, useMock = true) {
   if (useMock) {
     await new Promise(r => setTimeout(r, 150))
@@ -310,7 +317,7 @@ export async function fetchEntitySchema(entityName, useMock = true) {
   return schema
 }
 
-export async function fetchSchemaByExample({ example, fileName = '', contentType = 'text/plain' }, useMock = true) {
+export async function fetchSchemaByExample({ example, fileName = '', contentType = 'text/plain', sourceFormat = '' }, useMock = true) {
   if (useMock) {
     await new Promise(r => setTimeout(r, 150))
     return {
@@ -320,7 +327,7 @@ export async function fetchSchemaByExample({ example, fileName = '', contentType
     }
   }
 
-  const response = await fetchWithUserId(`${API_BASE}/backend/schemaByExample`, {
+  const response = await fetchWithUserId(buildSchemaByExampleUrl({ sourceFormat }), {
     method: 'POST',
     headers: {
       'Content-Type': contentType || 'text/plain',
