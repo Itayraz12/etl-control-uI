@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildConfigurationYamlUrl,
   buildSchemaByExampleUrl,
+  fetchEntitySchema,
   fetchRecordsPerDay,
   fetchStreamingContinuities,
+  resetConfigServiceRequestCache,
 } from './configService.js'
 import { writePersistedActiveUser } from '../store/userSessionPersistence.js'
 
@@ -14,6 +16,7 @@ describe('configService', () => {
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
     localStorage.clear()
+    resetConfigServiceRequestCache()
     writePersistedActiveUser({ userId: 'user-123', teamName: 'data-platform' })
   })
 
@@ -92,6 +95,94 @@ describe('configService', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8080/api/config/records-per-day',
       { headers: { 'X-user-ID': 'user-123' } },
+    )
+  })
+
+  it('deduplicates concurrent streaming continuity fetches but refetches on a later revisit', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(new Response(JSON.stringify([
+      { value: 'continuous', label: 'Continuous' },
+      { value: 'every-day', label: 'Once a Day' },
+    ]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    const [first, second, third] = await Promise.all([
+      fetchStreamingContinuities(false),
+      fetchStreamingContinuities(false),
+      fetchStreamingContinuities(false),
+    ])
+
+    expect(first).toEqual(second)
+    expect(second).toEqual(third)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    await expect(fetchStreamingContinuities(false)).resolves.toEqual(first)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('deduplicates concurrent records-per-day fetches but refetches on a later revisit', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(new Response(JSON.stringify(['thousands', 'millions']), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    const [first, second] = await Promise.all([
+      fetchRecordsPerDay(false),
+      fetchRecordsPerDay(false),
+    ])
+
+    expect(first).toEqual(second)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    await expect(fetchRecordsPerDay(false)).resolves.toEqual(first)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('deduplicates concurrent entity schema fetches for the same entity but refetches on a later revisit', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
+      type: 'object',
+      required: ['code'],
+      properties: {
+        code: { type: 'string' },
+        price: { type: 'number' },
+      },
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    const [first, second, third] = await Promise.all([
+      fetchEntitySchema('Product', false),
+      fetchEntitySchema('Product', false),
+      fetchEntitySchema(' Product ', false),
+    ])
+
+    expect(first).toEqual(second)
+    expect(second).toEqual(third)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:8080/api/backend/schema/entity/Product',
+      {
+        headers: {
+          Accept: 'application/json, text/plain',
+          'X-user-ID': 'user-123',
+        },
+      },
+    )
+
+    await expect(fetchEntitySchema('product', false)).resolves.toEqual(first)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8080/api/backend/schema/entity/product',
+      {
+        headers: {
+          Accept: 'application/json, text/plain',
+          'X-user-ID': 'user-123',
+        },
+      },
     )
   })
 })

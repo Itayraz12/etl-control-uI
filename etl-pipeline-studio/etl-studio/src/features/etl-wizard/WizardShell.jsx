@@ -22,7 +22,7 @@ const STEP_COMPONENTS = [
 
 // Steps that require a pre-fetch and their corresponding loading flag key
 const LOADING_FLAG = {
-  [STEP_METADATA]:      'loadingEntities',
+  [STEP_METADATA]:      'loadingMetadata',
   [STEP_FILTERS]:       'loadingFilters',
   [STEP_FIELD_MAPPING]: 'loadingTransformers',
   [STEP_SUMMARY]:       'loadingTransformers',
@@ -52,8 +52,10 @@ export default function WizardShell() {
 
   // Trigger pre-fetch whenever the active step changes
   useEffect(() => {
-    prefetchForStep(state.currentStep, useMock)
-  }, [state.currentStep, useMock, prefetchForStep])
+    prefetchForStep(state.currentStep, useMock, {
+      entityName: state.metadata?.entityName,
+    })
+  }, [state.currentStep, state.metadata?.entityName, useMock, prefetchForStep])
 
   const Step = STEP_COMPONENTS[state.currentStep] || MetadataStep
   const isReadOnly = state.readOnly || state.interactionMode === 'view'

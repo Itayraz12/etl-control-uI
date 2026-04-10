@@ -4,15 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MetadataStep from './MetadataStep.jsx'
 import { WizardProvider } from '../../shared/store/wizardStore.jsx'
 
-const fetchEntitySchema = vi.fn()
-const fetchStreamingContinuities = vi.fn()
-const fetchRecordsPerDay = vi.fn()
 let mockUser = { userId: 'alice', teamName: 'platform', role: 'regular' }
+let mockConfig = {}
 
 vi.mock('../../shared/services/configService.js', () => ({
-  fetchEntitySchema: (...args) => fetchEntitySchema(...args),
-  fetchStreamingContinuities: (...args) => fetchStreamingContinuities(...args),
-  fetchRecordsPerDay: (...args) => fetchRecordsPerDay(...args),
   MOCK_STREAMING_CONTINUITIES: [
     { value: 'continuous', label: 'Continuous' },
   ],
@@ -22,12 +17,7 @@ vi.mock('../../shared/services/configService.js', () => ({
 }))
 
 vi.mock('../../shared/store/configContext.jsx', () => ({
-  useConfig: () => ({
-    entities: [
-      { id: 'ent-1', name: 'ProductEntity', type: 'Product' },
-      { id: 'ent-2', name: 'OrderEntity', type: 'Order' },
-    ],
-  }),
+  useConfig: () => mockConfig,
 }))
 
 vi.mock('../../shared/store/userContext.jsx', () => ({
@@ -103,20 +93,45 @@ function renderStep(initialState = {}) {
   )
 }
 
+function rerenderStep(view) {
+  view.rerender(
+    <WizardProvider>
+      <MetadataStep />
+    </WizardProvider>
+  )
+}
+
+function setResolvedEntitySchema(entityName, schema, { error = '', loading = false } = {}) {
+  mockConfig = {
+    ...mockConfig,
+    selectedEntitySchemaName: entityName,
+    selectedEntitySchema: schema,
+    entitySchemaError: error,
+    loadingEntitySchema: loading,
+  }
+}
+
 describe('MetadataStep entity target schema', () => {
   beforeEach(() => {
-    fetchEntitySchema.mockReset()
-    fetchStreamingContinuities.mockReset()
-    fetchRecordsPerDay.mockReset()
-    fetchStreamingContinuities.mockResolvedValue([
-      { value: 'continuous', label: 'Continuous' },
-      { value: 'every-day', label: 'Once a Day' },
-    ])
-    fetchRecordsPerDay.mockResolvedValue([
-      { value: 'millions', label: 'A Few Millions' },
-      { value: 'thousands', label: 'Thousands' },
-    ])
     mockUser = { userId: 'alice', teamName: 'platform', role: 'regular' }
+    mockConfig = {
+      entities: [
+        { id: 'ent-1', name: 'ProductEntity', type: 'Product' },
+        { id: 'ent-2', name: 'OrderEntity', type: 'Order' },
+      ],
+      streamingContinuities: [
+        { value: 'continuous', label: 'Continuous' },
+        { value: 'every-day', label: 'Once a Day' },
+      ],
+      recordsPerDay: [
+        { value: 'millions', label: 'A Few Millions' },
+        { value: 'thousands', label: 'Thousands' },
+      ],
+      selectedEntitySchema: [],
+      selectedEntitySchemaName: '',
+      loadingEntitySchema: false,
+      entitySchemaError: '',
+    }
   })
 
   it('shows the logged-in team in a disabled dropdown for regular users', () => {
@@ -161,8 +176,6 @@ describe('MetadataStep entity target schema', () => {
     expect(screen.getByText('📊 Data Stream Info')).toBeInTheDocument()
 
     await waitFor(() => {
-      expect(fetchStreamingContinuities).toHaveBeenCalledWith(false)
-      expect(fetchRecordsPerDay).toHaveBeenCalledWith(false)
       expect(screen.getByRole('option', { name: 'Once a Day' })).toBeInTheDocument()
       expect(screen.getByRole('option', { name: 'Thousands' })).toBeInTheDocument()
     })
@@ -244,7 +257,11 @@ describe('MetadataStep entity target schema', () => {
 
   it('fetches entity schema on selection and persists parsed target fields', async () => {
     const user = userEvent.setup()
-    fetchEntitySchema.mockResolvedValue({
+    const view = renderStep()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Entity Name' }), 'Product')
+
+    setResolvedEntitySchema('Product', {
       type: 'object',
       required: ['code'],
       properties: {
@@ -252,14 +269,7 @@ describe('MetadataStep entity target schema', () => {
         price: { type: 'number' },
       },
     })
-
-    renderStep()
-
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Entity Name' }), 'Product')
-
-    await waitFor(() => {
-      expect(fetchEntitySchema).toHaveBeenCalledWith('Product', false)
-    })
+    rerenderStep(view)
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
@@ -275,11 +285,7 @@ describe('MetadataStep entity target schema', () => {
 
   it('clears stale mappings when the entity changes', async () => {
     const user = userEvent.setup()
-    fetchEntitySchema.mockResolvedValue([
-      { id: 'code', name: 'code', path: 'code', type: 'string', required: true },
-    ])
-
-    renderStep({
+    const view = renderStep({
       metadata: { entityName: 'Order' },
       targetSchema: [{ id: 'orderId', name: 'orderId', path: 'orderId', type: 'string', required: true }],
       mappings: [
@@ -301,7 +307,17 @@ describe('MetadataStep entity target schema', () => {
       ],
     })
 
+    setResolvedEntitySchema('Order', [
+      { id: 'orderId', name: 'orderId', path: 'orderId', type: 'string', required: true },
+    ])
+    rerenderStep(view)
+
     await user.selectOptions(screen.getByRole('combobox', { name: 'Entity Name' }), 'Product')
+
+    setResolvedEntitySchema('Product', [
+      { id: 'code', name: 'code', path: 'code', type: 'string', required: true },
+    ])
+    rerenderStep(view)
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
@@ -317,7 +333,11 @@ describe('MetadataStep entity target schema', () => {
 
   it('persists nested array target fields when the selected entity schema contains arrays', async () => {
     const user = userEvent.setup()
-    fetchEntitySchema.mockResolvedValue({
+    const view = renderStep()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Entity Name' }), 'Product')
+
+    setResolvedEntitySchema('Product', {
       type: 'object',
       properties: {
         persons: {
@@ -333,10 +353,7 @@ describe('MetadataStep entity target schema', () => {
         },
       },
     })
-
-    renderStep()
-
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Entity Name' }), 'Product')
+    rerenderStep(view)
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
@@ -351,7 +368,11 @@ describe('MetadataStep entity target schema', () => {
 
   it('persists referenced array target fields like person.*.firstName after entity change', async () => {
     const user = userEvent.setup()
-    fetchEntitySchema.mockResolvedValue({
+    const view = renderStep()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Entity Name' }), 'Product')
+
+    setResolvedEntitySchema('Product', {
       type: 'object',
       properties: {
         persons: {
@@ -372,10 +393,7 @@ describe('MetadataStep entity target schema', () => {
         },
       },
     })
-
-    renderStep()
-
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Entity Name' }), 'Product')
+    rerenderStep(view)
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
@@ -388,6 +406,30 @@ describe('MetadataStep entity target schema', () => {
       expect(persisted.targetSchema).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: 'persons[]' }),
+        ])
+      )
+    })
+  })
+
+  it('uses the prefetched selected entity schema when returning to metadata instead of fetching from the step again', async () => {
+    const view = renderStep({
+      metadata: { entityName: 'Product' },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Entity Name' })).toHaveValue('Product')
+    })
+
+    setResolvedEntitySchema('Product', [
+      { id: 'code', name: 'code', path: 'code', type: 'string', required: true },
+    ])
+    rerenderStep(view)
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.targetSchema).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'code', type: 'string', required: true }),
         ])
       )
     })

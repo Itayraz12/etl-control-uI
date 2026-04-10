@@ -275,6 +275,32 @@ export const MOCK_RECORDS_PER_DAY = [
   { value: 'hundreds-millions', label: 'Hundreds of Millions' },
 ]
 
+const configRequestCache = new Map()
+
+function loadInFlightConfigRequest(cacheKey, loader) {
+  if (configRequestCache.has(cacheKey)) {
+    return configRequestCache.get(cacheKey)
+  }
+
+  const request = Promise.resolve()
+    .then(loader)
+    .then(result => {
+      configRequestCache.delete(cacheKey)
+      return result
+    })
+    .catch(error => {
+      configRequestCache.delete(cacheKey)
+      throw error
+    })
+
+  configRequestCache.set(cacheKey, request)
+  return request
+}
+
+export function resetConfigServiceRequestCache() {
+  configRequestCache.clear()
+}
+
 // ── Fetch helpers ─────────────────────────────────────────────────────────
 
 async function fetchJson(url) {
@@ -350,46 +376,51 @@ export function buildSchemaByExampleUrl({ sourceFormat } = {}) {
 }
 
 export async function fetchEntitySchema(entityName, useMock = true) {
-  if (useMock) {
-    await new Promise(r => setTimeout(r, 150))
-    return normalizeSourceSchema(TARGET_FIELDS)
-  }
+  const normalizedEntityName = String(entityName ?? '').trim()
+  const cacheKey = `entity-schema::${useMock ? 'mock' : 'live'}::${normalizedEntityName.toLowerCase()}`
 
-  const response = await fetchWithUserId(`${API_BASE}/backend/schema/entity/${encodeURIComponent(entityName ?? '')}`, {
-    headers: {
-      Accept: 'application/json, text/plain',
-    },
-  })
-
-  if (!response.ok) {
-    let message = `Entity schema fetch failed with status: ${response.status}`
-    try {
-      const text = await response.text()
-      if (text) message = text
-    } catch {}
-    throw new Error(message)
-  }
-
-  const contentType = response.headers.get('content-type') || ''
-  let payload
-
-  if (contentType.includes('application/json')) {
-    payload = await response.json()
-  } else {
-    const text = await response.text()
-    try {
-      payload = JSON.parse(text)
-    } catch {
-      payload = null
+  return loadInFlightConfigRequest(cacheKey, async () => {
+    if (useMock) {
+      await new Promise(r => setTimeout(r, 150))
+      return normalizeSourceSchema(TARGET_FIELDS)
     }
-  }
 
-  const schema = normalizeSchemaByExamplePayload(payload)
-  if (schema.length === 0) {
-    throw new Error('Entity schema returned no fields')
-  }
+    const response = await fetchWithUserId(`${API_BASE}/backend/schema/entity/${encodeURIComponent(normalizedEntityName)}`, {
+      headers: {
+        Accept: 'application/json, text/plain',
+      },
+    })
 
-  return schema
+    if (!response.ok) {
+      let message = `Entity schema fetch failed with status: ${response.status}`
+      try {
+        const text = await response.text()
+        if (text) message = text
+      } catch {}
+      throw new Error(message)
+    }
+
+    const contentType = response.headers.get('content-type') || ''
+    let payload
+
+    if (contentType.includes('application/json')) {
+      payload = await response.json()
+    } else {
+      const text = await response.text()
+      try {
+        payload = JSON.parse(text)
+      } catch {
+        payload = null
+      }
+    }
+
+    const schema = normalizeSchemaByExamplePayload(payload)
+    if (schema.length === 0) {
+      throw new Error('Entity schema returned no fields')
+    }
+
+    return schema
+  })
 }
 
 export async function fetchSchemaByExample({ example, fileName = '', contentType = 'text/plain', sourceFormat = '' }, useMock = true) {
@@ -503,31 +534,43 @@ export async function fetchFilters(useMock = true) {
  * Live → GET http://localhost:8080/api/backbone/entities
  */
 export async function fetchEntities(useMock = true) {
-  if (useMock) {
-    await new Promise(r => setTimeout(r, 150))
-    return MOCK_ENTITIES
-  }
-  return fetchJson(`${API_BASE}/backbone/entities`)
+  const cacheKey = `entities::${useMock ? 'mock' : 'live'}`
+
+  return loadInFlightConfigRequest(cacheKey, async () => {
+    if (useMock) {
+      await new Promise(r => setTimeout(r, 150))
+      return MOCK_ENTITIES
+    }
+    return fetchJson(`${API_BASE}/backbone/entities`)
+  })
 }
 
 export async function fetchStreamingContinuities(useMock = true) {
-  if (useMock) {
-    await new Promise(r => setTimeout(r, 120))
-    return MOCK_STREAMING_CONTINUITIES
-  }
+  const cacheKey = `streaming-continuities::${useMock ? 'mock' : 'live'}`
 
-  const payload = await fetchJson(`${API_BASE}/config/streaming-continuities`)
-  return normalizeConfigOptions(payload, MOCK_STREAMING_CONTINUITIES)
+  return loadInFlightConfigRequest(cacheKey, async () => {
+    if (useMock) {
+      await new Promise(r => setTimeout(r, 120))
+      return MOCK_STREAMING_CONTINUITIES
+    }
+
+    const payload = await fetchJson(`${API_BASE}/config/streaming-continuities`)
+    return normalizeConfigOptions(payload, MOCK_STREAMING_CONTINUITIES)
+  })
 }
 
 export async function fetchRecordsPerDay(useMock = true) {
-  if (useMock) {
-    await new Promise(r => setTimeout(r, 120))
-    return MOCK_RECORDS_PER_DAY
-  }
+  const cacheKey = `records-per-day::${useMock ? 'mock' : 'live'}`
 
-  const payload = await fetchJson(`${API_BASE}/config/records-per-day`)
-  return normalizeConfigOptions(payload, MOCK_RECORDS_PER_DAY)
+  return loadInFlightConfigRequest(cacheKey, async () => {
+    if (useMock) {
+      await new Promise(r => setTimeout(r, 120))
+      return MOCK_RECORDS_PER_DAY
+    }
+
+    const payload = await fetchJson(`${API_BASE}/config/records-per-day`)
+    return normalizeConfigOptions(payload, MOCK_RECORDS_PER_DAY)
+  })
 }
 
 /**

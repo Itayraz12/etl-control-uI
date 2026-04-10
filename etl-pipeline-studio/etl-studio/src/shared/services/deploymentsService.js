@@ -10,6 +10,36 @@ import { fetchWithUserId } from './requestHeaders.js'
 
 const LOCAL_DRAFTS_KEY = 'etl-local-drafts'
 const DEPLOYMENT_STATUS_OVERRIDES_KEY = 'etl-deployment-status-overrides'
+const deploymentsListRequestCache = new Map()
+
+function buildDeploymentsListRequestKey({ teamName = 'default', useMock = false, includeAllTeams = false }) {
+  return JSON.stringify({
+    teamName: String(teamName || 'default').trim(),
+    useMock: Boolean(useMock),
+    includeAllTeams: Boolean(includeAllTeams),
+  })
+}
+
+function loadInFlightDeploymentsRequest(requestKey, loader, { forceRefresh = false } = {}) {
+  if (!forceRefresh && deploymentsListRequestCache.has(requestKey)) {
+    return deploymentsListRequestCache.get(requestKey)
+  }
+
+  const request = Promise.resolve()
+    .then(loader)
+    .finally(() => {
+      if (deploymentsListRequestCache.get(requestKey) === request) {
+        deploymentsListRequestCache.delete(requestKey)
+      }
+    })
+
+  deploymentsListRequestCache.set(requestKey, request)
+  return request
+}
+
+export function resetDeploymentsServiceRequestCache() {
+  deploymentsListRequestCache.clear()
+}
 
 function buildLocalDraftId({ teamName, productSource, productType, environment }) {
   return `local-draft:${teamName}::${(productSource || '').toLowerCase()}::${(productType || '').toLowerCase()}::${environment}`
@@ -564,7 +594,7 @@ function cloneMockDeployments() {
   return mockDeploymentsStore.map(item => ({ ...item }))
 }
 
-export async function fetchDeployments(teamName = 'default', useMock = false, { includeAllTeams = false } = {}) {
+export async function fetchDeployments(teamName = 'default', useMock = false, { includeAllTeams = false, forceRefresh = false } = {}) {
   // Helper: merge local drafts with the backend / mock list.
   // A local draft is suppressed when the backend already has a row whose
   // productSource + productType + environment matches (backend is source of truth).
@@ -586,11 +616,15 @@ export async function fetchDeployments(teamName = 'default', useMock = false, { 
     return applyDeploymentStatusOverrides([...backendRows, ...extra], teamName)
   }
 
-  if (useMock) {
-    // Simulate network delay
-    await new Promise(r => setTimeout(r, 300));
-    return mergeWithLocalDrafts(cloneMockDeployments());
-  } else {
+  const requestKey = buildDeploymentsListRequestKey({ teamName, useMock, includeAllTeams })
+
+  return loadInFlightDeploymentsRequest(requestKey, async () => {
+    if (useMock) {
+      // Simulate network delay
+      await new Promise(r => setTimeout(r, 300));
+      return mergeWithLocalDrafts(cloneMockDeployments());
+    }
+
     try {
       const url = includeAllTeams
         ? `${API_BASE}/backend/deployments`
@@ -633,7 +667,7 @@ export async function fetchDeployments(teamName = 'default', useMock = false, { 
       // Return empty array on error
       return mergeWithLocalDrafts([]);
     }
-  }
+  }, { forceRefresh })
 }
 
 export async function deployService(id, useMock = false) {

@@ -5,9 +5,10 @@ import { APP_VERSION } from '../../shared/services/appConfig.js'
 
 export default function TopNav() {
   const { state, actions } = useWizard()
-  const { logout } = useUser()
+  const { user, logout } = useUser()
   const { readOnly } = state
   const appVersion = `v${APP_VERSION}`
+  const userRoleHeader = String(user?.userRoleHeader ?? '').trim()
 
   function handleBrandClick() {
     if (readOnly) return
@@ -51,6 +52,9 @@ export default function TopNav() {
           👁 VIEW ONLY
         </Chip>
       )}
+      <Chip c="slate" title="Debug: raw user-role response header" style={{ textTransform: 'none' }}>
+        user-role header: {userRoleHeader || '(missing)'}
+      </Chip>
       <div style={{ flex: 1 }} />
       <Btn
         v="ghost" sm

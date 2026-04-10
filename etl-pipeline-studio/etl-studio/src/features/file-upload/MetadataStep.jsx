@@ -1,13 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useUser } from '../../shared/store/userContext.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
-import { useMockMode } from '../../shared/store/mockModeContext.jsx'
 import { useTeamNames } from '../../shared/store/teamNamesContext.jsx'
 import {
-  fetchEntitySchema,
-  fetchRecordsPerDay,
-  fetchStreamingContinuities,
   MOCK_RECORDS_PER_DAY,
   MOCK_STREAMING_CONTINUITIES,
 } from '../../shared/services/configService.js'
@@ -23,8 +19,15 @@ import { Card, CardTitle, FormRow, FormGroup } from '../../shared/components/ind
 export default function MetadataStep() {
   const { state, actions } = useWizard()
   const { user } = useUser()
-  const { entities } = useConfig()
-  const { useMock } = useMockMode()
+  const {
+    entities,
+    streamingContinuities = MOCK_STREAMING_CONTINUITIES,
+    recordsPerDay = MOCK_RECORDS_PER_DAY,
+    selectedEntitySchema = [],
+    selectedEntitySchemaName = '',
+    loadingEntitySchema = false,
+    entitySchemaError = '',
+  } = useConfig()
   const { teamNames } = useTeamNames()
   const { metadata } = state
   const src = state.source
@@ -39,10 +42,6 @@ export default function MetadataStep() {
   const allowedLocations = getAllowedMetadataLocations(metadata.environment)
   const normalizedLocation = normalizeMetadataLocation(metadata.location, metadata.environment)
   const previousEntityRef = useRef(metadata.entityName)
-  const [loadingSchema, setLoadingSchema] = useState(false)
-  const [schemaError, setSchemaError] = useState('')
-  const [streamingContinuityOptions, setStreamingContinuityOptions] = useState(MOCK_STREAMING_CONTINUITIES)
-  const [recordsPerDayOptions, setRecordsPerDayOptions] = useState(MOCK_RECORDS_PER_DAY)
   const u = (k, v) => actions.updateMetadata({ [k]: v })
   const updateSourceField = (k, v) => actions.updateSource({ [k]: v })
   const handleProductCodeChange = (value) => {
@@ -71,35 +70,11 @@ export default function MetadataStep() {
   }, [actions, metadata.location, normalizedLocation])
 
   useEffect(() => {
-    let isActive = true
-
-    Promise.all([
-      fetchStreamingContinuities(useMock),
-      fetchRecordsPerDay(useMock),
-    ])
-      .then(([nextStreamingContinuities, nextRecordsPerDay]) => {
-        if (!isActive) return
-        setStreamingContinuityOptions(nextStreamingContinuities)
-        setRecordsPerDayOptions(nextRecordsPerDay)
-      })
-      .catch(() => {
-        if (!isActive) return
-        setStreamingContinuityOptions(MOCK_STREAMING_CONTINUITIES)
-        setRecordsPerDayOptions(MOCK_RECORDS_PER_DAY)
-      })
-
-    return () => {
-      isActive = false
-    }
-  }, [useMock])
-
-  useEffect(() => {
     const entityName = String(metadata.entityName ?? '').trim()
     const previousEntityName = String(previousEntityRef.current ?? '').trim()
+    const resolvedEntityName = String(selectedEntitySchemaName ?? '').trim()
 
     if (!entityName) {
-      setSchemaError('')
-      setLoadingSchema(false)
       actions.setTargetSchema([])
       if (previousEntityName) {
         actions.setMappings([])
@@ -108,37 +83,27 @@ export default function MetadataStep() {
       return
     }
 
-    let isActive = true
-    setLoadingSchema(true)
-    setSchemaError('')
-
-    fetchEntitySchema(entityName, useMock)
-      .then(schemaResponse => {
-        if (!isActive) return
-        const schema = normalizeSourceSchema(schemaResponse)
-        if (schema.length === 0) {
-          throw new Error('Entity schema returned no fields')
-        }
-        actions.setTargetSchema(schema)
-        if (previousEntityName && previousEntityName !== entityName) {
-          actions.setMappings([])
-        }
-        previousEntityRef.current = entityName
-      })
-      .catch(error => {
-        if (!isActive) return
-        actions.setTargetSchema([])
-        setSchemaError(error?.message || 'Failed to load entity schema.')
-      })
-      .finally(() => {
-        if (!isActive) return
-        setLoadingSchema(false)
-      })
-
-    return () => {
-      isActive = false
+    if (loadingEntitySchema || resolvedEntityName !== entityName) {
+      return
     }
-  }, [actions, metadata.entityName, useMock])
+
+    if (entitySchemaError) {
+      actions.setTargetSchema([])
+      return
+    }
+
+    const schema = normalizeSourceSchema(selectedEntitySchema)
+    if (schema.length === 0) {
+      actions.setTargetSchema([])
+      return
+    }
+
+    actions.setTargetSchema(schema)
+    if (previousEntityName && previousEntityName !== entityName) {
+      actions.setMappings([])
+    }
+    previousEntityRef.current = entityName
+  }, [actions, entitySchemaError, loadingEntitySchema, metadata.entityName, selectedEntitySchema, selectedEntitySchemaName])
 
 
   return (
@@ -215,8 +180,8 @@ export default function MetadataStep() {
                   <option key={ent.id} value={ent.type}>{ent.name}</option>
                 ))}
               </select>
-              {loadingSchema && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>Loading entity schema…</div>}
-              {!!schemaError && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>{schemaError}</div>}
+              {loadingEntitySchema && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>Loading entity schema…</div>}
+              {!!entitySchemaError && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>{entitySchemaError}</div>}
             </FormGroup>
           </FormRow>
         </Card>
@@ -226,14 +191,14 @@ export default function MetadataStep() {
           <FormRow>
             <FormGroup label="Streaming Continuity" required>
               <select value={src.streamingContinuity || 'continuous'} onChange={e => updateSourceField('streamingContinuity', e.target.value)}>
-                {streamingContinuityOptions.map(option => (
+                {streamingContinuities.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </FormGroup>
             <FormGroup label="Avg Records Per Day" required>
               <select value={src.recordsPerDay || 'millions'} onChange={e => updateSourceField('recordsPerDay', e.target.value)}>
-                {recordsPerDayOptions.map(option => (
+                {recordsPerDay.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>

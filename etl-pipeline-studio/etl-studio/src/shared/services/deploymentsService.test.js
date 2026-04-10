@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { deleteDeployment, deployFromYaml, fetchDeployments, permanentlyDeleteDeployment, setDeploymentStatus, stopDeployment, upsertSavedDraftDeployment } from './deploymentsService.js'
+import { deleteDeployment, deployFromYaml, fetchDeployments, permanentlyDeleteDeployment, resetDeploymentsServiceRequestCache, setDeploymentStatus, stopDeployment, upsertSavedDraftDeployment } from './deploymentsService.js'
 import { writePersistedActiveUser } from '../store/userSessionPersistence.js'
 
 describe('deploymentsService', () => {
@@ -9,6 +9,7 @@ describe('deploymentsService', () => {
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
     localStorage.clear()
+    resetDeploymentsServiceRequestCache()
     writePersistedActiveUser({ userId: 'user-123', teamName: 'data-platform' })
   })
 
@@ -228,6 +229,33 @@ describe('deploymentsService', () => {
       'http://localhost:8080/api/backend/deployments',
       { headers: { 'X-user-ID': 'user-123' } },
     )
+  })
+
+  it('deduplicates concurrent deployments fetches for the same management entry', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    const [first, second] = await Promise.all([
+      fetchDeployments('data-platform', false),
+      fetchDeployments('data-platform', false),
+    ])
+
+    expect(first).toEqual(second)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('refetches deployments after the initial request settles when forceRefresh is requested', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    await fetchDeployments('data-platform', false)
+    await fetchDeployments('data-platform', false, { forceRefresh: true })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('applies persisted failed status overrides to matching backend rows', async () => {
