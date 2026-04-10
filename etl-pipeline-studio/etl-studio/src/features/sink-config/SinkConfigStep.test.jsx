@@ -55,7 +55,7 @@ function renderStep(initialSink = {}, initialMappings = []) {
       filters: [],
       sink: {
         sinkType: 'kafka',
-        sinkKafkaTopic: 'etl_products_v3',
+        sinkKafkaTopic: '',
         sinkKafkaEnv: 'production',
         sinkKafkaAdditionalPropertiesEnabled: false,
         sinkKafkaAdditionalProperties: [],
@@ -110,7 +110,7 @@ function renderReadOnlyStep(initialSink = {}, initialMappings = []) {
         filters: [],
         sink: {
           sinkType: 'kafka',
-          sinkKafkaTopic: 'etl_products_v3',
+          sinkKafkaTopic: '',
           sinkKafkaEnv: 'production',
           sinkKafkaAdditionalPropertiesEnabled: false,
           sinkKafkaAdditionalProperties: [],
@@ -180,6 +180,13 @@ describe('SinkConfigStep Kafka additional properties', () => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
       expect(persisted.sink?.sinkKafkaAdditionalProperties).toEqual([])
     })
+  })
+
+  it('renders the Kafka output topic empty by default', () => {
+    renderStep()
+
+    const outputTopicInput = screen.getByText('Output Topic').closest('label')?.parentElement?.querySelector('input')
+    expect(outputTopicInput).toHaveValue('')
   })
 
   it('renders persisted Kafka additional properties when reopening the step', () => {

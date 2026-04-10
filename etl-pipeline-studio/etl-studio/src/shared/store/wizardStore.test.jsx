@@ -13,6 +13,7 @@ function StateProbe() {
       <div data-testid="read-only">{String(state.readOnly)}</div>
       <div data-testid="product-type">{state.metadata.productType}</div>
       <div data-testid="kafka-topic">{state.source.kafkaTopic}</div>
+      <div data-testid="sink-kafka-topic">{state.sink.sinkKafkaTopic}</div>
     </div>
   )
 }
@@ -93,6 +94,18 @@ describe('WizardProvider preview boot', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('kafka-topic')).toHaveTextContent('')
+    })
+  })
+
+  it('starts new wizard state with an empty sink Kafka topic by default', async () => {
+    render(
+      <WizardProvider user={user}>
+        <StateProbe />
+      </WizardProvider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sink-kafka-topic')).toHaveTextContent('')
     })
   })
 })

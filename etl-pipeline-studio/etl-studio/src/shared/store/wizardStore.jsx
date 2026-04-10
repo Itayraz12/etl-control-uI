@@ -87,7 +87,7 @@ const initialState = {
   // Step 6 — Sink Config
   sink: {
     sinkType:        'kafka',
-    sinkKafkaTopic:  'etl_products_v3',
+    sinkKafkaTopic:  '',
     sinkKafkaEnv:    'production',
     sinkKafkaAdditionalPropertiesEnabled: false,
     sinkKafkaAdditionalProperties: [],
