@@ -12,6 +12,7 @@ function StateProbe() {
       <div data-testid="current-step">{String(state.currentStep)}</div>
       <div data-testid="read-only">{String(state.readOnly)}</div>
       <div data-testid="product-type">{state.metadata.productType}</div>
+      <div data-testid="kafka-topic">{state.source.kafkaTopic}</div>
     </div>
   )
 }
@@ -80,6 +81,18 @@ describe('WizardProvider preview boot', () => {
       expect(screen.getByTestId('current-step')).toHaveTextContent('2')
       expect(screen.getByTestId('read-only')).toHaveTextContent('false')
       expect(screen.getByTestId('product-type')).toHaveTextContent('Pricing')
+    })
+  })
+
+  it('starts new wizard state with an empty Kafka topic by default', async () => {
+    render(
+      <WizardProvider user={user}>
+        <StateProbe />
+      </WizardProvider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('kafka-topic')).toHaveTextContent('')
     })
   })
 })

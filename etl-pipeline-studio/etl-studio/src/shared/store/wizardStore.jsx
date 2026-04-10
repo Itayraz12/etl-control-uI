@@ -49,7 +49,7 @@ const initialState = {
   source: {
     sourceType:           'kafka',
     kafkaEnv:             'production',
-    kafkaTopic:           'source_products_raw',
+    kafkaTopic:           '',
     kafkaOffset:          '',
     kafkaKeys:            '',
     kafkaKeyMode:         'include',
