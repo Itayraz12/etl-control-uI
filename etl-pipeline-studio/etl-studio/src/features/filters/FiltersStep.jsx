@@ -3,6 +3,22 @@ import { useConfig } from '../../shared/store/configContext.jsx'
 import { Card, CardTitle, Btn } from '../../shared/components/index.jsx'
 import { resolveSourceSchema } from '../../shared/types/index.js'
 
+function getDefaultRuleOperator(group = {}, operators = []) {
+  const availableOperatorIds = new Set(
+    (Array.isArray(operators) ? operators : [])
+      .map(operator => String(operator?.id || '').trim())
+      .filter(Boolean)
+  )
+
+  const lastRuleOperator = [...(Array.isArray(group?.rules) ? group.rules : [])]
+    .reverse()
+    .map(rule => String(rule?.op || '').trim())
+    .find(operatorId => availableOperatorIds.has(operatorId))
+
+  if (lastRuleOperator) return lastRuleOperator
+  return String(operators?.[0]?.id || 'eq').trim() || 'eq'
+}
+
 function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions }) {
   const currentOperator = operators.find(o => o.id === rule.op)
   const additionalProps = currentOperator?.additionalProperties || {}
@@ -76,10 +92,14 @@ function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions
 }
 
 function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions, readOnly = false }) {
-  const addRule = () => onUpdate({
-    ...group,
-    rules: [...group.rules, { id: `r-${Date.now()}`, field: fieldOptions[0] || 'id', op: 'eq', value: '1' }]
-  })
+  const addRule = () => {
+    const defaultOperator = getDefaultRuleOperator(group, operators)
+
+    onUpdate({
+      ...group,
+      rules: [...group.rules, { id: `r-${Date.now()}`, field: fieldOptions[0] || 'id', op: defaultOperator, value: '1' }]
+    })
+  }
   const addSubgroup = () => onUpdate({
     ...group,
     subgroups: [...group.subgroups, { id: `g-${Date.now()}`, logic: 'OR', rules: [], subgroups: [] }]
