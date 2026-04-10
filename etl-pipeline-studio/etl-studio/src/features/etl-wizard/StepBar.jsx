@@ -13,6 +13,17 @@ export default function StepBar() {
     ? getSummaryFailingStepIndexes(state, undefined, transformers)
     : new Set()
 
+  function handleStepClick(targetStep, canClick) {
+    if (!canClick) return
+
+    if (targetStep === currentStep + 1) {
+      actions.goNext(currentStep)
+      return
+    }
+
+    actions.setStep(targetStep)
+  }
+
   return (
     <div style={{
       background: 'var(--surf)', borderBottom: '1px solid var(--border)',
@@ -34,7 +45,7 @@ export default function StepBar() {
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
               <div
-                onClick={() => canClick && actions.setStep(i)}
+                onClick={() => handleStepClick(i, canClick)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 7,
                   cursor: canClick ? 'pointer' : 'default',

@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import StepBar from './StepBar.jsx'
 
 const mockSetStep = vi.fn()
+const mockGoNext = vi.fn()
 const wizardState = {
   currentStep: 4,
   completedSteps: new Set([0, 1, 2]),
@@ -19,6 +20,7 @@ vi.mock('../../shared/store/wizardStore.jsx', () => ({
     state: wizardState,
     actions: {
       setStep: mockSetStep,
+      goNext: mockGoNext,
     },
   }),
 }))
@@ -43,6 +45,32 @@ describe('StepBar', () => {
     wizardState.filters = []
     wizardState.source = { sourceType: 'kafka', kafkaEnv: 'production', kafkaTopic: 'source_products_raw', kafkaOffset: 'earliest' }
     mockSetStep.mockClear()
+    mockGoNext.mockClear()
+  })
+
+  it('marks the current step complete when the user clicks the next step header directly', () => {
+    wizardState.currentStep = 0
+    wizardState.completedSteps = new Set()
+    wizardState.metadata = {
+      productSource: 'ERP',
+      productType: 'Inventory',
+      environment: 'production',
+      location: 'HOME',
+      entityName: 'Product',
+      team: 'data-platform',
+    }
+    wizardState.source = {
+      sourceType: 'kafka',
+      streamingContinuity: 'continuous',
+      recordsPerDay: 'millions',
+    }
+
+    render(<StepBar />)
+
+    fireEvent.click(screen.getByText('Source Config'))
+
+    expect(mockGoNext).toHaveBeenCalledWith(0)
+    expect(mockSetStep).not.toHaveBeenCalled()
   })
 
   it('shows Filters as completed after the user advances past it even with no filters configured', () => {
