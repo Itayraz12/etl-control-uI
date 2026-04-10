@@ -6,6 +6,7 @@ const mockSetStep = vi.fn()
 const mockGoNext = vi.fn()
 const wizardState = {
   currentStep: 4,
+  furthestStepVisited: 4,
   completedSteps: new Set([0, 1, 2]),
   metadata: { productSource: 'ERP', productType: 'Inventory', environment: 'production', entityName: 'Product' },
   source: { sourceType: 'kafka' },
@@ -40,6 +41,7 @@ vi.mock('../../shared/store/configContext.jsx', () => ({
 describe('StepBar', () => {
   beforeEach(() => {
     wizardState.currentStep = 4
+    wizardState.furthestStepVisited = 4
     wizardState.completedSteps = new Set([0, 1, 2])
     wizardState.mappings = []
     wizardState.filters = []
@@ -82,6 +84,57 @@ describe('StepBar', () => {
     expect(filtersLabel).toHaveStyle({ color: 'var(--success)' })
     expect(filtersCircle).toHaveTextContent('✓')
     expect(filtersCircle).toHaveStyle({ background: 'var(--success)' })
+  })
+
+  it('lets the user jump back to Source Upload directly after revisiting Metadata', () => {
+    wizardState.currentStep = 0
+    wizardState.furthestStepVisited = 2
+    wizardState.completedSteps = new Set([0, 1])
+    wizardState.metadata = {
+      productSource: 'ERP',
+      productType: 'Inventory',
+      environment: 'production',
+      location: 'OFFICE',
+      entityName: 'Product',
+      team: 'data-platform',
+    }
+
+    render(<StepBar />)
+
+    fireEvent.click(screen.getByText('Source Upload'))
+
+    expect(mockSetStep).toHaveBeenCalledWith(2)
+  })
+
+  it('lets the user jump back to Summary directly after revisiting Metadata', () => {
+    wizardState.currentStep = 0
+    wizardState.furthestStepVisited = 6
+    wizardState.completedSteps = new Set([0, 1, 2, 3, 4, 5])
+    wizardState.metadata = {
+      productSource: 'ERP',
+      productType: 'Inventory',
+      environment: 'production',
+      location: 'OFFICE',
+      entityName: 'Product',
+      team: 'data-platform',
+    }
+    wizardState.source = {
+      sourceType: 'kafka',
+      kafkaEnv: 'production',
+      kafkaTopic: 'source_products_raw',
+      kafkaOffset: 'earliest',
+      format: 'JSON',
+      streamingContinuity: 'continuous',
+      recordsPerDay: 'millions',
+    }
+    wizardState.sink = { sinkType: 'kafka', sinkKafkaEnv: 'production' }
+    wizardState.mappings = [{ src: 'sourceName', tgt: 'targetId' }]
+
+    render(<StepBar />)
+
+    fireEvent.click(screen.getByText('Summary'))
+
+    expect(mockSetStep).toHaveBeenCalledWith(6)
   })
 
   it('marks Field Mapping as incomplete when a transformer is missing a required property', () => {

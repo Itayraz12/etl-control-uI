@@ -224,6 +224,26 @@ describe('canNavigateToWizardStep', () => {
     expect(canNavigateToWizardStep(6, state)).toBe(true)
   })
 
+  it('keeps previously visited tabs navigable after returning to metadata', () => {
+    const state = buildState({
+      currentStep: 0,
+      furthestStepVisited: 2,
+      completedSteps: new Set([0, 1]),
+    })
+
+    expect(canNavigateToWizardStep(2, state)).toBe(true)
+  })
+
+  it('keeps summary navigable after the user revisits an earlier step', () => {
+    const state = buildState({
+      currentStep: 0,
+      furthestStepVisited: 6,
+      completedSteps: new Set([0, 1, 2, 3, 4, 5]),
+    })
+
+    expect(canNavigateToWizardStep(6, state)).toBe(true)
+  })
+
   it('treats field mapping as invalid when a transformer is missing a required property', () => {
     const state = buildState({
       currentStep: 4,

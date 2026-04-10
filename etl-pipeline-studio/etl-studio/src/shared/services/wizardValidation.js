@@ -440,9 +440,15 @@ export function canNavigateToWizardStep(targetStep, state, targetSchema = getRes
   const completedSteps = state?.completedSteps instanceof Set
     ? state.completedSteps
     : new Set(Array.isArray(state?.completedSteps) ? state.completedSteps : [])
+  const completedIndexes = Array.from(completedSteps).filter(Number.isInteger)
+  const furthestCompletedStep = completedIndexes.length > 0 ? Math.max(...completedIndexes) : 0
+  const furthestVisitedStep = Math.max(
+    currentStep,
+    furthestCompletedStep,
+    Number.isInteger(state?.furthestStepVisited) ? state.furthestStepVisited : 0,
+  )
 
-  if (targetStep <= currentStep) return true
-  if (completedSteps.has(targetStep)) return true
+  if (targetStep <= furthestVisitedStep) return true
   if (targetStep !== currentStep + 1) return false
 
   return isWizardStepValid(currentStep, state, targetSchema, transformers)

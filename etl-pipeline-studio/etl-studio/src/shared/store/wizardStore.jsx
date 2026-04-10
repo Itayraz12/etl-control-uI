@@ -24,6 +24,7 @@ const initialState = {
   // Global navigation mode
   navigationMode: 'menu', // 'menu' | 'etl-config' | 'etl-management'
   currentStep: 0,
+  furthestStepVisited: 0,
   completedSteps: new Set(),
   originalDraftYaml: '',
   originalDraftSignature: '',
@@ -108,33 +109,62 @@ function normalizeMetadataState(metadata = {}) {
   }
 }
 
+function resolveFurthestStepVisited(currentStep = 0, completedSteps = [], furthestStepVisited = null) {
+  const completedIndexes = completedSteps instanceof Set
+    ? Array.from(completedSteps)
+    : Array.isArray(completedSteps)
+      ? completedSteps
+      : []
+
+  const numericCompletedIndexes = completedIndexes.filter(Number.isInteger)
+  const furthestCompletedStep = numericCompletedIndexes.length > 0
+    ? Math.max(...numericCompletedIndexes)
+    : 0
+  const normalizedCurrentStep = Number.isInteger(currentStep) ? currentStep : 0
+  const normalizedVisitedStep = Number.isInteger(furthestStepVisited) ? furthestStepVisited : 0
+
+  return Math.max(normalizedCurrentStep, furthestCompletedStep, normalizedVisitedStep)
+}
+
 // ── Reducer ───────────────────────────────────────────────────────────────
 function wizardReducer(state, action) {
   switch (action.type) {
     case 'SET_NAVIGATION_MODE':
       return { ...state, navigationMode: action.payload }
     case 'SET_STEP':
-      return { ...state, currentStep: action.payload }
+      return {
+        ...state,
+        currentStep: action.payload,
+        furthestStepVisited: resolveFurthestStepVisited(action.payload, state.completedSteps, state.furthestStepVisited),
+      }
     case 'COMPLETE_STEP':
-      return { ...state, completedSteps: new Set([...state.completedSteps, action.payload]) }
+      return {
+        ...state,
+        completedSteps: new Set([...state.completedSteps, action.payload]),
+        furthestStepVisited: resolveFurthestStepVisited(state.currentStep, [...state.completedSteps, action.payload], state.furthestStepVisited),
+      }
     case 'LOAD_STATE': {
       const payload = action.payload || {}
+      const completedSteps = new Set(
+        payload.completedSteps instanceof Set
+          ? Array.from(payload.completedSteps)
+          : Array.isArray(payload.completedSteps)
+            ? payload.completedSteps
+            : []
+      )
+      const currentStep = Number.isInteger(payload.currentStep) ? payload.currentStep : 0
+
       return {
         ...initialState,
         ...payload,
         theme: state.theme,
         navigationMode: payload.navigationMode ?? initialState.navigationMode,
         readOnly: payload.readOnly === true,
-        currentStep: Number.isInteger(payload.currentStep) ? payload.currentStep : 0,
+        currentStep,
+        furthestStepVisited: resolveFurthestStepVisited(currentStep, completedSteps, payload.furthestStepVisited),
         originalDraftYaml: typeof payload.originalDraftYaml === 'string' ? payload.originalDraftYaml : '',
         originalDraftSignature: typeof payload.originalDraftSignature === 'string' ? payload.originalDraftSignature : '',
-        completedSteps: new Set(
-          payload.completedSteps instanceof Set
-            ? Array.from(payload.completedSteps)
-            : Array.isArray(payload.completedSteps)
-              ? payload.completedSteps
-              : []
-        ),
+        completedSteps,
         metadata: normalizeMetadataState(payload.metadata),
         source: { ...initialState.source, ...(payload.source || {}) },
         upload: { ...initialState.upload, ...(payload.upload || {}) },
@@ -199,8 +229,11 @@ export function WizardProvider({ children, user = null }) {
                 metadata: normalizeMetadataState(wizardState.metadata),
                 readOnly: true,
                 theme: 'dark',
-                completedSteps: new Set(
-                  Array.isArray(wizardState.completedSteps) ? wizardState.completedSteps : []
+                completedSteps: new Set(Array.isArray(wizardState.completedSteps) ? wizardState.completedSteps : []),
+                furthestStepVisited: resolveFurthestStepVisited(
+                  wizardState.currentStep,
+                  Array.isArray(wizardState.completedSteps) ? wizardState.completedSteps : [],
+                  wizardState.furthestStepVisited,
                 ),
               }
             }
@@ -297,7 +330,7 @@ export function WizardProvider({ children, user = null }) {
       dispatch({ type: 'SET_STEP', payload: Math.max(current - 1, 0) })
     },
     goTo: (step, state) => {
-      if (step <= state.currentStep || state.completedSteps.has(step)) {
+      if (step <= resolveFurthestStepVisited(state.currentStep, state.completedSteps, state.furthestStepVisited)) {
         dispatch({ type: 'SET_STEP', payload: step })
       }
     },
