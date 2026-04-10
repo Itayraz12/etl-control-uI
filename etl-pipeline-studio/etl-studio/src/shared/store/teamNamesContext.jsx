@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { fetchTeamNames } from '../services/teamNamesService.js'
+import { useMockMode } from './mockModeContext.jsx'
+import { MOCK_TEAM_NAMES } from '../services/authService.js'
 
 const TeamNamesContext = createContext({
   teamNames: [],
@@ -9,11 +11,19 @@ const TeamNamesContext = createContext({
 })
 
 export function TeamNamesProvider({ children }) {
+  const { useMock } = useMockMode()
   const [teamNames, setTeamNames] = useState([])
   const [loadingTeamNames, setLoadingTeamNames] = useState(false)
   const [teamNamesError, setTeamNamesError] = useState('')
 
   const refreshTeamNames = useCallback(async () => {
+    if (useMock) {
+      setTeamNames(MOCK_TEAM_NAMES)
+      setTeamNamesError('')
+      setLoadingTeamNames(false)
+      return MOCK_TEAM_NAMES
+    }
+
     setLoadingTeamNames(true)
     setTeamNamesError('')
 
@@ -28,7 +38,7 @@ export function TeamNamesProvider({ children }) {
     } finally {
       setLoadingTeamNames(false)
     }
-  }, [])
+  }, [useMock])
 
   useEffect(() => {
     refreshTeamNames()

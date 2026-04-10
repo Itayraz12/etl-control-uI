@@ -216,6 +216,20 @@ describe('deploymentsService', () => {
     )
   })
 
+  it('omits the team query param when fetching deployments across all teams for admins', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await fetchDeployments('data-platform', false, { includeAllTeams: true })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8080/api/backend/deployments',
+      { headers: { 'X-user-ID': 'user-123' } },
+    )
+  })
+
   it('applies persisted failed status overrides to matching backend rows', async () => {
     setDeploymentStatus({
       teamName: 'data-platform',

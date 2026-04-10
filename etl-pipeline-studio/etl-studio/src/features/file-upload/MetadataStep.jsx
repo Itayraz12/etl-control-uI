@@ -3,6 +3,7 @@ import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useUser } from '../../shared/store/userContext.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
 import { useMockMode } from '../../shared/store/mockModeContext.jsx'
+import { useTeamNames } from '../../shared/store/teamNamesContext.jsx'
 import { fetchEntitySchema } from '../../shared/services/configService.js'
 import {
   normalizeSourceSchema,
@@ -18,8 +19,15 @@ export default function MetadataStep() {
   const { user } = useUser()
   const { entities } = useConfig()
   const { useMock } = useMockMode()
+  const { teamNames } = useTeamNames()
   const { metadata } = state
   const src = state.source
+  const isAdminUser = user?.role === 'admin'
+  const teamOptions = Array.from(new Set([
+    String(user?.teamName ?? '').trim(),
+    String(metadata.team ?? '').trim(),
+    ...teamNames,
+  ].filter(Boolean)))
   const hasEnvironment = Boolean(String(metadata.environment ?? '').trim())
   const isProduction = isProductionEnvironment(metadata.environment)
   const allowedLocations = getAllowedMetadataLocations(metadata.environment)
@@ -35,11 +43,18 @@ export default function MetadataStep() {
 
   // Sync team from user context when it changes
   useEffect(() => {
-    if (user?.teamName && metadata.team !== user.teamName) {
+    if (!user?.teamName) return
+
+    if (!isAdminUser && metadata.team !== user.teamName) {
+      actions.updateMetadata({ team: user.teamName })
+      return
+    }
+
+    if (isAdminUser && !String(metadata.team ?? '').trim()) {
       actions.updateMetadata({ team: user.teamName })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.teamName])
+  }, [isAdminUser, metadata.team, user?.teamName])
 
   useEffect(() => {
     if (metadata.location !== normalizedLocation) {
@@ -119,7 +134,18 @@ export default function MetadataStep() {
               />
             </FormGroup>
             <FormGroup label="Team" required>
-              <input value={user?.teamName || metadata.team || ''} disabled style={{ opacity: 0.6, cursor: 'not-allowed' }} />
+              <select
+                aria-label="Team"
+                value={metadata.team || user?.teamName || ''}
+                onChange={e => u('team', e.target.value)}
+                disabled={!isAdminUser}
+                style={!isAdminUser ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+              >
+                {teamOptions.length === 0 && <option value="">Select a team...</option>}
+                {teamOptions.map(teamOption => (
+                  <option key={teamOption} value={teamOption}>{teamOption}</option>
+                ))}
+              </select>
             </FormGroup>
           </FormRow>
           <FormRow>

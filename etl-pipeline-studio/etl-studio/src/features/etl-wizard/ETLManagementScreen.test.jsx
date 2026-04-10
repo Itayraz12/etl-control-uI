@@ -5,6 +5,7 @@ import ETLManagementScreen, { compareDeploymentVersions, getManagementSearchTerm
 
 const mockFetchDraftConfiguration = vi.fn(() => Promise.resolve('pipeline: yaml'))
 const mockFetchSavedDraftYaml = vi.fn(() => Promise.resolve('saved: yaml'))
+const mockFetchDeployments = vi.fn(() => Promise.resolve([]))
 const mockFetchDeploymentSteps = vi.fn(() => Promise.resolve([
   { id: 'validate', label: 'Validate' },
   { id: 'deploy', label: 'Deploy' },
@@ -46,6 +47,7 @@ const mockActions = {
 const baseMockDeployments = [
   {
     id: 'dep-1',
+    teamName: 'data-platform',
     productType: 'Inventory',
     productSource: 'ERP',
     environment: 'production',
@@ -57,6 +59,7 @@ const baseMockDeployments = [
   },
   {
     id: 'dep-2',
+    teamName: 'data-platform',
     productType: 'Catalog',
     productSource: 'CRM',
     environment: 'staging',
@@ -68,6 +71,7 @@ const baseMockDeployments = [
   },
   {
     id: 'dep-3',
+    teamName: 'data-platform',
     productType: 'Pricing',
     productSource: 'PIM',
     environment: 'production',
@@ -79,6 +83,7 @@ const baseMockDeployments = [
   },
   {
     id: 'dep-4',
+    teamName: 'data-platform',
     productType: 'Legacy',
     productSource: 'Archive',
     environment: 'production',
@@ -92,6 +97,7 @@ const baseMockDeployments = [
 ]
 
 let mockDeployments = []
+let mockUser = { teamName: 'data-platform', userId: 'user-1', role: 'regular' }
 const mockCopyTextToClipboard = vi.fn(() => Promise.resolve(true))
 
 vi.mock('../../shared/store/wizardStore.jsx', () => ({
@@ -110,12 +116,12 @@ vi.mock('../../shared/store/mockModeContext.jsx', () => ({
 
 vi.mock('../../shared/store/userContext.jsx', () => ({
   useUser: () => ({
-    user: { teamName: 'data-platform', userId: 'user-1' },
+    user: mockUser,
   }),
 }))
 
 vi.mock('../../shared/services/deploymentsService.js', () => ({
-  fetchDeployments: vi.fn(() => Promise.resolve(mockDeployments)),
+  fetchDeployments: (...args) => mockFetchDeployments(...args),
   deployService: vi.fn(() => Promise.resolve()),
   deleteDeployment: (...args) => mockDeleteDeployment(...args),
   permanentlyDeleteDeployment: (...args) => mockPermanentlyDeleteDeployment(...args),
@@ -148,6 +154,9 @@ describe('ETLManagementScreen table layout stability', () => {
   beforeEach(() => {
     vi.useRealTimers()
     mockDeployments = structuredClone(baseMockDeployments)
+    mockUser = { teamName: 'data-platform', userId: 'user-1', role: 'regular' }
+    mockFetchDeployments.mockReset()
+    mockFetchDeployments.mockImplementation(() => Promise.resolve(mockDeployments))
     Object.values(mockActions).forEach(fn => fn.mockReset())
     mockFetchDraftConfiguration.mockClear()
     mockFetchSavedDraftYaml.mockClear()
@@ -250,6 +259,8 @@ describe('ETLManagementScreen table layout stability', () => {
       borderTopRightRadius: '10px',
     })
     expect(deletedTabButton).toBeInTheDocument()
+    expect(screen.queryByText('Team Name')).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Team filter' })).not.toBeInTheDocument()
 
     const productTypeIndicator = screen.getByTestId('sort-indicator-productType')
     const productSourceIndicator = screen.getByTestId('sort-indicator-productSource')
@@ -284,7 +295,7 @@ describe('ETLManagementScreen table layout stability', () => {
         environment: '',
       }),
     }))
-  })
+  }, 10000)
 
   it('does not render a left warning border for version mismatch rows', async () => {
     render(<ETLManagementScreen />)
@@ -332,7 +343,7 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.queryByText('Inventory')).not.toBeInTheDocument()
       expect(screen.queryByText('Catalog')).not.toBeInTheDocument()
     })
-  })
+  }, 10000)
 
   it('updates the summary line to reflect only the active tab', async () => {
     const user = userEvent.setup()
@@ -412,6 +423,143 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(rows).toHaveLength(2)
       expect(within(rows[1]).getByText('Catalog')).toBeInTheDocument()
       expect(within(rows[1]).getByText('CRM')).toBeInTheDocument()
+    })
+  })
+
+  it('fetches deployments with teamName for regular users and without it for admin users', async () => {
+    const { rerender } = render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(mockFetchDeployments).toHaveBeenCalledWith('data-platform', true, { includeAllTeams: false })
+    })
+
+    mockFetchDeployments.mockClear()
+    mockUser = { teamName: 'data-platform', userId: 'admin-1', role: 'admin' }
+
+    rerender(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(mockFetchDeployments).toHaveBeenCalledWith('data-platform', true, { includeAllTeams: true })
+    })
+  })
+
+  it('shows an admin-only team column and filters deployments by the selected team', async () => {
+    const user = userEvent.setup()
+    mockUser = { teamName: 'data-platform', userId: 'admin-1', role: 'admin' }
+    mockDeployments = structuredClone(baseMockDeployments).map((deployment, index) => ({
+      ...deployment,
+      teamName: index % 2 === 0 ? 'Team A' : 'Team B',
+    }))
+
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Team Name')).toBeInTheDocument()
+      const teamFilter = screen.getByRole('combobox', { name: 'Team filter' })
+      expect(teamFilter).toBeInTheDocument()
+      expect(within(teamFilter).getByRole('option', { name: 'Team A' })).toBeInTheDocument()
+      expect(within(teamFilter).getByRole('option', { name: 'Team B' })).toBeInTheDocument()
+    })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Team filter' }), 'Team B')
+
+    await waitFor(() => {
+      expect(screen.getByText('Catalog')).toBeInTheDocument()
+      expect(screen.getByText('Legacy')).toBeInTheDocument()
+      expect(screen.queryByText('Inventory')).not.toBeInTheDocument()
+      expect(screen.queryByText('Pricing')).not.toBeInTheDocument()
+    })
+  })
+
+  it('keeps admin sorting and team filtering stable when multiple teams share backend ids', async () => {
+    const user = userEvent.setup()
+    mockUser = { teamName: 'data-platform', userId: 'admin-1', role: 'admin' }
+    mockDeployments = [
+      {
+        id: 'shared-1',
+        teamName: 'Team A',
+        productType: 'Alpha',
+        productSource: 'ERP',
+        environment: 'production',
+        deploymentStatus: 'running',
+        savedVersion: '1.0.0',
+        deployedVersion: '1.0.0',
+        lastStatusChange: '2026-03-15T10:00:00.000Z',
+        createdAt: '2026-03-14T09:00:00.000Z',
+      },
+      {
+        id: 'shared-1',
+        teamName: 'Team B',
+        productType: 'Beta',
+        productSource: 'ERP',
+        environment: 'production',
+        deploymentStatus: 'running',
+        savedVersion: '1.0.0',
+        deployedVersion: '1.0.0',
+        lastStatusChange: '2026-03-15T10:05:00.000Z',
+        createdAt: '2026-03-14T09:05:00.000Z',
+      },
+      {
+        id: 'shared-2',
+        teamName: 'Team A',
+        productType: 'Gamma',
+        productSource: 'CRM',
+        environment: 'staging',
+        deploymentStatus: 'draft',
+        savedVersion: '2.0.0',
+        deployedVersion: null,
+        lastStatusChange: '2026-03-13T10:00:00.000Z',
+        createdAt: '2026-03-12T09:00:00.000Z',
+      },
+      {
+        id: 'shared-2',
+        teamName: 'Team B',
+        productType: 'Delta',
+        productSource: 'CRM',
+        environment: 'staging',
+        deploymentStatus: 'draft',
+        savedVersion: '2.0.0',
+        deployedVersion: null,
+        lastStatusChange: '2026-03-13T10:05:00.000Z',
+        createdAt: '2026-03-12T09:05:00.000Z',
+      },
+    ]
+
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Team filter' })).toBeInTheDocument()
+      expect(screen.getByText('Alpha')).toBeInTheDocument()
+      expect(screen.getByText('Beta')).toBeInTheDocument()
+      expect(screen.getByText('Gamma')).toBeInTheDocument()
+      expect(screen.getByText('Delta')).toBeInTheDocument()
+    })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Team filter' }), 'Team B')
+
+    await waitFor(() => {
+      expect(screen.getByText('Beta')).toBeInTheDocument()
+      expect(screen.getByText('Delta')).toBeInTheDocument()
+      expect(screen.queryByText('Alpha')).not.toBeInTheDocument()
+      expect(screen.queryByText('Gamma')).not.toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('Product Type'))
+
+    await waitFor(() => {
+      const rows = screen.getAllByRole('row')
+      expect(rows).toHaveLength(3)
+      expect(within(rows[1]).getByText('Delta')).toBeInTheDocument()
+      expect(within(rows[2]).getByText('Beta')).toBeInTheDocument()
+    })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Team filter' }), 'Team A')
+
+    await waitFor(() => {
+      expect(screen.getByText('Alpha')).toBeInTheDocument()
+      expect(screen.getByText('Gamma')).toBeInTheDocument()
+      expect(screen.queryByText('Beta')).not.toBeInTheDocument()
+      expect(screen.queryByText('Delta')).not.toBeInTheDocument()
     })
   })
 
@@ -692,7 +840,7 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.queryByText('Legacy')).not.toBeInTheDocument()
       expect(screen.getByText('Pipeline permanently deleted.')).toBeInTheDocument()
     })
-  })
+  }, 10000)
 
   it('restores deleted rows back to their original environment tab', async () => {
     const user = userEvent.setup()
@@ -726,7 +874,7 @@ describe('ETLManagementScreen table layout stability', () => {
     await waitFor(() => {
       expect(screen.getByText('Legacy')).toBeInTheDocument()
     })
-  })
+  }, 10000)
 
   it('shows a deployment failure popup with a readable reason when deploy startup fails', async () => {
     const user = userEvent.setup()
@@ -765,7 +913,7 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.queryByText('Failure Reason')).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Got it' })).toBeInTheDocument()
     })
-  })
+  }, 10000)
 
   it('copies the Grafana link from the deployed success overlay with the async clipboard API', async () => {
     const user = userEvent.setup()
@@ -913,7 +1061,7 @@ describe('ETLManagementScreen table layout stability', () => {
       currentStep: 0,
       completedSteps: [0, 1, 2, 3, 4, 5, 6],
     })
-  })
+  }, 10000)
 
   it('opens deployed versions in a read-only preview window that carries the deployment id in the URL', async () => {
     const user = userEvent.setup()

@@ -2,74 +2,89 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import LoginPage from './LoginPage.jsx'
-import { TeamNamesProvider } from '../../shared/store/teamNamesContext.jsx'
 
 const login = vi.fn()
 const setUseMock = vi.fn()
-const fetchTeamNames = vi.fn()
+const loginUser = vi.fn()
+let mockUseMock = false
 
 vi.mock('../../shared/store/userContext.jsx', () => ({
   useUser: () => ({ login }),
 }))
 
 vi.mock('../../shared/store/mockModeContext.jsx', () => ({
-  useMockMode: () => ({ useMock: false, setUseMock }),
+  useMockMode: () => ({ useMock: mockUseMock, setUseMock }),
 }))
 
-vi.mock('../../shared/services/teamNamesService.js', () => ({
-  fetchTeamNames: (...args) => fetchTeamNames(...args),
+vi.mock('../../shared/services/authService.js', () => ({
+  MOCK_TEAM_NAMES: ['Team A', 'Team B', 'Team C', 'Yarden'],
+  USER_ROLES: { ADMIN: 'admin', REGULAR: 'regular' },
+  loginUser: (...args) => loginUser(...args),
 }))
 
 function renderLogin() {
-  return render(
-    <TeamNamesProvider>
-      <LoginPage />
-    </TeamNamesProvider>
-  )
+  return render(<LoginPage />)
 }
 
-describe('LoginPage team dropdown', () => {
+describe('LoginPage authentication flow', () => {
   beforeEach(() => {
     login.mockReset()
     setUseMock.mockReset()
-    fetchTeamNames.mockReset()
+    loginUser.mockReset()
+    mockUseMock = false
   })
 
-  it('loads team names on startup and logs in with the selected team', async () => {
+  it('logs in through the backend in live mode and uses the team and role from the response', async () => {
     const user = userEvent.setup()
-    fetchTeamNames.mockResolvedValue(['data-platform', 'analytics'])
+    loginUser.mockResolvedValue({ userId: 'alice', teamName: 'Team B', role: 'admin', userRoleHeader: 'admin' })
 
     renderLogin()
 
-    await waitFor(() => {
-      expect(fetchTeamNames).toHaveBeenCalledTimes(1)
-    })
+    expect(screen.queryByLabelText('Team Name')).not.toBeInTheDocument()
 
     await user.type(screen.getByPlaceholderText('User ID'), 'alice')
     await user.type(screen.getByPlaceholderText('Password'), 'secret')
-    await user.selectOptions(screen.getByLabelText('Team Name'), 'analytics')
     await user.click(screen.getByRole('button', { name: 'Login' }))
 
-    expect(login).toHaveBeenCalledWith({ userId: 'alice', teamName: 'analytics' })
+    await waitFor(() => {
+      expect(loginUser).toHaveBeenCalledWith({ username: 'alice', password: 'secret' })
+      expect(login).toHaveBeenCalledWith({ userId: 'alice', teamName: 'Team B', role: 'admin', userRoleHeader: 'admin' })
+    })
   })
 
-  it('shows a retry action when loading team names fails and recovers on retry', async () => {
+  it('shows the mock-only team dropdown and logs in locally with the selected team', async () => {
     const user = userEvent.setup()
-    fetchTeamNames
-      .mockRejectedValueOnce(new Error('Failed to load teams'))
-      .mockResolvedValueOnce(['platform'])
+    mockUseMock = true
 
     renderLogin()
 
-    await waitFor(() => {
-      expect(screen.getByText('Failed to load teams')).toBeInTheDocument()
-    })
+    const teamSelect = screen.getByLabelText('Team Name')
+    expect(screen.getByRole('option', { name: 'Team A' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Team B' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Team C' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Yarden' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Retry loading teams' }))
+    await user.type(screen.getByPlaceholderText('User ID'), 'mock-user')
+    await user.type(screen.getByPlaceholderText('Password'), 'secret')
+    await user.selectOptions(teamSelect, 'Yarden')
+    await user.click(screen.getByRole('button', { name: 'Login' }))
+
+    expect(loginUser).not.toHaveBeenCalled()
+    expect(login).toHaveBeenCalledWith({ userId: 'mock-user', teamName: 'Yarden', role: 'regular' })
+  })
+
+  it('shows the backend error when live login fails', async () => {
+    const user = userEvent.setup()
+    loginUser.mockRejectedValue(new Error('Invalid credentials'))
+
+    renderLogin()
+
+    await user.type(screen.getByPlaceholderText('User ID'), 'alice')
+    await user.type(screen.getByPlaceholderText('Password'), 'wrong-password')
+    await user.click(screen.getByRole('button', { name: 'Login' }))
 
     await waitFor(() => {
-      expect(fetchTeamNames).toHaveBeenCalledTimes(2)
-      expect(screen.getByRole('option', { name: 'platform' })).toBeInTheDocument()
+      expect(screen.getByText('Invalid credentials')).toBeInTheDocument()
     })
   })
 })

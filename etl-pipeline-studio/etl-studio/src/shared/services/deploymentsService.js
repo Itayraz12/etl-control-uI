@@ -413,6 +413,7 @@ function buildMockDeployments() {
   return [
     {
       id: '1',
+      teamName: 'Team A',
       productType: 'Data Pipeline',
       productSource: 'GitHub',
       environment: 'production',
@@ -424,6 +425,7 @@ function buildMockDeployments() {
     },
     {
       id: '2',
+      teamName: 'Team B',
       productType: 'ETL Job',
       productSource: 'Bitbucket',
       environment: 'staging',
@@ -435,6 +437,7 @@ function buildMockDeployments() {
     },
     {
       id: '3',
+      teamName: 'Team C',
       productType: 'Analytics',
       productSource: 'GitLab',
       environment: 'development',
@@ -446,6 +449,7 @@ function buildMockDeployments() {
     },
     {
       id: '4',
+      teamName: 'Yarden',
       productType: 'Analytics4',
       productSource: 'GitLab',
       environment: 'production',
@@ -457,6 +461,7 @@ function buildMockDeployments() {
     },
     {
       id: '5',
+      teamName: 'Team A',
       productType: 'Analytics5',
       productSource: 'GitLab',
       environment: 'staging',
@@ -468,6 +473,7 @@ function buildMockDeployments() {
     },
     {
       id: '6',
+      teamName: 'Team B',
       productType: 'Analytics6',
       productSource: 'GitLab',
       environment: 'development',
@@ -479,6 +485,7 @@ function buildMockDeployments() {
     },
     {
       id: '7',
+      teamName: 'Team C',
       productType: 'Analytics7',
       productSource: 'GitLab',
       environment: 'production',
@@ -490,6 +497,7 @@ function buildMockDeployments() {
     },
     {
       id: '8',
+      teamName: 'Yarden',
       productType: 'Analytics8',
       productSource: 'GitLab',
       environment: 'staging',
@@ -501,6 +509,7 @@ function buildMockDeployments() {
     },
     {
       id: '9',
+      teamName: 'Team A',
       productType: 'Analytics9',
       productSource: 'GitLab',
       environment: 'development',
@@ -512,6 +521,7 @@ function buildMockDeployments() {
     },
     {
       id: '10',
+      teamName: 'Team B',
       productType: 'Analytics10',
       productSource: 'GitLab',
       environment: 'production',
@@ -523,6 +533,7 @@ function buildMockDeployments() {
     },
     {
       id: '11',
+      teamName: 'Team C',
       productType: 'Analytics11',
       productSource: 'GitLab',
       environment: 'staging',
@@ -534,6 +545,7 @@ function buildMockDeployments() {
     },
     {
       id: '12',
+      teamName: 'Yarden',
       productType: 'Analytics12',
       productSource: 'GitLab',
       environment: 'development',
@@ -552,7 +564,7 @@ function cloneMockDeployments() {
   return mockDeploymentsStore.map(item => ({ ...item }))
 }
 
-export async function fetchDeployments(teamName = 'default', useMock = false) {
+export async function fetchDeployments(teamName = 'default', useMock = false, { includeAllTeams = false } = {}) {
   // Helper: merge local drafts with the backend / mock list.
   // A local draft is suppressed when the backend already has a row whose
   // productSource + productType + environment matches (backend is source of truth).
@@ -568,9 +580,9 @@ export async function fetchDeployments(teamName = 'default', useMock = false) {
         })
       )
     )
-    const extra = Object.values(drafts).filter(
-      d => d.teamName === teamName && !dominated.has(d.id)
-    )
+      const extra = Object.values(drafts).filter(d => (
+        !dominated.has(d.id) && (includeAllTeams || d.teamName === teamName)
+      ))
     return applyDeploymentStatusOverrides([...backendRows, ...extra], teamName)
   }
 
@@ -580,7 +592,9 @@ export async function fetchDeployments(teamName = 'default', useMock = false) {
     return mergeWithLocalDrafts(cloneMockDeployments());
   } else {
     try {
-      const url = `${API_BASE}/backend/deployments?teamName=${encodeURIComponent(teamName)}`;
+      const url = includeAllTeams
+        ? `${API_BASE}/backend/deployments`
+        : `${API_BASE}/backend/deployments?teamName=${encodeURIComponent(teamName)}`;
       console.log('🔵 Fetching deployments from:', url);
 
       const response = await fetchWithUserId(url);

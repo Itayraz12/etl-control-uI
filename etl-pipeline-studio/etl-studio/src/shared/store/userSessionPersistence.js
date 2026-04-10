@@ -1,4 +1,5 @@
 import { normalizeStorageUserId } from './wizardPersistence.js'
+import { normalizeUserRole } from '../services/authService.js'
 
 export const PENDING_SCOPE_RESET_STORAGE_KEY = 'etl-studio-pending-scope-resets'
 export const ACTIVE_USER_STORAGE_KEY = 'etl-studio-active-user'
@@ -17,6 +18,8 @@ export function parsePersistedActiveUser(raw) {
       ...parsed,
       userId,
       teamName: String(parsed.teamName ?? '').trim(),
+      role: normalizeUserRole(parsed.role),
+      userRoleHeader: String(parsed.userRoleHeader ?? '').trim(),
     }
   } catch {
     return null
@@ -42,6 +45,8 @@ export function writePersistedActiveUser(user) {
       ...user,
       userId: String(user.userId).trim(),
       teamName: String(user.teamName ?? '').trim(),
+      role: normalizeUserRole(user.role),
+      userRoleHeader: String(user.userRoleHeader ?? '').trim(),
     }
 
     localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(persistedUser))

@@ -8,7 +8,6 @@ import { fetchDraftConfiguration, fetchSavedDraftYaml } from '../../shared/servi
 import { copyTextToClipboard } from '../../shared/services/clipboard.js';
 import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js';
 import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js';
-import { serializeWizardState } from '../../shared/store/wizardPersistence.js';
 import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js';
 import { useWizard } from '../../shared/store/wizardStore.jsx';
 import { useMockMode } from '../../shared/store/mockModeContext.jsx';
@@ -59,7 +58,7 @@ function formatDateShort(ts) {
   return `${day} ${month} ${year}, ${hours}:${mins}`;
 }
 
-const COLUMNS = [
+const BASE_COLUMNS = [
   { key: 'productSource', label: 'Product Source' },
   { key: 'productType', label: 'Product Type' },
   { key: 'environment', label: 'Environment' },
@@ -68,6 +67,19 @@ const COLUMNS = [
   { key: 'deployedVersion', label: 'Deployed Version' },
   { key: 'lastStatusChange', label: 'Last Status Change' },
 ];
+
+function getManagementColumns(isAdminUser = false) {
+  if (!isAdminUser) return BASE_COLUMNS
+
+  return [
+    BASE_COLUMNS[0],
+    BASE_COLUMNS[1],
+    BASE_COLUMNS[2],
+    BASE_COLUMNS[3],
+    { key: 'teamName', label: 'Team Name' },
+    ...BASE_COLUMNS.slice(4),
+  ]
+}
 
 const SORT_INDICATOR_STYLE = {
   display: 'inline-flex',
@@ -157,7 +169,7 @@ function getManagementSearchValue(deployment, columnKey) {
   return String(value).toLowerCase()
 }
 
-export function matchesManagementSearch(deployment, filterText, columns = COLUMNS) {
+export function matchesManagementSearch(deployment, filterText, columns = BASE_COLUMNS) {
   const terms = Array.isArray(filterText) ? filterText : getManagementSearchTerms(filterText)
 
   if (terms.length === 0) return true
@@ -219,6 +231,16 @@ function isSavedVersionNewer(savedVersion, deployedVersion) {
   return compareDeploymentVersions(savedVersion, deployedVersion) > 0
 }
 
+function buildDeploymentRowKey(deploymentRow, fallbackTeamName = 'default') {
+  const backendId = String(deploymentRow?.id || '').trim() || 'no-id'
+  const team = String(deploymentRow?.teamName || fallbackTeamName || '').trim().toLowerCase() || 'default'
+  const source = String(deploymentRow?.productSource || deploymentRow?.source || '').trim().toLowerCase()
+  const productType = String(deploymentRow?.productType || '').trim().toLowerCase()
+  const environment = String(deploymentRow?.environment || 'production').trim().toLowerCase()
+
+  return [backendId, team, source, productType, environment].join('::')
+}
+
 export default function ETLManagementScreen() {
   const [deployments, setDeployments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -226,6 +248,7 @@ export default function ETLManagementScreen() {
   const [sortKey, setSortKey] = useState('productType');
   const [sortOrder, setSortOrder] = useState('asc');
   const [filterText, setFilterText] = useState("");
+  const [teamFilter, setTeamFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('all');
   const [screenError, setScreenError] = useState('');
   const [screenNotice, setScreenNotice] = useState(null);
@@ -237,12 +260,33 @@ export default function ETLManagementScreen() {
   const [activeDeployId, setActiveDeployId] = useState(null);
   const [activeDeploymentAction, setActiveDeploymentAction] = useState('deploy');
   const { actions, state } = useWizard();
-  const { useMock, setUseMock } = useMockMode();
+  const { useMock } = useMockMode();
   const { user } = useUser();
 
   // Use team name from user context
   const teamName = user?.teamName || 'default';
+  const isAdminUser = user?.role === 'admin'
+  const managementColumns = useMemo(() => getManagementColumns(isAdminUser), [isAdminUser])
   const activeDeploymentCopy = MANAGEMENT_DEPLOYMENT_COPY[activeDeploymentAction] || MANAGEMENT_DEPLOYMENT_COPY.deploy;
+  const adminTeamOptions = useMemo(() => Array.from(new Set(
+    deployments
+      .map(dep => String(dep?.teamName || '').trim())
+      .filter(Boolean)
+  )).sort((left, right) => left.localeCompare(right)), [deployments])
+
+  const getDeploymentTeamName = (deploymentRow) => String(deploymentRow?.teamName || teamName || '').trim() || 'default'
+  const getDeploymentRowKey = (deploymentRow) => buildDeploymentRowKey(deploymentRow, teamName)
+
+  useEffect(() => {
+    if (!isAdminUser) {
+      setTeamFilter('all')
+      return
+    }
+
+    if (teamFilter !== 'all' && !adminTeamOptions.includes(teamFilter)) {
+      setTeamFilter('all')
+    }
+  }, [adminTeamOptions, isAdminUser, teamFilter])
 
   const handleSuccessOverlayCopy = async (text) => {
     try {
@@ -299,7 +343,7 @@ export default function ETLManagementScreen() {
   async function refreshDeployments() {
     setLoading(true);
     try {
-      const data = await deploymentsService.fetchDeployments(teamName, useMock);
+      const data = await deploymentsService.fetchDeployments(teamName, useMock, { includeAllTeams: isAdminUser });
       setDeployments(data);
       return data;
     } finally {
@@ -307,19 +351,9 @@ export default function ETLManagementScreen() {
     }
   }
 
-  // Expose the toggle to the service
-  function handleMockToggle(e) {
-    setUseMock(e.target.checked);
-    setLoading(true);
-    deploymentsService.fetchDeployments(teamName, e.target.checked).then(data => {
-      setDeployments(data);
-      setLoading(false);
-    });
-  }
-
   useEffect(() => {
     refreshDeployments();
-  }, [teamName, useMock]);
+  }, [teamName, useMock, isAdminUser]);
 
   // Clear screenNotice after 10 seconds
   useEffect(() => {
@@ -363,9 +397,10 @@ export default function ETLManagementScreen() {
 
     return deployments.filter(dep => {
       if (!matchesManagementTab(dep, activeTab)) return false;
-      return matchesManagementSearch(dep, searchTerms, COLUMNS)
+      if (isAdminUser && teamFilter !== 'all' && String(dep?.teamName || '').trim() !== teamFilter) return false
+      return matchesManagementSearch(dep, searchTerms, managementColumns)
     });
-  }, [activeTab, deployments, filterText]);
+  }, [activeTab, deployments, filterText, isAdminUser, managementColumns, teamFilter]);
 
   const sortedDeployments = useMemo(() => [...visibleDeployments].sort((a, b) => {
     let aVal = a[sortKey];
@@ -393,8 +428,10 @@ export default function ETLManagementScreen() {
   }), [sortKey, sortOrder, visibleDeployments]);
 
   const updateDeploymentRowStatus = (deploymentRow, deploymentStatus, extraFields = {}) => {
+    const targetRowKey = getDeploymentRowKey(deploymentRow)
+
     deploymentsService.setDeploymentStatus({
-      teamName,
+      teamName: getDeploymentTeamName(deploymentRow),
       productSource: deploymentRow.productSource,
       productType: deploymentRow.productType,
       environment: deploymentRow.environment || 'production',
@@ -404,7 +441,7 @@ export default function ETLManagementScreen() {
     });
 
     setDeployments(current => current.map(item => (
-      item.id === deploymentRow.id
+      getDeploymentRowKey(item) === targetRowKey
         ? {
             ...item,
             deploymentStatus,
@@ -418,23 +455,23 @@ export default function ETLManagementScreen() {
   const runManagementDeploymentAction = async (deploymentRow, mode, { isSavedVersion = false } = {}) => {
     const actionCopy = MANAGEMENT_DEPLOYMENT_COPY[mode] || MANAGEMENT_DEPLOYMENT_COPY.deploy;
     const isDeploy = mode !== 'upgrade';
-    const id = deploymentRow.id;
-    if (actionLoading[id]) return;
+    const rowKey = getDeploymentRowKey(deploymentRow);
+    if (actionLoading[rowKey]) return;
 
     setScreenError('');
     setScreenNotice(null);
-    setActiveDeployId(id);
+    setActiveDeployId(rowKey);
     setActiveDeploymentAction(mode);
-    setActionLoading(a => ({ ...a, [id]: actionCopy.loadingKey }));
+    setActionLoading(a => ({ ...a, [rowKey]: actionCopy.loadingKey }));
 
     console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] ── start ──────────────────────`);
-    console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] pipeline id:`, id);
+    console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] pipeline id:`, deploymentRow.id);
 
     const showActionError = (msg) => {
       updateDeploymentRowStatus(deploymentRow, 'failed');
       deployment.reset();
       setErrorModal({ icon: '❌', title: actionCopy.failureDialogTitle, message: msg });
-      setActionLoading(a => ({ ...a, [id]: null }));
+      setActionLoading(a => ({ ...a, [rowKey]: null }));
       setActiveDeployId(null);
       setActiveDeploymentAction('deploy');
     };
@@ -449,6 +486,7 @@ export default function ETLManagementScreen() {
     // 3. Fetch the saved YAML for this pipeline, then POST it to the same
     //    deploy endpoint used by the Summary wizard tab.
     const environment = deploymentRow.environment || 'production';
+      const deploymentTeamName = getDeploymentTeamName(deploymentRow)
     let yamlText;
     try {
       console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] fetching ${isSavedVersion ? 'saved' : 'deployed'} YAML for`, deploymentRow.productType, '/', deploymentRow.productSource);
@@ -456,7 +494,7 @@ export default function ETLManagementScreen() {
       yamlText = await fetchYaml({
         productType: deploymentRow.productType,
         source: deploymentRow.productSource,
-        team: teamName,
+          team: deploymentTeamName,
         environment,
       }, false);
     } catch (fetchErr) {
@@ -475,7 +513,7 @@ export default function ETLManagementScreen() {
     const result = await deployFromYaml({
       productType: deploymentRow.productType,
       source: deploymentRow.productSource,
-      team: teamName,
+      team: deploymentTeamName,
       environment,
       isDeploy,
       isSavedVersion,
@@ -554,7 +592,7 @@ export default function ETLManagementScreen() {
         try { await refreshDeployments(); } catch (e) {
           console.warn(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] refresh failed:`, e);
         }
-        setActionLoading(a => ({ ...a, [id]: null }));
+        setActionLoading(a => ({ ...a, [rowKey]: null }));
         setActiveDeployId(null);
         setTimeout(() => {
           deployment.reset();
@@ -607,14 +645,14 @@ export default function ETLManagementScreen() {
   };
 
   const handleDelete = async (deploymentRow) => {
-    const id = deploymentRow.id;
+    const rowKey = getDeploymentRowKey(deploymentRow);
     setScreenError('');
     setScreenNotice(null);
-    setActionLoading(a => ({ ...a, [id]: 'delete' }));
+    setActionLoading(a => ({ ...a, [rowKey]: 'delete' }));
     console.log('[ETLManagementScreen] handleDelete, useMock:', useMock);
     const result = await deploymentsService.deleteDeployment({
       ...deploymentRow,
-      teamName,
+      teamName: getDeploymentTeamName(deploymentRow),
       environment: deploymentRow.environment || 'production',
     }, useMock);
 
@@ -628,18 +666,18 @@ export default function ETLManagementScreen() {
       setScreenError(result?.error || 'Failed to delete the selected deployment.');
     }
 
-    setActionLoading(a => ({ ...a, [id]: null }));
+    setActionLoading(a => ({ ...a, [rowKey]: null }));
   };
 
   const handlePermanentDelete = async (deploymentRow) => {
-    const id = deploymentRow.id;
+    const rowKey = getDeploymentRowKey(deploymentRow);
     setScreenError('');
     setScreenNotice(null);
-    setActionLoading(a => ({ ...a, [id]: 'delete-permanent' }));
+    setActionLoading(a => ({ ...a, [rowKey]: 'delete-permanent' }));
     console.log('[ETLManagementScreen] handlePermanentDelete, useMock:', useMock);
     const result = await deploymentsService.permanentlyDeleteDeployment({
       ...deploymentRow,
-      teamName,
+      teamName: getDeploymentTeamName(deploymentRow),
       environment: deploymentRow.environment || 'production',
     }, useMock);
 
@@ -653,13 +691,13 @@ export default function ETLManagementScreen() {
       setScreenError(result?.error || 'Failed to permanently delete the selected pipeline.');
     }
 
-    setActionLoading(a => ({ ...a, [id]: null }));
+    setActionLoading(a => ({ ...a, [rowKey]: null }));
   };
 
-  const handleRestore = async (id) => {
+  const handleRestore = async (id, rowKey = id) => {
     setScreenError('');
     setScreenNotice(null);
-    setActionLoading(a => ({ ...a, [id]: 'restore' }));
+    setActionLoading(a => ({ ...a, [rowKey]: 'restore' }));
     const result = await deploymentsService.restoreDeployment(id, useMock);
 
     if (result?.success !== false) {
@@ -672,18 +710,18 @@ export default function ETLManagementScreen() {
       setScreenError(result?.error || 'Failed to restore the selected pipeline.');
     }
 
-    setActionLoading(a => ({ ...a, [id]: null }));
+    setActionLoading(a => ({ ...a, [rowKey]: null }));
   };
 
   const handleStop = async (deploymentRow) => {
-    const id = deploymentRow.id;
+    const rowKey = getDeploymentRowKey(deploymentRow);
     setScreenError('');
     setScreenNotice(null);
-    setActionLoading(a => ({ ...a, [id]: 'stop' }));
+    setActionLoading(a => ({ ...a, [rowKey]: 'stop' }));
 
     const result = await deploymentsService.stopDeployment({
       ...deploymentRow,
-      teamName,
+      teamName: getDeploymentTeamName(deploymentRow),
       environment: deploymentRow.environment || 'production',
     }, useMock);
 
@@ -698,7 +736,7 @@ export default function ETLManagementScreen() {
       setScreenError(result?.error || 'Failed to stop the selected pipeline.');
     }
 
-    setActionLoading(a => ({ ...a, [id]: null }));
+    setActionLoading(a => ({ ...a, [rowKey]: null }));
   };
 
   const handleUpgrade = async (deploymentRow) => {
@@ -707,24 +745,26 @@ export default function ETLManagementScreen() {
   };
 
   const handleEdit = async (dep) => {
-    setActionLoading(a => ({ ...a, [dep.id]: 'edit' }));
+    const rowKey = getDeploymentRowKey(dep)
+    setActionLoading(a => ({ ...a, [rowKey]: 'edit' }));
     setScreenError('');
     setScreenNotice(null);
     console.log('[ETLManagementScreen] handleEdit, useMock:', useMock);
 
     try {
       const environment = dep.environment || state.metadata.environment || 'production';
+      const deploymentTeamName = getDeploymentTeamName(dep)
       const yamlText = await fetchDraftConfiguration({
         productType: dep.productType,
         source: dep.productSource,
-        team: teamName,
+        team: deploymentTeamName,
         environment,
       }, useMock);
 
       const loadedState = hydrateWizardStateFromYaml(yamlText, {
         productType: dep.productType,
         source: dep.productSource,
-        teamName,
+        teamName: deploymentTeamName,
         environment,
       });
 
@@ -740,7 +780,7 @@ export default function ETLManagementScreen() {
       console.error('[ETLManagementScreen] failed to edit deployment:', error);
       setScreenError(error?.message || 'Failed to load deployment configuration.');
     } finally {
-      setActionLoading(a => ({ ...a, [dep.id]: null }));
+      setActionLoading(a => ({ ...a, [rowKey]: null }));
     }
   };
 
@@ -750,17 +790,19 @@ export default function ETLManagementScreen() {
    * filled in from that YAML as a read-only preview for this deployment.
    */
   const handleViewSavedVersion = async (dep) => {
-    setActionLoading(a => ({ ...a, [`${dep.id}_savedVersion`]: true }));
+    const savedVersionActionKey = `${getDeploymentRowKey(dep)}_savedVersion`
+    setActionLoading(a => ({ ...a, [savedVersionActionKey]: true }));
     setScreenError('');
     setScreenNotice(null);
 
     try {
       const environment = dep.environment || state.metadata.environment || 'production';
+      const deploymentTeamName = getDeploymentTeamName(dep)
 
       const yamlText = await fetchSavedDraftYaml({
         productType: dep.productType,
         source: dep.productSource,
-        team: teamName,
+        team: deploymentTeamName,
         environment,
       }, useMock);
 
@@ -772,7 +814,7 @@ export default function ETLManagementScreen() {
       const loadedState = hydrateWizardStateFromYaml(yamlText, {
         productType: dep.productType,
         source: dep.productSource,
-        teamName,
+        teamName: deploymentTeamName,
         environment,
       });
 
@@ -798,7 +840,7 @@ export default function ETLManagementScreen() {
       console.error('[ETLManagementScreen] handleViewSavedVersion failed:', error);
       setScreenError(error?.message || 'Failed to load saved draft configuration.');
     } finally {
-      setActionLoading(a => ({ ...a, [`${dep.id}_savedVersion`]: false }));
+      setActionLoading(a => ({ ...a, [savedVersionActionKey]: false }));
     }
   };
 
@@ -807,17 +849,19 @@ export default function ETLManagementScreen() {
    * opens a new read-only window with all configuration tabs pre-filled.
    */
   const handleViewDeployedVersion = async (dep) => {
-    setActionLoading(a => ({ ...a, [`${dep.id}_deployedVersion`]: true }));
+    const deployedVersionActionKey = `${getDeploymentRowKey(dep)}_deployedVersion`
+    setActionLoading(a => ({ ...a, [deployedVersionActionKey]: true }));
     setScreenError('');
     setScreenNotice(null);
 
     try {
       const environment = dep.environment || state.metadata.environment || 'production';
+      const deploymentTeamName = getDeploymentTeamName(dep)
 
       const yamlText = await fetchDraftConfiguration({
         productType: dep.productType,
         source: dep.productSource,
-        team: teamName,
+        team: deploymentTeamName,
         environment,
       }, useMock);
 
@@ -829,7 +873,7 @@ export default function ETLManagementScreen() {
       const loadedState = hydrateWizardStateFromYaml(yamlText, {
         productType: dep.productType,
         source: dep.productSource,
-        teamName,
+        teamName: deploymentTeamName,
         environment,
       });
 
@@ -855,7 +899,7 @@ export default function ETLManagementScreen() {
       console.error('[ETLManagementScreen] handleViewDeployedVersion failed:', error);
       setScreenError(error?.message || 'Failed to load deployed configuration.');
     } finally {
-      setActionLoading(a => ({ ...a, [`${dep.id}_deployedVersion`]: false }));
+      setActionLoading(a => ({ ...a, [deployedVersionActionKey]: false }));
     }
   };
 
@@ -933,7 +977,7 @@ export default function ETLManagementScreen() {
       confirmVariant: 'primary',
       onConfirm: async () => {
         setConfirmDialog(null);
-        await handleRestore(dep.id);
+        await handleRestore(dep.id, getDeploymentRowKey(dep));
       },
     });
   }
@@ -982,7 +1026,7 @@ export default function ETLManagementScreen() {
           alignItems: 'center',
           flexWrap: 'wrap'
         }}>
-          <span>{teamName || 'default'}</span>
+          <span>{isAdminUser ? (teamFilter === 'all' ? 'All teams' : teamFilter) : (teamName || 'default')}</span>
           <span>·</span>
           <span>{tabDeployments.length} {tabDeployments.length === 1 ? 'pipeline' : 'pipelines'}</span>
           <span>·</span>
@@ -1031,6 +1075,28 @@ export default function ETLManagementScreen() {
               boxSizing: 'border-box',
             }}
           />
+          {isAdminUser && (
+            <select
+              aria-label="Team filter"
+              value={teamFilter}
+              onChange={e => setTeamFilter(e.target.value)}
+              style={{
+                width: 180,
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: '1px solid var(--border)',
+                fontSize: 14,
+                background: 'var(--bg)',
+                color: 'var(--text)',
+                boxSizing: 'border-box',
+              }}
+            >
+              <option value="all">All Teams</option>
+              {adminTeamOptions.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          )}
           <Btn v="accent" onClick={handleCreateNewConfig} style={{ whiteSpace: 'nowrap' }}>
             + New Configuration
           </Btn>
@@ -1195,7 +1261,7 @@ export default function ETLManagementScreen() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, minWidth: '900px' }}>
                 <thead>
                   <tr>
-                    {COLUMNS.map(col => (
+                    {managementColumns.map(col => (
                       <th
                         key={col.key}
                         onClick={() => handleSort(col.key)}
@@ -1236,41 +1302,44 @@ export default function ETLManagementScreen() {
                 </thead>
                 <tbody>
                   {sortedDeployments.map(dep => {
+                    const rowKey = getDeploymentRowKey(dep);
+                    const savedVersionActionKey = `${rowKey}_savedVersion`;
+                    const deployedVersionActionKey = `${rowKey}_deployedVersion`;
                     const hasVersionMismatch = dep.deployedVersion && dep.savedVersion && dep.deployedVersion !== dep.savedVersion;
                     const canUpgrade = hasVersionMismatch && dep.deploymentStatus === 'running';
                     const isRunning = dep.deploymentStatus === 'running';
                     const isDeletedRow = dep.deploymentStatus === 'deleted' && activeTab === 'deleted';
                     const deployTooltip = dep.deploymentStatus === 'running'
                       ? 'Already running'
-                      : actionLoading[dep.id] === 'deploy'
+                      : actionLoading[rowKey] === 'deploy'
                         ? 'Deploying pipeline'
                         : 'Deploy pipeline';
                     const stopTooltip = !isRunning
                       ? 'Pipeline is not running'
-                      : actionLoading[dep.id] === 'stop'
+                      : actionLoading[rowKey] === 'stop'
                         ? 'Stopping pipeline'
                         : 'Stop pipeline';
                     const deleteTooltip = dep.deploymentStatus === 'running'
                       ? 'Cannot delete a running pipeline'
-                      : actionLoading[dep.id] === 'delete'
+                      : actionLoading[rowKey] === 'delete'
                         ? 'Deleting pipeline'
                         : 'Delete pipeline';
-                    const isPermanentDeleteDisabled = actionLoading[dep.id] === 'delete-permanent' || actionLoading[dep.id] === 'restore';
-                    const isRestoreDisabled = actionLoading[dep.id] === 'restore' || actionLoading[dep.id] === 'delete-permanent';
+                    const isPermanentDeleteDisabled = actionLoading[rowKey] === 'delete-permanent' || actionLoading[rowKey] === 'restore';
+                    const isRestoreDisabled = actionLoading[rowKey] === 'restore' || actionLoading[rowKey] === 'delete-permanent';
                     const upgradeTooltip = !canUpgrade && hasVersionMismatch
                       ? 'Pipeline must be running'
                       : !canUpgrade
                         ? 'No update available'
-                        : actionLoading[dep.id] === 'upgrade'
+                        : actionLoading[rowKey] === 'upgrade'
                           ? 'Upgrading deployment'
                           : 'Upgrade to latest version';
-                    const editTooltip = actionLoading[dep.id] === 'edit'
+                    const editTooltip = actionLoading[rowKey] === 'edit'
                       ? 'Opening deployment editor'
                       : 'Edit configuration';
 
                     return (
                       <tr
-                        key={dep.id}
+                        key={rowKey}
                         style={{
                           borderTop: '1px solid var(--border)',
                           height: 44,
@@ -1301,10 +1370,11 @@ export default function ETLManagementScreen() {
                             {dep.deploymentStatus}
                           </Chip>
                         </td>
+                        {isAdminUser && <td style={{ padding: 8 }}>{dep.teamName || '—'}</td>}
                         <td style={{ padding: 8, fontFamily: 'var(--mono)', fontSize: 13 }}>
                           {dep.savedVersion ? (
                             <Tooltip
-                              content={actionLoading[`${dep.id}_savedVersion`]
+                              content={actionLoading[savedVersionActionKey]
                                 ? '⏳ Loading configuration…'
                                 : '👁 Open saved version preview'}
                               placement="top"
@@ -1313,25 +1383,25 @@ export default function ETLManagementScreen() {
                             >
                               <button
                                 onClick={() => handleViewSavedVersion(dep)}
-                                disabled={!!actionLoading[`${dep.id}_savedVersion`]}
+                                disabled={!!actionLoading[savedVersionActionKey]}
                                 onMouseEnter={e => { e.currentTarget.style.opacity = '0.75'; }}
-                                onMouseLeave={e => { e.currentTarget.style.opacity = actionLoading[`${dep.id}_savedVersion`] ? '0.5' : '1'; }}
+                                onMouseLeave={e => { e.currentTarget.style.opacity = actionLoading[savedVersionActionKey] ? '0.5' : '1'; }}
                                 style={{
                                   background: 'none',
                                   border: 'none',
                                   padding: 0,
-                                  cursor: actionLoading[`${dep.id}_savedVersion`] ? 'wait' : 'pointer',
+                                  cursor: actionLoading[savedVersionActionKey] ? 'wait' : 'pointer',
                                   fontFamily: 'var(--mono)',
                                   fontSize: 13,
                                   color: 'var(--accent)',
                                   textDecoration: 'underline',
                                   textDecorationStyle: 'dashed',
                                   textUnderlineOffset: '3px',
-                                  opacity: actionLoading[`${dep.id}_savedVersion`] ? 0.5 : 1,
+                                  opacity: actionLoading[savedVersionActionKey] ? 0.5 : 1,
                                   transition: 'opacity 0.15s',
                                 }}
                               >
-                                {actionLoading[`${dep.id}_savedVersion`] ? '…' : dep.savedVersion}
+                                {actionLoading[savedVersionActionKey] ? '…' : dep.savedVersion}
                               </button>
                             </Tooltip>
                           ) : (
@@ -1341,7 +1411,7 @@ export default function ETLManagementScreen() {
                         <td style={{ padding: 8, fontFamily: 'var(--mono)', fontSize: 13 }}>
                           {dep.deployedVersion ? (
                             <Tooltip
-                              content={actionLoading[`${dep.id}_deployedVersion`]
+                              content={actionLoading[deployedVersionActionKey]
                                 ? '⏳ Loading configuration…'
                                 : '👁 Open deployed version preview'}
                               placement="top"
@@ -1350,14 +1420,14 @@ export default function ETLManagementScreen() {
                             >
                               <button
                                 onClick={() => handleViewDeployedVersion(dep)}
-                                disabled={!!actionLoading[`${dep.id}_deployedVersion`]}
+                                disabled={!!actionLoading[deployedVersionActionKey]}
                                 onMouseEnter={e => { e.currentTarget.style.opacity = '0.75'; }}
-                                onMouseLeave={e => { e.currentTarget.style.opacity = actionLoading[`${dep.id}_deployedVersion`] ? '0.5' : '1'; }}
+                                onMouseLeave={e => { e.currentTarget.style.opacity = actionLoading[deployedVersionActionKey] ? '0.5' : '1'; }}
                                 style={{
                                   background: 'none',
                                   border: 'none',
                                   padding: 0,
-                                  cursor: actionLoading[`${dep.id}_deployedVersion`] ? 'wait' : 'pointer',
+                                  cursor: actionLoading[deployedVersionActionKey] ? 'wait' : 'pointer',
                                   fontFamily: 'var(--mono)',
                                   fontSize: 13,
                                   color: hasVersionMismatch ? 'var(--warning)' : 'var(--accent)',
@@ -1365,11 +1435,11 @@ export default function ETLManagementScreen() {
                                   textDecoration: 'underline',
                                   textDecorationStyle: 'dashed',
                                   textUnderlineOffset: '3px',
-                                  opacity: actionLoading[`${dep.id}_deployedVersion`] ? 0.5 : 1,
+                                  opacity: actionLoading[deployedVersionActionKey] ? 0.5 : 1,
                                   transition: 'opacity 0.15s',
                                 }}
                               >
-                                {actionLoading[`${dep.id}_deployedVersion`] ? '…' : dep.deployedVersion}
+                                {actionLoading[deployedVersionActionKey] ? '…' : dep.deployedVersion}
                               </button>
                             </Tooltip>
                           ) : (
@@ -1380,7 +1450,7 @@ export default function ETLManagementScreen() {
                         <td style={{ padding: 8, textAlign: 'center', display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
                           {isDeletedRow ? (
                             <>
-                              <Tooltip content={actionLoading[dep.id] === 'delete-permanent' ? 'Deleting permanently' : 'Delete permanently'}>
+                              <Tooltip content={actionLoading[rowKey] === 'delete-permanent' ? 'Deleting permanently' : 'Delete permanently'}>
                                 <span style={{ display: 'inline-flex' }}>
                                   <button
                                     type="button"
@@ -1408,7 +1478,7 @@ export default function ETLManagementScreen() {
                                 </span>
                               </Tooltip>
 
-                              <Tooltip content={actionLoading[dep.id] === 'restore' ? 'Restoring pipeline' : 'Restore pipeline'}>
+                              <Tooltip content={actionLoading[rowKey] === 'restore' ? 'Restoring pipeline' : 'Restore pipeline'}>
                                 <span style={{ display: 'inline-flex' }}>
                                   <button
                                     type="button"
@@ -1443,16 +1513,16 @@ export default function ETLManagementScreen() {
                                   <button
                                     aria-label="Deploy pipeline"
                                     onClick={() => handleDeploy(dep)}
-                                    disabled={dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy'}
+                                    disabled={dep.deploymentStatus === 'running' || actionLoading[rowKey] === 'deploy'}
                                     style={{
                                       ...ICON_BUTTON_STYLE,
                                       borderColor: '#22c55e',
                                       color: '#22c55e',
-                                      opacity: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy') ? 0.4 : 1,
-                                      cursor: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'deploy') ? 'not-allowed' : 'pointer',
+                                      opacity: (dep.deploymentStatus === 'running' || actionLoading[rowKey] === 'deploy') ? 0.4 : 1,
+                                      cursor: (dep.deploymentStatus === 'running' || actionLoading[rowKey] === 'deploy') ? 'not-allowed' : 'pointer',
                                     }}
                                     onMouseEnter={e => {
-                                      if (dep.deploymentStatus !== 'running' && actionLoading[dep.id] !== 'deploy') {
+                                      if (dep.deploymentStatus !== 'running' && actionLoading[rowKey] !== 'deploy') {
                                         e.currentTarget.style.background = 'rgba(34,197,94,0.15)';
                                       }
                                     }}
@@ -1470,16 +1540,16 @@ export default function ETLManagementScreen() {
                                   <button
                                     aria-label="Stop pipeline"
                                     onClick={() => handleStop(dep)}
-                                    disabled={!isRunning || actionLoading[dep.id] === 'stop'}
+                                    disabled={!isRunning || actionLoading[rowKey] === 'stop'}
                                     style={{
                                       ...ICON_BUTTON_STYLE,
                                       borderColor: '#ef4444',
                                       color: '#ef4444',
-                                      opacity: (!isRunning || actionLoading[dep.id] === 'stop') ? 0.4 : 1,
-                                      cursor: (!isRunning || actionLoading[dep.id] === 'stop') ? 'not-allowed' : 'pointer',
+                                      opacity: (!isRunning || actionLoading[rowKey] === 'stop') ? 0.4 : 1,
+                                      cursor: (!isRunning || actionLoading[rowKey] === 'stop') ? 'not-allowed' : 'pointer',
                                     }}
                                     onMouseEnter={e => {
-                                      if (isRunning && actionLoading[dep.id] !== 'stop') {
+                                      if (isRunning && actionLoading[rowKey] !== 'stop') {
                                         e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
                                       }
                                     }}
@@ -1497,16 +1567,16 @@ export default function ETLManagementScreen() {
                                   <button
                                     aria-label="Delete pipeline"
                                     onClick={() => requestDelete(dep)}
-                                    disabled={dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete'}
+                                    disabled={dep.deploymentStatus === 'running' || actionLoading[rowKey] === 'delete'}
                                     style={{
                                       ...ICON_BUTTON_STYLE,
                                       borderColor: '#ef4444',
                                       color: '#ef4444',
-                                      opacity: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete') ? 0.4 : 1,
-                                      cursor: (dep.deploymentStatus === 'running' || actionLoading[dep.id] === 'delete') ? 'not-allowed' : 'pointer',
+                                      opacity: (dep.deploymentStatus === 'running' || actionLoading[rowKey] === 'delete') ? 0.4 : 1,
+                                      cursor: (dep.deploymentStatus === 'running' || actionLoading[rowKey] === 'delete') ? 'not-allowed' : 'pointer',
                                     }}
                                     onMouseEnter={e => {
-                                      if (dep.deploymentStatus !== 'running' && actionLoading[dep.id] !== 'delete') {
+                                      if (dep.deploymentStatus !== 'running' && actionLoading[rowKey] !== 'delete') {
                                         e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
                                       }
                                     }}
@@ -1524,16 +1594,16 @@ export default function ETLManagementScreen() {
                                   <button
                                     aria-label="Upgrade deployment"
                                     onClick={() => handleUpgrade(dep)}
-                                    disabled={!canUpgrade || actionLoading[dep.id] === 'upgrade'}
+                                    disabled={!canUpgrade || actionLoading[rowKey] === 'upgrade'}
                                     style={{
                                       ...ICON_BUTTON_STYLE,
                                       borderColor: 'var(--warning)',
                                       color: 'var(--warning)',
-                                      opacity: (!canUpgrade || actionLoading[dep.id] === 'upgrade') ? 0.4 : 1,
-                                      cursor: (!canUpgrade || actionLoading[dep.id] === 'upgrade') ? 'not-allowed' : 'pointer',
+                                      opacity: (!canUpgrade || actionLoading[rowKey] === 'upgrade') ? 0.4 : 1,
+                                      cursor: (!canUpgrade || actionLoading[rowKey] === 'upgrade') ? 'not-allowed' : 'pointer',
                                     }}
                                     onMouseEnter={e => {
-                                      if (canUpgrade && actionLoading[dep.id] !== 'upgrade') {
+                                      if (canUpgrade && actionLoading[rowKey] !== 'upgrade') {
                                         e.currentTarget.style.background = 'rgba(245,158,11,0.15)';
                                       }
                                     }}
@@ -1551,14 +1621,14 @@ export default function ETLManagementScreen() {
                                   <button
                                     aria-label="Edit configuration"
                                     onClick={() => requestEdit(dep)}
-                                    disabled={actionLoading[dep.id] === 'edit'}
+                                    disabled={actionLoading[rowKey] === 'edit'}
                                     style={{
                                       ...ICON_BUTTON_STYLE,
-                                      opacity: actionLoading[dep.id] === 'edit' ? 0.4 : 1,
-                                      cursor: actionLoading[dep.id] === 'edit' ? 'not-allowed' : 'pointer',
+                                      opacity: actionLoading[rowKey] === 'edit' ? 0.4 : 1,
+                                      cursor: actionLoading[rowKey] === 'edit' ? 'not-allowed' : 'pointer',
                                     }}
                                     onMouseEnter={e => {
-                                      if (actionLoading[dep.id] !== 'edit') {
+                                      if (actionLoading[rowKey] !== 'edit') {
                                         e.currentTarget.style.background = 'rgba(79,110,247,0.15)';
                                         e.currentTarget.style.borderColor = 'var(--accent)';
                                         e.currentTarget.style.color = 'var(--accent)';

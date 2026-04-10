@@ -5,6 +5,7 @@ import MetadataStep from './MetadataStep.jsx'
 import { WizardProvider } from '../../shared/store/wizardStore.jsx'
 
 const fetchEntitySchema = vi.fn()
+let mockUser = { userId: 'alice', teamName: 'platform', role: 'regular' }
 
 vi.mock('../../shared/services/configService.js', () => ({
   fetchEntitySchema: (...args) => fetchEntitySchema(...args),
@@ -21,12 +22,21 @@ vi.mock('../../shared/store/configContext.jsx', () => ({
 
 vi.mock('../../shared/store/userContext.jsx', () => ({
   useUser: () => ({
-    user: { userId: 'alice', teamName: 'platform' },
+    user: mockUser,
   }),
 }))
 
 vi.mock('../../shared/store/mockModeContext.jsx', () => ({
   useMockMode: () => ({ useMock: false, setUseMock: vi.fn() }),
+}))
+
+vi.mock('../../shared/store/teamNamesContext.jsx', () => ({
+  useTeamNames: () => ({
+    teamNames: ['platform', 'analytics', 'Team A'],
+    loadingTeamNames: false,
+    teamNamesError: '',
+    refreshTeamNames: vi.fn(),
+  }),
 }))
 
 const WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
@@ -86,6 +96,32 @@ function renderStep(initialState = {}) {
 describe('MetadataStep entity target schema', () => {
   beforeEach(() => {
     fetchEntitySchema.mockReset()
+    mockUser = { userId: 'alice', teamName: 'platform', role: 'regular' }
+  })
+
+  it('shows the logged-in team in a disabled dropdown for regular users', () => {
+    renderStep()
+
+    const teamSelect = screen.getByRole('combobox', { name: 'Team' })
+    expect(teamSelect).toHaveValue('platform')
+    expect(teamSelect).toBeDisabled()
+  })
+
+  it('allows admin users to change the team dropdown value', async () => {
+    const user = userEvent.setup()
+    mockUser = { userId: 'admin-user', teamName: 'platform', role: 'admin' }
+
+    renderStep()
+
+    const teamSelect = screen.getByRole('combobox', { name: 'Team' })
+    expect(teamSelect).toBeEnabled()
+
+    await user.selectOptions(teamSelect, 'analytics')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.metadata?.team).toBe('analytics')
+    })
   })
 
   it('shows only the entity name in the entity dropdown options', () => {

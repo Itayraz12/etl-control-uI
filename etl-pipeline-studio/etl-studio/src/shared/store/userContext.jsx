@@ -9,6 +9,7 @@ import {
   upsertPendingScopeReset,
   writePersistedActiveUser,
 } from './userSessionPersistence.js'
+import { normalizeUserRole } from '../services/authService.js'
 
 const IDLE_LOGOUT_MS = SESSION_TIMEOUTS_MS.idleLogout
 const RELOGIN_GRACE_MS = SESSION_TIMEOUTS_MS.scopeResetGrace
@@ -29,6 +30,8 @@ function normalizeUser(user) {
     ...user,
     userId: String(user.userId).trim(),
     teamName: String(user.teamName ?? '').trim(),
+    role: normalizeUserRole(user.role),
+    userRoleHeader: String(user.userRoleHeader ?? '').trim(),
   }
 }
 

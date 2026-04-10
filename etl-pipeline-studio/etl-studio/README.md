@@ -39,6 +39,9 @@ npm run dev
 
 Open `http://localhost:5173`.
 
+For local development, the Vite dev server can proxy `/api` requests to `http://localhost:8080`.
+This avoids cross-origin browser restrictions on custom response headers such as `user-role`.
+
 ## Build-time application configuration
 
 The UI reads these Vite environment variables at build time:
@@ -46,6 +49,7 @@ The UI reads these Vite environment variables at build time:
 | Variable | Default | Description |
 |---|---:|---|
 | `VITE_API_BASE` | `http://localhost:8080/api` | Base URL for all live backend API calls |
+| `VITE_AUTH_AES_KEY` | `MDEyMzQ1Njc4OWFiY2RlZg==` | Base64-encoded shared AES key used to AES-GCM encrypt the live-login `username` and `password` payload fields |
 | `VITE_APP_VERSION` | `package.json` version | UI version label override shown in the app chrome |
 | `VITE_IDLE_LOGOUT_MINUTES` | `15` | Logs out the active user after this many minutes of inactivity |
 | `VITE_SCOPE_RESET_GRACE_MINUTES` | `10` | Clears a timed-out user's saved wizard scope after this many additional minutes |
@@ -54,9 +58,20 @@ Example `.env` values:
 
 ```bash
 VITE_API_BASE=http://localhost:8080/api
+VITE_AUTH_AES_KEY=MDEyMzQ1Njc4OWFiY2RlZg==
 VITE_APP_VERSION=1.2.3-build.7
 VITE_IDLE_LOGOUT_MINUTES=20
 VITE_SCOPE_RESET_GRACE_MINUTES=15
+```
+
+Example `.env.development` values for local proxy-based development:
+
+```bash
+VITE_API_BASE=/api
+VITE_AUTH_AES_KEY=MDEyMzQ1Njc4OWFiY2RlZg==
+VITE_APP_VERSION=
+VITE_IDLE_LOGOUT_MINUTES=15
+VITE_SCOPE_RESET_GRACE_MINUTES=10
 ```
 
 ## Verified scripts

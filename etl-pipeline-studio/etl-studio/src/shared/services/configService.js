@@ -38,6 +38,30 @@ function asString(value, fallback = '') {
   return String(value)
 }
 
+function buildApiUrl(pathname = '', { apiBase = API_BASE, origin } = {}) {
+  const normalizedBase = String(apiBase ?? '').trim().replace(/\/+$/, '')
+  const normalizedPath = String(pathname ?? '').trim().replace(/^\/+/, '')
+
+  if (/^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(normalizedBase)) {
+    return new URL(`${normalizedBase}/${normalizedPath}`)
+  }
+
+  const resolvedOrigin = origin
+    ?? globalThis.location?.origin
+    ?? 'http://localhost'
+
+  const relativeUrl = `${normalizedBase}/${normalizedPath}`.replace(/\/+/g, '/').replace(/^(?!\/)/, '/')
+  return new URL(relativeUrl, resolvedOrigin)
+}
+
+export function buildConfigurationYamlUrl(pathname = 'backend/configuration/yaml', query = {}, options = {}) {
+  const url = buildApiUrl(pathname, options)
+  Object.entries(query).forEach(([key, value]) => {
+    url.searchParams.set(key, value ?? '')
+  })
+  return url.toString()
+}
+
 function extractSchemaVersionFromYaml(yaml = '') {
   const match = String(yaml ?? '').match(/^\s*schemaVersion\s*:\s*(.+)$/m)
   return match?.[1]?.trim() || '1.0'
@@ -496,13 +520,12 @@ sink:
 `
   }
 
-  const url = new URL(`${API_BASE}/backend/configuration/draft/yaml`)
-  url.searchParams.set('productType', productType ?? '')
-  url.searchParams.set('source', source ?? '')
-  url.searchParams.set('team', team ?? '')
-  url.searchParams.set('environment', environment ?? '')
-
-  const response = await fetchWithUserId(url.toString(), {
+  const response = await fetchWithUserId(buildConfigurationYamlUrl('backend/configuration/draft/yaml', {
+    productType,
+    source,
+    team,
+    environment,
+  }), {
     headers: {
       Accept: 'application/yaml, text/yaml, text/plain, application/json',
     },
@@ -574,13 +597,12 @@ sink:
 `
   }
 
-  const url = new URL(`${API_BASE}/backend/configuration/yaml`)
-  url.searchParams.set('productType', productType ?? '')
-  url.searchParams.set('source', source ?? '')
-  url.searchParams.set('team', team ?? '')
-  url.searchParams.set('environment', environment ?? '')
-
-  const response = await fetchWithUserId(url.toString(), {
+  const response = await fetchWithUserId(buildConfigurationYamlUrl('backend/configuration/yaml', {
+    productType,
+    source,
+    team,
+    environment,
+  }), {
     headers: {
       Accept: 'application/yaml, text/yaml, text/plain, application/json',
     },
@@ -600,15 +622,14 @@ sink:
 }
 
 export async function saveDraftConfiguration({ productType, source, team, environment, yaml }) {
-  const url = new URL(`${API_BASE}/backend/configuration/yaml`)
-  url.searchParams.set('productType', productType ?? '')
-  url.searchParams.set('source', source ?? '')
-  url.searchParams.set('team', team ?? '')
-  url.searchParams.set('environment', environment ?? '')
-
   const cleanYaml = compactYamlDocument(yaml)
 
-  const response = await fetchWithUserId(url.toString(), {
+  const response = await fetchWithUserId(buildConfigurationYamlUrl('backend/configuration/yaml', {
+    productType,
+    source,
+    team,
+    environment,
+  }), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

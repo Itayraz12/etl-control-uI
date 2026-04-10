@@ -10,10 +10,12 @@ function TestConsumer() {
 
   return (
     <div>
-      <div data-testid="active-user">{user ? `${user.userId}|${user.teamName}` : 'anonymous'}</div>
-      <button type="button" onClick={() => login({ userId: 'alice', teamName: 'platform' })}>
-        Login
+      <div data-testid="active-user">{user ? `${user.userId}|${user.teamName}|${user.role}` : 'anonymous'}</div>
+      <div data-testid="user-role-header">{user?.userRoleHeader || '(missing)'}</div>
+      <button type="button" onClick={() => login({ userId: 'alice', teamName: 'platform', role: 'admin', userRoleHeader: 'admin' })}>
+        Login as Admin
       </button>
+      <button type="button" onClick={() => login({ userId: 'bob', teamName: 'analytics' })}>Login as Regular</button>
       <button type="button" onClick={() => logout('manual')}>
         Logout
       </button>
@@ -28,7 +30,7 @@ describe('UserProvider persistence', () => {
   it('hydrates the active user from localStorage on mount', async () => {
     localStorage.setItem(
       ACTIVE_USER_STORAGE_KEY,
-      JSON.stringify({ userId: 'alice', teamName: 'platform' })
+      JSON.stringify({ userId: 'alice', teamName: 'platform', role: 'admin', userRoleHeader: 'admin' })
     )
 
     render(
@@ -38,7 +40,26 @@ describe('UserProvider persistence', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByTestId('active-user')).toHaveTextContent('alice|platform')
+      expect(screen.getByTestId('active-user')).toHaveTextContent('alice|platform|admin')
+      expect(screen.getByTestId('user-role-header')).toHaveTextContent('admin')
+    })
+  })
+
+  it('defaults missing persisted roles to regular', async () => {
+    localStorage.setItem(
+      ACTIVE_USER_STORAGE_KEY,
+      JSON.stringify({ userId: 'bob', teamName: 'analytics' })
+    )
+
+    render(
+      <UserProvider>
+        <TestConsumer />
+      </UserProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('active-user')).toHaveTextContent('bob|analytics|regular')
+      expect(screen.getByTestId('user-role-header')).toHaveTextContent('(missing)')
     })
   })
 
@@ -53,13 +74,16 @@ describe('UserProvider persistence', () => {
 
     expect(screen.getByTestId('active-user')).toHaveTextContent('anonymous')
 
-    await user.click(screen.getByRole('button', { name: 'Login' }))
+    await user.click(screen.getByRole('button', { name: 'Login as Admin' }))
 
     await waitFor(() => {
-      expect(screen.getByTestId('active-user')).toHaveTextContent('alice|platform')
+      expect(screen.getByTestId('active-user')).toHaveTextContent('alice|platform|admin')
+      expect(screen.getByTestId('user-role-header')).toHaveTextContent('admin')
       expect(JSON.parse(localStorage.getItem(ACTIVE_USER_STORAGE_KEY) || '{}')).toMatchObject({
         userId: 'alice',
         teamName: 'platform',
+        role: 'admin',
+        userRoleHeader: 'admin',
       })
     })
 
@@ -93,10 +117,10 @@ describe('UserProvider persistence', () => {
       </UserProvider>
     )
 
-    await user.click(screen.getByRole('button', { name: 'Login' }))
+    await user.click(screen.getByRole('button', { name: 'Login as Admin' }))
 
     await waitFor(() => {
-      expect(screen.getByTestId('active-user')).toHaveTextContent('alice|platform')
+      expect(screen.getByTestId('active-user')).toHaveTextContent('alice|platform|admin')
     })
 
     expect(localStorage.getItem(scopedWizardStorageKey)).not.toBeNull()
@@ -129,10 +153,10 @@ describe('UserProvider persistence', () => {
       </UserProvider>
     )
 
-    await user.click(screen.getByRole('button', { name: 'Login' }))
+    await user.click(screen.getByRole('button', { name: 'Login as Admin' }))
 
     await waitFor(() => {
-      expect(screen.getByTestId('active-user')).toHaveTextContent('alice|platform')
+      expect(screen.getByTestId('active-user')).toHaveTextContent('alice|platform|admin')
     })
 
     await user.click(screen.getByRole('button', { name: 'Idle Logout' }))
