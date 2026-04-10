@@ -4,13 +4,12 @@ import { useConfig } from "../../shared/store/configContext.jsx";
 import { Card, CardTitle, ValidationItem, Btn, DeployProgressModal } from '../../shared/components/index.jsx'
 import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js'
 import { SOURCE_TYPES, normalizeMetadataLocation, resolveSourceSchema, resolveTargetSchema } from '../../shared/types/index.js'
-import { MOCK_FILTER_OPERATORS, saveDraftConfiguration } from '../../shared/services/configService.js'
+import { saveDraftConfiguration } from '../../shared/services/configService.js'
 import { fetchDeploymentSteps, deployFromYaml, subscribeToDeploymentProgress }
   from '../../shared/services/deploymentsService.js'
 import { setDeploymentStatus } from '../../shared/services/deploymentsService.js'
-import { compactYamlDocument, formatTransformationYamlItem, quoteYamlDoubleQuoted, formatKeyValueYamlSection } from '../../shared/services/configurationYaml.js'
+import { compactYamlDocument, formatTransformationYamlItem, quoteYamlDoubleQuoted, formatKeyValueYamlSection, formatFiltersYamlSection } from '../../shared/services/configurationYaml.js'
 import { formatInputFieldsYamlSection } from '../../shared/services/configurationYaml.js'
-import { formatFilterYamlItem } from '../../shared/services/configurationYaml.js'
 import { copyTextToClipboard } from '../../shared/services/clipboard.js'
 import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js'
 import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js'
@@ -285,28 +284,6 @@ export default function SummaryStep() {
 
   // Generate YAML with improved transformer descriptions
   const generateYaml = () => {
-    // Helper to map operator ID to name
-    const getOperatorName = (opId) => {
-      const op = MOCK_FILTER_OPERATORS.find(o => o.id === opId)
-      return op?.name?.toLowerCase().replace(/\s+/g, '_') || opId
-    }
-
-    // Helper to format a filter group with parentheses
-    const formatFilterGroup = (group, depth = 0) => {
-      const conditions = group.rules
-        .map(r => `(${r.field} ${getOperatorName(r.op)} ${r.value || 'null'})`)
-        .join(` ${group.logic} `)
-      
-      const subgroupConditions = group.subgroups?.length > 0
-        ? group.subgroups.map(sg => `(${formatFilterGroup(sg, depth + 1)})`).join(` ${group.logic} `)
-        : ''
-      
-      if (conditions && subgroupConditions) {
-        return `${conditions} ${group.logic} ${subgroupConditions}`
-      }
-      return conditions || subgroupConditions
-    }
-
     // Find source and target field types
     const nestedInputMappingYaml = formatInputFieldsYamlSection(sourceSchema, '    ')
     const columnDelimiter = state.source.csvDelimiter == null
@@ -426,6 +403,7 @@ ${nestedInputMappingYaml}` : ''}
         return formatTransformationYamlItem(expression)
       })
 
+    const filtersYaml = formatFiltersYamlSection(state.filters)
     const sinkAdditionalConfigYaml = state.sink.sinkType === 'kafka'
       ? formatKeyValueYamlSection('additionalConfig', state.sink.sinkKafkaAdditionalProperties, '')
       : ''
@@ -491,9 +469,8 @@ ${outputKafkaYaml}` : ''}
 ${transformations.length > 0 ? `
 transformations:
 ${transformations.join('\n')}` : ''}
-${state.filters.length > 0 ? `
-filters:
-${state.filters.map(group => formatFilterYamlItem(formatFilterGroup(group))).join('\n')}` : ''}
+${filtersYaml ? `
+${filtersYaml}` : ''}
 ${sinkAdditionalConfigYaml ? `
 ${sinkAdditionalConfigYaml}` : ''}
 `

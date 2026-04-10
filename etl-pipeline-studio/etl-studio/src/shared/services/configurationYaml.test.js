@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactYamlDocument, formatTransformationYamlItem, quoteYamlDoubleQuoted, formatInputFieldsYamlSection, formatKeyValueYamlSection } from './configurationYaml.js'
+import { compactYamlDocument, formatTransformationYamlItem, quoteYamlDoubleQuoted, formatInputFieldsYamlSection, formatKeyValueYamlSection, formatFiltersYamlSection } from './configurationYaml.js'
 import { formatFilterYamlItem } from './configurationYaml.js'
 import { hydrateWizardStateFromYaml } from './configurationHydrator.js'
 
@@ -1024,6 +1024,79 @@ sink:
     expect(formatFilterYamlItem('(id f-2 2)')).toBe('  - "(id f-2 2)"')
   })
 
+  it('serializes filters into dependencies and config sections', () => {
+    expect(formatFiltersYamlSection([
+      {
+        id: 'group-1',
+        logic: 'AND',
+        mode: 'exclude',
+        rules: [
+          { id: 'rule-1', field: 'productName', op: 'eq', value: 'john, unknown' },
+        ],
+        subgroups: [],
+      },
+      {
+        id: 'group-2',
+        logic: 'AND',
+        mode: 'include',
+        rules: [
+          { id: 'rule-2', field: 'price', op: 'eq', value: '100' },
+          { id: 'rule-3', field: 'price', op: 'eq', value: '200' },
+        ],
+        subgroups: [],
+      },
+    ])).toBe(`filters:
+  dependencies:
+    - type: EQ
+  config:
+    - rule:
+        and:
+          - field: productName
+            mode: exclude
+            op: EQ
+            values:
+              - john
+              - unknown
+    - rule:
+        and:
+          - field: price
+            op: EQ
+            values:
+              - "100"
+              - "200"`)
+  })
+
+  it('serializes filters with multiple operators using explicit per-rule op fields', () => {
+    expect(formatFiltersYamlSection([
+      {
+        id: 'group-1',
+        logic: 'AND',
+        mode: 'include',
+        rules: [
+          { id: 'rule-1', field: 'productName', op: 'eq', value: 'john, unknown' },
+          { id: 'rule-2', field: 'price', op: 'gt', value: '100, 200' },
+        ],
+        subgroups: [],
+      },
+    ])).toBe(`filters:
+  dependencies:
+    - type: EQ
+    - type: GT
+  config:
+    - rule:
+        and:
+          - field: productName
+            op: EQ
+            values:
+              - john
+              - unknown
+          - field: price
+            op: GT
+            values:
+              - "100"
+              - "200"`)
+  })
+
   it('serializes Kafka additional properties as root additionalConfig', () => {
     expect(formatKeyValueYamlSection('additionalConfig', [
       { id: '1', key: 'acks', value: 'all' },
@@ -1075,6 +1148,136 @@ output:
     expect(state.sink.sinkKafkaAdditionalProperties).toEqual([
       { id: 'sink-kafka-prop-0', key: 'acks', value: 'all' },
       { id: 'sink-kafka-prop-1', key: 'compression.type', value: 'gzip' },
+    ])
+  })
+
+  it('hydrates structured filters dependencies/config YAML', () => {
+    const yaml = `metadata:
+  entity: Product
+  product_source: ERP
+  product_type: Inventory
+  environment: production
+  team: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+mapping:
+  - inName: id
+    outName: name
+filters:
+  dependencies:
+    - type: EQ
+  config:
+    - rule:
+        and:
+          - field: productName
+            mode: exclude
+            op: EQ
+            values:
+              - john
+              - unknown
+    - rule:
+        and:
+          - field: price
+            op: EQ
+            values:
+              - "100"
+              - "200"
+additionalConfig:
+  "acks": "all"
+output:
+  kafka:
+    topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.filters).toEqual([
+      {
+        id: 'group-0',
+        logic: 'AND',
+        mode: 'exclude',
+        rules: [
+          { id: 'group-0-rule-0-0', field: 'productName', op: 'eq', value: 'john' },
+          { id: 'group-0-rule-0-1', field: 'productName', op: 'eq', value: 'unknown' },
+        ],
+        subgroups: [],
+      },
+      {
+        id: 'group-1',
+        logic: 'AND',
+        mode: 'include',
+        rules: [
+          { id: 'group-1-rule-0-0', field: 'price', op: 'eq', value: '100' },
+          { id: 'group-1-rule-0-1', field: 'price', op: 'eq', value: '200' },
+        ],
+        subgroups: [],
+      },
+    ])
+  })
+
+  it('hydrates structured filters that use explicit op fields', () => {
+    const yaml = `metadata:
+  entity: Product
+  product_source: ERP
+  product_type: Inventory
+  environment: production
+  team: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+mapping:
+  - inName: id
+    outName: name
+filters:
+  dependencies:
+    - type: EQ
+    - type: GT
+  config:
+    - rule:
+        and:
+          - field: productName
+            op: EQ
+            values:
+              - john
+              - unknown
+          - field: price
+            op: GT
+            values:
+              - "100"
+              - "200"
+output:
+  kafka:
+    topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.filters).toEqual([
+      {
+        id: 'group-0',
+        logic: 'AND',
+        mode: 'include',
+        rules: [
+          { id: 'group-0-rule-0-0', field: 'productName', op: 'eq', value: 'john' },
+          { id: 'group-0-rule-0-1', field: 'productName', op: 'eq', value: 'unknown' },
+          { id: 'group-0-rule-1-0', field: 'price', op: 'gt', value: '100' },
+          { id: 'group-0-rule-1-1', field: 'price', op: 'gt', value: '200' },
+        ],
+        subgroups: [],
+      },
     ])
   })
 

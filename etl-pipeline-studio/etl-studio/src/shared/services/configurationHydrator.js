@@ -331,6 +331,132 @@ function stripSingleOuterPair(text = '') {
   return trimmed.slice(1, -1).trim()
 }
 
+function normalizeStructuredFilterDependencyType(value = '') {
+  const normalized = asString(value).trim().toLowerCase().replace(/\s+/g, '_')
+  if (!normalized) return ''
+  return NORMALIZED_OPERATOR_TO_ID.get(normalized) || normalized
+}
+
+function extractStructuredFilterDependencies(dependencies) {
+  if (!Array.isArray(dependencies)) return []
+
+  return dependencies
+    .map((entry) => {
+      if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+        return normalizeStructuredFilterDependencyType(entry.type ?? entry.id ?? entry.name)
+      }
+      return normalizeStructuredFilterDependencyType(entry)
+    })
+    .filter(Boolean)
+}
+
+function normalizeStructuredFilterValues(values) {
+  if (Array.isArray(values)) {
+    return values.map(asString).map(value => value.trim()).filter(Boolean)
+  }
+
+  const text = asString(values).trim()
+  if (!text) return []
+
+  return text
+    .split(/[\r\n,]+/)
+    .map(value => value.trim())
+    .filter(Boolean)
+}
+
+function normalizeStructuredFilterMode(value = '') {
+  return asString(value || 'include').trim().toLowerCase() === 'exclude'
+    ? 'exclude'
+    : 'include'
+}
+
+function extractStructuredFilterMode(...values) {
+  const candidate = values.find((value) => {
+    const normalized = asString(value).trim().toLowerCase()
+    return normalized === 'include' || normalized === 'exclude'
+  })
+
+  return normalizeStructuredFilterMode(candidate)
+}
+
+function extractStructuredFilterOperator(entry, resolveDependencyType) {
+  const explicitOperator = normalizeStructuredFilterDependencyType(
+    entry?.op
+      ?? entry?.operator
+      ?? (['include', 'exclude'].includes(asString(entry?.type).trim().toLowerCase()) ? '' : entry?.type)
+  )
+
+  return explicitOperator || resolveDependencyType()
+}
+
+function createStructuredDependencyResolver(dependencyTypes = []) {
+  const normalizedTypes = Array.isArray(dependencyTypes) ? dependencyTypes.filter(Boolean) : []
+  let cursor = 0
+
+  return () => {
+    if (normalizedTypes.length === 0) return 'eq'
+    if (normalizedTypes.length === 1) return normalizedTypes[0]
+
+    const resolved = normalizedTypes[cursor] || normalizedTypes[normalizedTypes.length - 1] || 'eq'
+    cursor += 1
+    return resolved
+  }
+}
+
+function buildStructuredFilterRuleGroup(rule, resolveDependencyType, idPrefix = 'group', inheritedMode = 'include') {
+  if (!rule || typeof rule !== 'object') return null
+
+  const logicKey = Array.isArray(rule.or) ? 'or' : 'and'
+  const entries = Array.isArray(rule[logicKey]) ? rule[logicKey] : []
+  const group = {
+    id: idPrefix,
+    logic: logicKey === 'or' ? 'OR' : 'AND',
+    mode: normalizeStructuredFilterMode(inheritedMode),
+    rules: [],
+    subgroups: [],
+  }
+
+  entries.forEach((entry, index) => {
+    if (!entry || typeof entry !== 'object') return
+
+    if (entry.rule && typeof entry.rule === 'object') {
+      const subgroup = buildStructuredFilterRuleGroup(
+        entry.rule,
+        resolveDependencyType,
+        `${idPrefix}-group-${index}`,
+        extractStructuredFilterMode(entry.mode, entry.type, inheritedMode),
+      )
+      if (subgroup && (subgroup.rules.length > 0 || subgroup.subgroups.length > 0)) {
+        group.subgroups.push(subgroup)
+      }
+      return
+    }
+
+    const field = asString(entry.field).trim()
+    if (!field) return
+
+    const mode = extractStructuredFilterMode(entry.mode, entry.type, inheritedMode)
+    const values = normalizeStructuredFilterValues(entry.values)
+    const operator = extractStructuredFilterOperator(entry, resolveDependencyType)
+    const ruleValues = values.length > 0 ? values : ['']
+
+    if (group.rules.length === 0 && group.subgroups.length === 0) {
+      group.mode = mode
+    }
+
+    ruleValues.forEach((value, valueIndex) => {
+      group.rules.push({
+        id: `${idPrefix}-rule-${index}-${valueIndex}`,
+        field,
+        op: operator,
+        value,
+      })
+    })
+  })
+
+  return group
+}
+
 function splitTopLevel(text, separator) {
   const parts = []
   let depth = 0
@@ -404,6 +530,45 @@ function buildFilterGroups(filters) {
   return filters
     .map((filter, index) => parseFilterGroup(filter, `group-${index}`))
     .filter(group => group.rules.length > 0 || group.subgroups.length > 0)
+}
+
+function buildStructuredFilterGroups(filters = {}) {
+  if (!filters || typeof filters !== 'object' || Array.isArray(filters)) return []
+
+  const dependencyTypes = extractStructuredFilterDependencies(filters.dependencies)
+  const configEntries = Array.isArray(filters.config) ? filters.config : []
+  const resolveDependencyType = createStructuredDependencyResolver(dependencyTypes)
+
+  return configEntries
+    .map((entry, index) => {
+      if (!entry || typeof entry !== 'object') return null
+
+      if (entry.rule && typeof entry.rule === 'object') {
+        return buildStructuredFilterRuleGroup(entry.rule, resolveDependencyType, `group-${index}`)
+      }
+
+      const field = asString(entry.field).trim()
+      if (!field) return null
+
+      const mode = extractStructuredFilterMode(entry.mode, entry.type, 'include')
+      const operator = extractStructuredFilterOperator(entry, () => dependencyTypes[index] || dependencyTypes[0] || 'eq')
+      const values = normalizeStructuredFilterValues(entry.values)
+      const ruleValues = values.length > 0 ? values : ['']
+
+      return {
+        id: `group-${index}`,
+        logic: 'OR',
+        mode,
+        rules: ruleValues.map((value, valueIndex) => ({
+          id: `group-${index}-rule-${valueIndex}`,
+          field,
+          op: operator,
+          value,
+        })),
+        subgroups: [],
+      }
+    })
+    .filter(Boolean)
 }
 
 function buildMappings(mappings, transformations) {
@@ -494,6 +659,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const sinkKafkaAdditionalProperties = sinkType === 'kafka'
     ? buildKeyValueEntries(parsed.additionalConfig ?? sink.additional_properties ?? sink.additionalProperties, 'sink-kafka-prop')
     : []
+  const filtersDefinition = parsed.filters ?? output.filters
 
   return {
     metadata: {
@@ -534,7 +700,9 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       schemaName: asString(schema.inputSchema ?? fallback.upload?.schemaName),
     },
     mappings: buildMappings(output.mapping || output.mappings || parsed.mapping || parsed.mappings, output.transformations || parsed.transformations),
-    filters: buildFilterGroups(output.filters || parsed.filters),
+    filters: Array.isArray(filtersDefinition)
+      ? buildFilterGroups(filtersDefinition)
+      : buildStructuredFilterGroups(filtersDefinition),
     sink: {
       sinkType,
       sinkKafkaTopic: sinkType === 'kafka' ? sinkTopic : '',

@@ -424,6 +424,8 @@ output:
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('additional_inputs:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('streamingContinuity: continuous')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('avgRecordsAmount: millions')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('filters:\n  dependencies:\n    - type: EQ\n  config:\n    - rule:\n        and:\n          - field: sku\n            op: EQ\n            values:\n              - ABC-123')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('filters:\n  - ')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('streaming_continuity:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('avg_records_amount:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml.trimEnd()).not.toMatch(/}\s*$/)
