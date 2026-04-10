@@ -5,10 +5,20 @@ import MetadataStep from './MetadataStep.jsx'
 import { WizardProvider } from '../../shared/store/wizardStore.jsx'
 
 const fetchEntitySchema = vi.fn()
+const fetchStreamingContinuities = vi.fn()
+const fetchRecordsPerDay = vi.fn()
 let mockUser = { userId: 'alice', teamName: 'platform', role: 'regular' }
 
 vi.mock('../../shared/services/configService.js', () => ({
   fetchEntitySchema: (...args) => fetchEntitySchema(...args),
+  fetchStreamingContinuities: (...args) => fetchStreamingContinuities(...args),
+  fetchRecordsPerDay: (...args) => fetchRecordsPerDay(...args),
+  MOCK_STREAMING_CONTINUITIES: [
+    { value: 'continuous', label: 'Continuous' },
+  ],
+  MOCK_RECORDS_PER_DAY: [
+    { value: 'millions', label: 'A Few Millions' },
+  ],
 }))
 
 vi.mock('../../shared/store/configContext.jsx', () => ({
@@ -96,6 +106,16 @@ function renderStep(initialState = {}) {
 describe('MetadataStep entity target schema', () => {
   beforeEach(() => {
     fetchEntitySchema.mockReset()
+    fetchStreamingContinuities.mockReset()
+    fetchRecordsPerDay.mockReset()
+    fetchStreamingContinuities.mockResolvedValue([
+      { value: 'continuous', label: 'Continuous' },
+      { value: 'every-day', label: 'Once a Day' },
+    ])
+    fetchRecordsPerDay.mockResolvedValue([
+      { value: 'millions', label: 'A Few Millions' },
+      { value: 'thousands', label: 'Thousands' },
+    ])
     mockUser = { userId: 'alice', teamName: 'platform', role: 'regular' }
   })
 
@@ -140,6 +160,13 @@ describe('MetadataStep entity target schema', () => {
 
     expect(screen.getByText('📊 Data Stream Info')).toBeInTheDocument()
 
+    await waitFor(() => {
+      expect(fetchStreamingContinuities).toHaveBeenCalledWith(false)
+      expect(fetchRecordsPerDay).toHaveBeenCalledWith(false)
+      expect(screen.getByRole('option', { name: 'Once a Day' })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: 'Thousands' })).toBeInTheDocument()
+    })
+
     const streamContinuitySelect = screen.getByDisplayValue('Continuous')
     const recordsPerDaySelect = screen.getByDisplayValue('A Few Millions')
 
@@ -151,6 +178,7 @@ describe('MetadataStep entity target schema', () => {
       expect(persisted.source?.streamingContinuity).toBe('every-day')
       expect(persisted.source?.recordsPerDay).toBe('thousands')
     })
+
   })
 
   it('accepts only numeric characters in the product code field', async () => {

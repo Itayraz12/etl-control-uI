@@ -258,12 +258,63 @@ export const MOCK_ENTITIES = [
   { id: 'ent-3', name: 'ProductEntity',  type: 'Product',  description: 'Represents a catalog product'   },
 ]
 
+export const MOCK_STREAMING_CONTINUITIES = [
+  { value: 'once', label: 'Once' },
+  { value: 'every-hour', label: 'Every Hour' },
+  { value: 'every-few-hours', label: 'Every Few Hours' },
+  { value: 'every-day', label: 'Once a Day' },
+  { value: 'continuous', label: 'Continuous' },
+]
+
+export const MOCK_RECORDS_PER_DAY = [
+  { value: 'hundreds', label: 'Hundreds' },
+  { value: 'thousands', label: 'Thousands' },
+  { value: 'hun-thousands', label: 'Hundred of Thousands' },
+  { value: 'millions', label: 'A Few Millions' },
+  { value: 'tens-millions', label: 'Tens of Millions' },
+  { value: 'hundreds-millions', label: 'Hundreds of Millions' },
+]
+
 // ── Fetch helpers ─────────────────────────────────────────────────────────
 
 async function fetchJson(url) {
   const res = await fetchWithUserId(url)
   if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`)
   return res.json()
+}
+
+function normalizeConfigOptions(payload, fallbackOptions = []) {
+  const fallbackMap = new Map(fallbackOptions.map(option => [String(option.value), option.label]))
+  const items = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.items)
+      ? payload.items
+      : Array.isArray(payload?.data)
+        ? payload.data
+        : []
+
+  const normalized = items
+    .map(item => {
+      if (typeof item === 'string' || typeof item === 'number') {
+        const value = String(item).trim()
+        return value
+          ? { value, label: fallbackMap.get(value) || value }
+          : null
+      }
+
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+
+      const value = String(item.value ?? item.id ?? item.key ?? item.name ?? '').trim()
+      if (!value) return null
+
+      return {
+        value,
+        label: String(item.label ?? item.name ?? item.title ?? fallbackMap.get(value) ?? value).trim() || value,
+      }
+    })
+    .filter(Boolean)
+
+  return normalized.length > 0 ? normalized : fallbackOptions
 }
 
 function extractSchemaArray(payload) {
@@ -457,6 +508,26 @@ export async function fetchEntities(useMock = true) {
     return MOCK_ENTITIES
   }
   return fetchJson(`${API_BASE}/backbone/entities`)
+}
+
+export async function fetchStreamingContinuities(useMock = true) {
+  if (useMock) {
+    await new Promise(r => setTimeout(r, 120))
+    return MOCK_STREAMING_CONTINUITIES
+  }
+
+  const payload = await fetchJson(`${API_BASE}/config/streaming-continuities`)
+  return normalizeConfigOptions(payload, MOCK_STREAMING_CONTINUITIES)
+}
+
+export async function fetchRecordsPerDay(useMock = true) {
+  if (useMock) {
+    await new Promise(r => setTimeout(r, 120))
+    return MOCK_RECORDS_PER_DAY
+  }
+
+  const payload = await fetchJson(`${API_BASE}/config/records-per-day`)
+  return normalizeConfigOptions(payload, MOCK_RECORDS_PER_DAY)
 }
 
 /**

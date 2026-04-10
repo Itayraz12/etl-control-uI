@@ -4,7 +4,13 @@ import { useUser } from '../../shared/store/userContext.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
 import { useMockMode } from '../../shared/store/mockModeContext.jsx'
 import { useTeamNames } from '../../shared/store/teamNamesContext.jsx'
-import { fetchEntitySchema } from '../../shared/services/configService.js'
+import {
+  fetchEntitySchema,
+  fetchRecordsPerDay,
+  fetchStreamingContinuities,
+  MOCK_RECORDS_PER_DAY,
+  MOCK_STREAMING_CONTINUITIES,
+} from '../../shared/services/configService.js'
 import {
   normalizeSourceSchema,
   ENVIRONMENTS,
@@ -35,6 +41,8 @@ export default function MetadataStep() {
   const previousEntityRef = useRef(metadata.entityName)
   const [loadingSchema, setLoadingSchema] = useState(false)
   const [schemaError, setSchemaError] = useState('')
+  const [streamingContinuityOptions, setStreamingContinuityOptions] = useState(MOCK_STREAMING_CONTINUITIES)
+  const [recordsPerDayOptions, setRecordsPerDayOptions] = useState(MOCK_RECORDS_PER_DAY)
   const u = (k, v) => actions.updateMetadata({ [k]: v })
   const updateSourceField = (k, v) => actions.updateSource({ [k]: v })
   const handleProductCodeChange = (value) => {
@@ -61,6 +69,29 @@ export default function MetadataStep() {
       actions.updateMetadata({ location: normalizedLocation })
     }
   }, [actions, metadata.location, normalizedLocation])
+
+  useEffect(() => {
+    let isActive = true
+
+    Promise.all([
+      fetchStreamingContinuities(useMock),
+      fetchRecordsPerDay(useMock),
+    ])
+      .then(([nextStreamingContinuities, nextRecordsPerDay]) => {
+        if (!isActive) return
+        setStreamingContinuityOptions(nextStreamingContinuities)
+        setRecordsPerDayOptions(nextRecordsPerDay)
+      })
+      .catch(() => {
+        if (!isActive) return
+        setStreamingContinuityOptions(MOCK_STREAMING_CONTINUITIES)
+        setRecordsPerDayOptions(MOCK_RECORDS_PER_DAY)
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [useMock])
 
   useEffect(() => {
     const entityName = String(metadata.entityName ?? '').trim()
@@ -195,21 +226,16 @@ export default function MetadataStep() {
           <FormRow>
             <FormGroup label="Streaming Continuity" required>
               <select value={src.streamingContinuity || 'continuous'} onChange={e => updateSourceField('streamingContinuity', e.target.value)}>
-                <option value="once">Once</option>
-                <option value="every-hour">Every Hour</option>
-                <option value="every-few-hours">Every Few Hours</option>
-                <option value="every-day">Once a Day</option>
-                <option value="continuous">Continuous</option>
+                {streamingContinuityOptions.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </FormGroup>
             <FormGroup label="Avg Records Per Day" required>
               <select value={src.recordsPerDay || 'millions'} onChange={e => updateSourceField('recordsPerDay', e.target.value)}>
-                <option value="hundreds">Hundreds</option>
-                <option value="thousands">Thousands</option>
-                <option value="hun-thousands">Hundred of Thousands</option>
-                <option value="millions">A Few Millions</option>
-                <option value="tens-millions">Tens of Millions</option>
-                <option value="hundreds-millions">Hundreds of Millions</option>
+                {recordsPerDayOptions.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </FormGroup>
           </FormRow>
