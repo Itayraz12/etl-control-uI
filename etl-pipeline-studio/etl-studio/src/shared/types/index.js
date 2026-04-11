@@ -515,6 +515,38 @@ export function normalizeSourceSchema(schema) {
     .filter(Boolean)
 }
 
+function buildSchemaFieldComparisonSignature(field = {}, index = 0) {
+  const normalizedField = normalizeSchemaField(field, index)
+  if (!normalizedField) return ''
+
+  return JSON.stringify({
+    id: normalizedField.id,
+    path: normalizedField.path,
+    name: normalizedField.name,
+    type: normalizedField.type,
+    arrayItemType: normalizedField.arrayItemType ?? '',
+    required: normalizedField.required === true,
+    nullable: normalizedField.nullable === true,
+    isArray: normalizedField.isArray === true,
+    inferredFormat: normalizedField.inferredFormat ?? '',
+  })
+}
+
+export function hasSourceSchemaFieldChanges(previousSchema, nextSchema) {
+  const previousSignatures = normalizeSourceSchema(previousSchema)
+    .map(buildSchemaFieldComparisonSignature)
+    .filter(Boolean)
+    .sort()
+  const nextSignatures = normalizeSourceSchema(nextSchema)
+    .map(buildSchemaFieldComparisonSignature)
+    .filter(Boolean)
+    .sort()
+
+  if (previousSignatures.length !== nextSignatures.length) return true
+
+  return previousSignatures.some((signature, index) => signature !== nextSignatures[index])
+}
+
 export function resolveSourceSchema(uploadState) {
   const uploadedSchema = normalizeSourceSchema(uploadState?.schema)
   return uploadedSchema.length > 0 ? uploadedSchema : MOCK_SCHEMA

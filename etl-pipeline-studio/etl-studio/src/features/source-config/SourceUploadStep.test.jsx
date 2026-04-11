@@ -32,6 +32,73 @@ function renderStep({ user = null } = {}) {
   )
 }
 
+function seedPersistedWizardState(overrides = {}) {
+  localStorage.setItem('etl-studio-wizard-draft', JSON.stringify({
+    navigationMode: 'etl-config',
+    currentStep: 2,
+    completedSteps: [0, 1],
+    metadata: {
+      productSource: 'ERP',
+      productType: 'Inventory',
+      team: 'data-platform',
+      environment: 'production',
+      entityName: 'Product',
+      tags: '',
+    },
+    source: {
+      sourceType: 'kafka',
+      kafkaEnv: 'production',
+      kafkaTopic: 'source_products_raw',
+      format: 'JSON',
+      streamingContinuity: 'continuous',
+      recordsPerDay: 'millions',
+    },
+    upload: {
+      done: true,
+      schema: [
+        { id: 'sku', path: 'sku', name: 'sku', type: 'string', required: true, nullable: false, isArray: false },
+        { id: 'price', path: 'price', name: 'price', type: 'number', required: false, nullable: false, isArray: false },
+      ],
+      schemaName: 'PreviousSchema',
+      fileName: 'previous.json',
+      fileType: 'application/json',
+      fileSize: 123,
+    },
+    targetSchema: [
+      { id: 'name', path: 'name', name: 'name', type: 'string', required: false },
+    ],
+    mappings: [
+      {
+        src: 'sku',
+        tgt: 'name',
+        srcNodeId: 'src-sku',
+        tgtNodeId: 'tgt-name',
+        srcPos: { x: 40, y: 30 },
+        tgtPos: { x: 650, y: 30 },
+        srcMetadata: { sendToSaknay: true, expression: '' },
+        tgtMetadata: { sendToSaknay: true, expression: '' },
+        transformer: 'none',
+        transformerInputType: 'any',
+        transformerOutputType: 'any',
+        transformerProps: {},
+        extraInputs: [],
+      },
+    ],
+    filters: [],
+    sink: {
+      sinkType: 'kafka',
+      sinkKafkaTopic: 'etl_products_v3',
+      sinkKafkaEnv: 'production',
+      shadow: false,
+      shadowTopic: '',
+      saknay: false,
+      saknayTopic: '',
+      asg: false,
+    },
+    ...overrides,
+  }))
+}
+
 describe('SourceUploadStep', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -343,6 +410,69 @@ describe('SourceUploadStep', () => {
           expect.objectContaining({ id: 'person.*.lastName', type: 'string' }),
         ])
       )
+    })
+  })
+
+  it('clears persisted mappings when a newly uploaded sample changes at least one inferred field', async () => {
+    seedPersistedWizardState()
+    fetchSchemaByExample.mockResolvedValue({
+      name: 'UpdatedSchema',
+      type: 'object',
+      required: ['sku'],
+      properties: {
+        sku: { type: 'string' },
+        price: { type: 'string' },
+      },
+    })
+
+    renderStep()
+
+    const input = screen.getByTestId('sample-file-input')
+    const file = new File(['{"sku":"A-1","price":"19.99"}'], 'updated.json', { type: 'application/json' })
+
+    fireEvent.change(input, { target: { files: [file] } })
+
+    await screen.findByText('Detected Schema')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem('etl-studio-wizard-draft') || '{}')
+      expect(persisted.mappings).toEqual([])
+      expect(persisted.upload).toMatchObject({
+        fileName: 'updated.json',
+        schemaName: 'UpdatedSchema',
+      })
+    })
+  })
+
+  it('keeps persisted mappings when the newly uploaded sample resolves to the same normalized fields', async () => {
+    seedPersistedWizardState()
+    fetchSchemaByExample.mockResolvedValue({
+      name: 'SameFieldsDifferentSample',
+      type: 'object',
+      properties: {
+        price: { type: 'number' },
+        sku: { type: 'string' },
+      },
+      required: ['sku'],
+    })
+
+    renderStep()
+
+    const input = screen.getByTestId('sample-file-input')
+    const file = new File(['{"price":19.99,"sku":"A-1"}'], 'same-fields.json', { type: 'application/json' })
+
+    fireEvent.change(input, { target: { files: [file] } })
+
+    await screen.findByText('Detected Schema')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem('etl-studio-wizard-draft') || '{}')
+      expect(persisted.mappings).toHaveLength(1)
+      expect(persisted.mappings[0]).toMatchObject({ src: 'sku', tgt: 'name' })
+      expect(persisted.upload).toMatchObject({
+        fileName: 'same-fields.json',
+        schemaName: 'SameFieldsDifferentSample',
+      })
     })
   })
 })

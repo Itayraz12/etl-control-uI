@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { Card, CardTitle, Btn, Spinner, TypeBadge, Tooltip } from '../../shared/components/index.jsx'
-import { normalizeSourceSchema } from '../../shared/types/index.js'
+import { hasSourceSchemaFieldChanges, normalizeSourceSchema } from '../../shared/types/index.js'
 import { extractSchemaNameFromExamplePayload, fetchSchemaByExample } from '../../shared/services/configService.js'
 import { useMockMode } from '../../shared/store/mockModeContext.jsx'
 
@@ -47,7 +47,15 @@ export default function SourceUploadStep() {
         throw new Error('Schema inference returned no fields')
       }
 
+      const previousSchema = normalizeSourceSchema(state.upload?.schema)
+      const shouldClearMappings = previousSchema.length > 0
+        && hasSourceSchemaFieldChanges(previousSchema, schema)
+
       const schemaName = extractSchemaNameFromExamplePayload(schemaResponse, file.name.replace(/\.[^.]+$/, ''))
+
+      if (shouldClearMappings) {
+        actions.setMappings([])
+      }
 
       actions.updateUpload({
         done: true,
