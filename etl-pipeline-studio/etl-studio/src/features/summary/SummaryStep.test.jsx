@@ -50,6 +50,10 @@ const mockWizardState = {
     sinkType: 'kafka',
     sinkKafkaTopic: 'catalog-sink',
     sinkKafkaAdditionalProperties: [],
+    sinkRmqVhost: '',
+    sinkRmqPort: '',
+    sinkRmqQueue: '',
+    sinkRmqExchange: '',
   },
   originalDraftYaml: '',
   originalDraftSignature: '',
@@ -168,6 +172,10 @@ describe('SummaryStep save draft behavior', () => {
     mockWizardState.sink.sinkType = 'kafka'
     mockWizardState.sink.sinkKafkaTopic = 'catalog-sink'
     mockWizardState.sink.sinkKafkaAdditionalProperties = []
+    mockWizardState.sink.sinkRmqVhost = ''
+    mockWizardState.sink.sinkRmqPort = ''
+    mockWizardState.sink.sinkRmqQueue = ''
+    mockWizardState.sink.sinkRmqExchange = ''
     mockWizardState.filters = []
     mockActions.setNavigationMode.mockReset()
     mockActions.goTo.mockReset()
@@ -492,6 +500,28 @@ output:
     const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
     expect(yaml).toContain('source:\n  rabbitmq:\n    ip: 10.0.0.12\n    port: 5672\n    username: guest\n    password: secret\n    queue: products.ingest\n    vhost: /etl')
     expect(yaml).not.toContain('source:\n  kafka:')
+  })
+
+  it('serializes RabbitMQ sink config values into the YAML when the rabbitmq sink is selected', async () => {
+    setPassingValidationChecklist()
+    mockWizardState.sink.sinkType = 'rabbitmq'
+    mockWizardState.sink.sinkRmqVhost = '/etl'
+    mockWizardState.sink.sinkRmqPort = '5672'
+    mockWizardState.sink.sinkRmqQueue = 'products.sink'
+    mockWizardState.sink.sinkRmqExchange = 'etl.exchange'
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save & deploy/i }))
+      await Promise.resolve()
+    })
+
+    const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
+    expect(yaml).toContain('output:\n  mapping:')
+    expect(yaml).toContain('  rabbitmq:\n    vhost: /etl\n    port: 5672\n    queue: products.sink\n    exchange: etl.exchange')
+    expect(yaml).not.toContain('\n  kafka:\n    topic: catalog-sink')
+    expect(yaml).not.toContain('additionalConfig:\n')
   })
 
   it('serializes empty shadow_topic as an empty YAML value', async () => {

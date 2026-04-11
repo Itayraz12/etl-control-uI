@@ -407,12 +407,32 @@ ${nestedInputMappingYaml}` : ''}
     const sinkAdditionalConfigYaml = state.sink.sinkType === 'kafka'
       ? formatKeyValueYamlSection('additionalConfig', state.sink.sinkKafkaAdditionalProperties, '')
       : ''
-    const outputKafkaYaml = [
-      '  kafka:',
-      `    topic: ${String(state.sink.sinkKafkaTopic || '').trim()}`,
-      ...(state.sink.shadow ? [`    shadow_topic: ${String(state.sink.shadowTopic || '').trim()}`] : []),
-      ...(hasSaknayTargets ? [`    saknay_topic: ${String(state.sink.saknayTopic || '').trim()}`] : []),
-    ].join('\n')
+    const outputSinkYaml = (() => {
+      const sinkType = String(state.sink.sinkType || '').trim().toLowerCase()
+
+      if (sinkType === 'rabbitmq') {
+        return [
+          '  rabbitmq:',
+          `    vhost: ${String(state.sink.sinkRmqVhost || '').trim()}`,
+          `    port: ${String(state.sink.sinkRmqPort || '').trim()}`,
+          `    queue: ${String(state.sink.sinkRmqQueue || '').trim()}`,
+          ...(String(state.sink.sinkRmqExchange || '').trim()
+            ? [`    exchange: ${String(state.sink.sinkRmqExchange || '').trim()}`]
+            : []),
+        ].join('\n')
+      }
+
+      if (sinkType === 'kafka') {
+        return [
+          '  kafka:',
+          `    topic: ${String(state.sink.sinkKafkaTopic || '').trim()}`,
+          ...(state.sink.shadow ? [`    shadow_topic: ${String(state.sink.shadowTopic || '').trim()}`] : []),
+          ...(hasSaknayTargets ? [`    saknay_topic: ${String(state.sink.saknayTopic || '').trim()}`] : []),
+        ].join('\n')
+      }
+
+      return ''
+    })()
     const metadataLocation = normalizeMetadataLocation(state.metadata.location, state.metadata.environment)
 
     const generalFormat = state.source.format === 'CSV' ? 'delimited' : state.source.format
@@ -465,8 +485,8 @@ ${state.mappings.map(m => {
   }
   return mapping
 }).join('\n')}
-${outputKafkaYaml ? `
-${outputKafkaYaml}` : ''}
+${outputSinkYaml ? `
+${outputSinkYaml}` : ''}
 ${transformations.length > 0 ? `
 transformations:
 ${transformations.join('\n')}` : ''}
