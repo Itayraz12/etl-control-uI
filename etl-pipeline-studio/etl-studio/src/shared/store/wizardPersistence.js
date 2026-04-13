@@ -33,7 +33,7 @@ export function parsePersistedWizardState(raw) {
       upload: parsed.upload && typeof parsed.upload === 'object' ? parsed.upload : undefined,
       targetSchema: Array.isArray(parsed.targetSchema) || (parsed.targetSchema && typeof parsed.targetSchema === 'object') ? parsed.targetSchema : undefined,
       sink: parsed.sink && typeof parsed.sink === 'object' ? parsed.sink : undefined,
-      navigationMode: ['menu', 'etl-config', 'etl-management'].includes(parsed.navigationMode) ? parsed.navigationMode : 'menu',
+      navigationMode: ['menu', 'etl-config', 'etl-management', 'etl-admin'].includes(parsed.navigationMode) ? parsed.navigationMode : 'menu',
       theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'dark',
     }
   } catch {

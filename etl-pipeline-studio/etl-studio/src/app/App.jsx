@@ -7,8 +7,8 @@ import StepBar     from '../features/etl-wizard/StepBar.jsx'
 import WizardShell from '../features/etl-wizard/WizardShell.jsx'
 import WizardFooter from '../features/etl-wizard/WizardFooter.jsx'
 import { SummaryFooterProvider } from '../features/summary/summaryFooterContext.jsx'
-import ETLManagementScreen from '../features/etl-wizard/ETLManagementScreen.jsx'
 import LoginPage from '../features/etl-wizard/LoginPage.jsx';
+import AdminWorkspace from '../features/admin/AdminWorkspace.jsx'
 
 function AppShell({ children }) {
   return (
@@ -91,8 +91,8 @@ function AppContent() {
     )
   }
 
-  // Show ETL Management
-  if (state.navigationMode === 'etl-management') {
+  // Show management/admin workspace
+  if (state.navigationMode === 'etl-management' || state.navigationMode === 'etl-admin') {
     return (
       <div style={{
         display: 'flex',
@@ -102,7 +102,7 @@ function AppContent() {
         background: 'var(--bg)',
       }}>
         <TopNav />
-        <ETLManagementScreen />
+        <AdminWorkspace />
       </div>
     )
   }

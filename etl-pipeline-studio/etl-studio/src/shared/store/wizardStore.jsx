@@ -22,7 +22,7 @@ function getPreviewStateStorageKey(search = window.location.search) {
 
 const initialState = {
   // Global navigation mode
-  navigationMode: 'menu', // 'menu' | 'etl-config' | 'etl-management'
+  navigationMode: 'menu', // 'menu' | 'etl-config' | 'etl-management' | 'etl-admin'
   currentStep: 0,
   furthestStepVisited: 0,
   completedSteps: new Set(),

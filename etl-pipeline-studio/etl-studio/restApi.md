@@ -240,6 +240,188 @@ Server-Sent Events stream for deploy/upgrade progress.
 
 ---
 
+## 7. Admin APIs
+
+These endpoints are used by the admin-only workspace added for team and user management.
+
+All admin requests are sent through `fetchWithUserId(...)`, so the frontend also includes the current user header:
+
+- Header: `X-user-ID: <logged-in-user-id>`
+
+### GET `/backend/admin/teams`
+Fetches teams for the Team Management table and the team options used by User Management.
+
+- Method: `GET`
+- Full default URL: `http://localhost:8080/api/backend/admin/teams`
+- Headers used by frontend:
+  - `Accept: application/json, text/plain`
+- Service: `src/shared/services/adminService.js`
+- Consumed by:
+  - `src/features/admin/TeamManagementTable.jsx`
+  - `src/features/admin/UserManagementTable.jsx`
+
+Expected response shape used by the frontend:
+
+```json
+[
+  {
+    "id": "team-data-platform",
+    "teamName": "data-platform",
+    "devopsName": "platform-devops",
+    "createdAt": "2026-01-10T09:00:00.000Z",
+    "updatedAt": "2026-03-08T14:20:00.000Z"
+  }
+]
+```
+
+The frontend also accepts these aliases when normalizing the payload:
+
+- `teamName` / `team` / `name`
+- `devopsName` / `devops` / `devopsOwner` / `devops_name`
+- `createdAt` / `dateOfCreate` / `createdDate` / `created_at`
+- `updatedAt` / `dateOfChange` / `modifiedAt` / `updated_at`
+
+### POST `/backend/admin/teams`
+Creates a new team.
+
+- Method: `POST`
+- Full default URL: `http://localhost:8080/api/backend/admin/teams`
+- Headers used by frontend:
+  - `Content-Type: application/json`
+  - `Accept: application/json, text/plain`
+- Body:
+
+```json
+{
+  "teamName": "data-platform",
+  "devopsName": "platform-devops"
+}
+```
+
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/TeamManagementTable.jsx`
+
+### PUT `/backend/admin/teams/{id}`
+Updates an existing team row.
+
+- Method: `PUT`
+- Full default URL example: `http://localhost:8080/api/backend/admin/teams/team-data-platform`
+- Path params:
+  - `id`
+- Headers used by frontend:
+  - `Content-Type: application/json`
+  - `Accept: application/json, text/plain`
+- Body:
+
+```json
+{
+  "teamName": "data-platform",
+  "devopsName": "platform-devops"
+}
+```
+
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/TeamManagementTable.jsx`
+
+### DELETE `/backend/admin/teams/{id}`
+Deletes a team row.
+
+- Method: `DELETE`
+- Full default URL example: `http://localhost:8080/api/backend/admin/teams/team-data-platform`
+- Path params:
+  - `id`
+- Headers used by frontend:
+  - `Accept: application/json, text/plain`
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/TeamManagementTable.jsx`
+
+### GET `/backend/admin/users`
+Fetches users for the User Management table.
+
+- Method: `GET`
+- Full default URL: `http://localhost:8080/api/backend/admin/users`
+- Headers used by frontend:
+  - `Accept: application/json, text/plain`
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/UserManagementTable.jsx`
+
+Expected response shape used by the frontend:
+
+```json
+[
+  {
+    "id": "alice",
+    "userId": "alice",
+    "teamName": "data-platform",
+    "createdAt": "2026-01-15T10:00:00.000Z",
+    "updatedAt": "2026-03-09T13:10:00.000Z"
+  }
+]
+```
+
+The frontend also accepts these aliases when normalizing the payload:
+
+- `userId` / `userID` / `username` / `id`
+- `teamName` / `team` / `team_name`
+- `createdAt` / `dateOfCreate` / `createdDate` / `created_at`
+- `updatedAt` / `dateOfChange` / `modifiedAt` / `updated_at`
+
+### POST `/backend/admin/users`
+Creates a new user row.
+
+- Method: `POST`
+- Full default URL: `http://localhost:8080/api/backend/admin/users`
+- Headers used by frontend:
+  - `Content-Type: application/json`
+  - `Accept: application/json, text/plain`
+- Body:
+
+```json
+{
+  "userId": "alice",
+  "teamName": "data-platform"
+}
+```
+
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/UserManagementTable.jsx`
+
+### PUT `/backend/admin/users/{id}`
+Updates an existing user row.
+
+- Method: `PUT`
+- Full default URL example: `http://localhost:8080/api/backend/admin/users/alice`
+- Path params:
+  - `id`
+- Headers used by frontend:
+  - `Content-Type: application/json`
+  - `Accept: application/json, text/plain`
+- Body:
+
+```json
+{
+  "userId": "alice",
+  "teamName": "analytics"
+}
+```
+
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/UserManagementTable.jsx`
+
+### DELETE `/backend/admin/users/{id}`
+Deletes a user row.
+
+- Method: `DELETE`
+- Full default URL example: `http://localhost:8080/api/backend/admin/users/alice`
+- Path params:
+  - `id`
+- Headers used by frontend:
+  - `Accept: application/json, text/plain`
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/UserManagementTable.jsx`
+
+---
+
 ## Quick List
 
 ```text
@@ -265,6 +447,16 @@ DELETE /backend/deployments/delete
 POST   /backend/deployments/{id}/restore
 
 SSE    /backend/deployments/{deploymentId}/progress
+
+GET    /backend/admin/teams
+POST   /backend/admin/teams
+PUT    /backend/admin/teams/{id}
+DELETE /backend/admin/teams/{id}
+
+GET    /backend/admin/users
+POST   /backend/admin/users
+PUT    /backend/admin/users/{id}
+DELETE /backend/admin/users/{id}
 ```
 
 ---
@@ -289,6 +481,7 @@ Core services:
 - `src/shared/services/kafkaService.js`
 - `src/shared/services/configService.js`
 - `src/shared/services/deploymentsService.js`
+- `src/shared/services/adminService.js`
 
 Main consumers:
 
@@ -299,6 +492,10 @@ Main consumers:
 - `src/features/source-config/SourceConfigStep.jsx`
 - `src/features/summary/SummaryStep.jsx`
 - `src/features/etl-wizard/ETLManagementScreen.jsx`
+- `src/features/admin/AdminWorkspace.jsx`
+- `src/features/admin/AdminScreen.jsx`
+- `src/features/admin/TeamManagementTable.jsx`
+- `src/features/admin/UserManagementTable.jsx`
 
 ---
 
