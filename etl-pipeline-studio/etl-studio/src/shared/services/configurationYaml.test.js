@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { compactYamlDocument, formatTransformationYamlItem, quoteYamlDoubleQuoted, formatInputFieldsYamlSection, formatKeyValueYamlSection, formatFiltersYamlSection } from './configurationYaml.js'
 import { formatFilterYamlItem } from './configurationYaml.js'
 import { hydrateWizardStateFromYaml } from './configurationHydrator.js'
@@ -488,6 +488,97 @@ sink:
       shadowTopic: '',
       saknayTopic: '',
     })
+  })
+
+  it('hydrates productCode and saknayTopic from the new output.saknay section', () => {
+    const yaml = `metadata:
+  genomeEntity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+general:
+  inputFormat: JSON
+  outputFormat: JSON
+  isSaknayEnabled: true
+source:
+  kafka:
+    topic: source_products_raw
+input:
+  convert:
+    mapping:
+      - name: id
+        type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+      sendToSaknay: true
+  kafka:
+    topic: etl_products_v3
+  saknay:
+    productCode: "PC-42"
+    saknay_topic: dog-topic
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.metadata.productCode).toBe('PC-42')
+    expect(state.sink.saknay).toBe(true)
+    expect(state.sink.saknayTopic).toBe('dog-topic')
+  })
+
+  it('hydrates productCode and saknayTopic from an env-driven Saknay output section', async () => {
+    vi.stubEnv('VITE_SAKNAY_LABEL', 'Dog')
+    vi.resetModules()
+
+    const { hydrateWizardStateFromYaml: hydrateWithDogLabel } = await import('./configurationHydrator.js')
+
+    const yaml = `metadata:
+  genomeEntity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+general:
+  inputFormat: JSON
+  outputFormat: JSON
+  isDogEnabled: true
+source:
+  kafka:
+    topic: source_products_raw
+input:
+  convert:
+    mapping:
+      - name: id
+        type: string
+output:
+  mapping:
+    - inName: id
+      outName: name
+      sendToDog: true
+  kafka:
+    topic: etl_products_v3
+  dog:
+    productCode: "PC-99"
+    dog_topic: wolf-topic
+`
+
+    const state = hydrateWithDogLabel(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.metadata.productCode).toBe('PC-99')
+    expect(state.sink.saknay).toBe(true)
+    expect(state.sink.saknayTopic).toBe('wolf-topic')
   })
 
   it('hydrates canonical genomeEntity metadata key', () => {

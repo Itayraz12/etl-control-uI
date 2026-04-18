@@ -1,4 +1,13 @@
 import { normalizeMetadataLocation } from '../types/index.js'
+import {
+  ASG_YAML_FLAG_KEY,
+  PRODUCT_CODE_YAML_KEY,
+  SAKNAY_TOPIC_YAML_KEY,
+  SAKNAY_YAML_FLAG_KEY,
+  SHADOW_TOPIC_YAML_KEY,
+  SHADOW_YAML_FLAG_KEY,
+  TARGET_SAKNAY_YAML_KEY,
+} from './appConfig.js'
 
 function sortDeep(value) {
   if (Array.isArray(value)) {
@@ -125,6 +134,15 @@ export function buildPipelineChangeSignature(state = {}) {
       saknay: Boolean(state?.sink?.saknay),
       saknayTopic: state?.sink?.saknayTopic || '',
       asg: Boolean(state?.sink?.asg),
+    },
+    yamlAliases: {
+      productCode: PRODUCT_CODE_YAML_KEY,
+      shadowFlag: SHADOW_YAML_FLAG_KEY,
+      shadowTopic: SHADOW_TOPIC_YAML_KEY,
+      asgFlag: ASG_YAML_FLAG_KEY,
+      saknayFlag: SAKNAY_YAML_FLAG_KEY,
+      saknayTopic: SAKNAY_TOPIC_YAML_KEY,
+      targetSaknayFlag: TARGET_SAKNAY_YAML_KEY,
     },
   }
 

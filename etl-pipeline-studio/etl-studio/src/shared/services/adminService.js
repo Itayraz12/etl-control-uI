@@ -3,6 +3,10 @@ import { fetchWithUserId } from './requestHeaders.js'
 
 const ADMIN_TEAMS_PATH = `${API_BASE}/backend/admin/teams`
 const ADMIN_USERS_PATH = `${API_BASE}/backend/admin/users`
+const ADMIN_UDFS_PATH = `${API_BASE}/backend/admin/udfs`
+
+const VALID_UDF_TYPES = new Set(['transformer', 'filter'])
+const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-.]+)?(?:\+[0-9A-Za-z-.]+)?$/
 
 const INITIAL_MOCK_TEAMS = [
   {
@@ -38,8 +42,54 @@ const INITIAL_MOCK_USERS = [
   },
 ]
 
+const INITIAL_MOCK_UDFS = [
+  {
+    id: 'udf-1',
+    name: 'data_cleaner',
+    type: 'transformer',
+    description: 'Cleans and normalizes data fields',
+    isActive: true,
+    isApproved: true,
+    version: '1.2.0',
+    filePath: '/path/to/udf/file',
+    team: 'data_team',
+    dateApproved: '2026-04-10T10:30:00.000Z',
+    createdAt: '2026-03-18T10:30:00.000Z',
+    updatedAt: '2026-04-12T10:30:00.000Z',
+  },
+  {
+    id: 'udf-2',
+    name: 'duplicate_filter',
+    type: 'filter',
+    description: 'Filters out duplicate records based on key fields',
+    isActive: true,
+    isApproved: true,
+    version: '2.1.3',
+    filePath: '/path/to/udf/file',
+    team: 'data_team',
+    dateApproved: '2026-04-09T08:15:00.000Z',
+    createdAt: '2026-03-22T10:30:00.000Z',
+    updatedAt: '2026-04-11T10:30:00.000Z',
+  },
+  {
+    id: 'udf-3',
+    name: 'email_normalizer',
+    type: 'transformer',
+    description: 'Normalizes email addresses to lowercase and validates format',
+    isActive: true,
+    isApproved: true,
+    version: '1.0.5',
+    filePath: '/path/to/udf/file',
+    team: 'data_team',
+    dateApproved: '2026-04-08T12:05:00.000Z',
+    createdAt: '2026-03-20T10:30:00.000Z',
+    updatedAt: '2026-04-10T10:30:00.000Z',
+  },
+]
+
 let mockTeamsStore = INITIAL_MOCK_TEAMS.map(team => ({ ...team }))
 let mockUsersStore = INITIAL_MOCK_USERS.map(user => ({ ...user }))
+let mockUdfsStore = INITIAL_MOCK_UDFS.map(udf => ({ ...udf }))
 
 function asTrimmedString(value, fallback = '') {
   if (value == null) return fallback
@@ -53,6 +103,26 @@ function normalizeDateValue(value) {
 
   const date = new Date(normalizedValue)
   return Number.isNaN(date.getTime()) ? normalizedValue : date.toISOString()
+}
+
+function normalizeNullableDateValue(value) {
+  const normalizedValue = asTrimmedString(value)
+  if (!normalizedValue) return null
+
+  const date = new Date(normalizedValue)
+  return Number.isNaN(date.getTime()) ? normalizedValue : date.toISOString()
+}
+
+function normalizeBooleanValue(value, fallback = false) {
+  if (typeof value === 'boolean') return value
+  if (value == null || value === '') return fallback
+  if (typeof value === 'number') return value !== 0
+
+  const normalizedValue = String(value).trim().toLowerCase()
+  if (['true', '1', 'yes', 'y'].includes(normalizedValue)) return true
+  if (['false', '0', 'no', 'n'].includes(normalizedValue)) return false
+
+  return fallback
 }
 
 function extractCollectionPayload(payload) {
@@ -134,6 +204,29 @@ export function normalizeAdminUser(record, index = 0) {
   }
 }
 
+export function normalizeAdminUDF(record, index = 0) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return null
+
+  const name = asTrimmedString(record.name ?? record.udfName ?? record.udf_name)
+  const normalizedType = asTrimmedString(record.type ?? record.udfType ?? record.udf_type).toLowerCase()
+  if (!name || !VALID_UDF_TYPES.has(normalizedType)) return null
+
+  return {
+    id: asTrimmedString(record.id ?? record.udfId ?? record.udf_id, `udf-${index + 1}`),
+    name,
+    type: normalizedType,
+    description: asTrimmedString(record.description ?? record.details ?? record.summary),
+    isActive: normalizeBooleanValue(record.isActive ?? record.active ?? record.is_active, true),
+    isApproved: normalizeBooleanValue(record.isApproved ?? record.approved ?? record.is_approved, false),
+    version: asTrimmedString(record.version ?? record.udfVersion ?? record.udf_version),
+    filePath: asTrimmedString(record.filePath ?? record.path ?? record.file_path),
+    team: asTrimmedString(record.team ?? record.teamName ?? record.team_name),
+    dateApproved: normalizeNullableDateValue(record.dateApproved ?? record.approvedAt ?? record.date_approved),
+    createdAt: normalizeDateValue(record.createdAt ?? record.dateOfCreate ?? record.createdDate ?? record.created_at),
+    updatedAt: normalizeDateValue(record.updatedAt ?? record.modifiedAt ?? record.dateOfChange ?? record.updated_at),
+  }
+}
+
 function normalizeAdminTeams(payload) {
   return extractCollectionPayload(payload)
     .map(normalizeAdminTeam)
@@ -146,9 +239,44 @@ function normalizeAdminUsers(payload) {
     .filter(Boolean)
 }
 
+function normalizeAdminUDFs(payload) {
+  return extractCollectionPayload(payload)
+    .map(normalizeAdminUDF)
+    .filter(Boolean)
+}
+
+function validateMockUdfUpdatePayload(udf) {
+  if (!udf || typeof udf !== 'object' || Array.isArray(udf)) {
+    throw new Error('Invalid UDF update payload.')
+  }
+
+  if (typeof udf.isApproved !== 'boolean') {
+    throw new Error('UDF approval status must be provided as a boolean.')
+  }
+}
+
+function validateNormalizedUdfRecord(udf, existingUdfs = [], previousId = '') {
+  if (!udf?.name) throw new Error('UDF name is required.')
+  if (!VALID_UDF_TYPES.has(udf.type)) throw new Error('UDF type must be either "transformer" or "filter".')
+  if (typeof udf.isApproved !== 'boolean') throw new Error('UDF approval status is required.')
+  if (typeof udf.isActive !== 'boolean') throw new Error('UDF active status must be a boolean value.')
+  if (udf.version && !SEMVER_PATTERN.test(udf.version)) {
+    throw new Error('UDF version must follow semantic versioning, for example "1.2.0".')
+  }
+
+  const duplicateName = existingUdfs.find(existingUdf => (
+    existingUdf.id !== previousId && existingUdf.name.toLowerCase() === udf.name.toLowerCase()
+  ))
+
+  if (duplicateName) {
+    throw new Error(`A UDF named "${udf.name}" already exists.`)
+  }
+}
+
 export function resetAdminServiceMockData() {
   mockTeamsStore = INITIAL_MOCK_TEAMS.map(team => ({ ...team }))
   mockUsersStore = INITIAL_MOCK_USERS.map(user => ({ ...user }))
+  mockUdfsStore = INITIAL_MOCK_UDFS.map(udf => ({ ...udf }))
 }
 
 export async function fetchAdminTeams(useMock = true) {
@@ -270,6 +398,89 @@ export async function fetchAdminUsers(useMock = true) {
   })
   const payload = await ensureOkResponse(response, 'Failed to fetch users')
   return normalizeAdminUsers(payload)
+}
+
+export async function fetchAdminUDFs(useMock = true) {
+  if (useMock) {
+    await new Promise(resolve => setTimeout(resolve, 80))
+    return mockUdfsStore.map(udf => ({ ...udf }))
+  }
+
+  const response = await fetchWithUserId(ADMIN_UDFS_PATH, {
+    headers: {
+      Accept: 'application/json, text/plain',
+    },
+  })
+  const payload = await ensureOkResponse(response, 'Failed to fetch UDFs')
+  return normalizeAdminUDFs(payload)
+}
+
+export async function updateAdminUDF(udfId, udf, useMock = true) {
+  const normalizedUdfId = asTrimmedString(udfId)
+  const payload = {
+    isApproved: udf?.isApproved,
+  }
+
+  if (useMock) {
+    validateMockUdfUpdatePayload(payload)
+    await new Promise(resolve => setTimeout(resolve, 80))
+
+    const existingUdf = mockUdfsStore.find(candidate => candidate.id === normalizedUdfId)
+    if (!existingUdf) {
+      throw new Error(`UDF "${normalizedUdfId}" was not found.`)
+    }
+
+    const now = new Date().toISOString()
+    const nextIsApproved = payload.isApproved
+    const updatedUdf = normalizeAdminUDF({
+      ...existingUdf,
+      isApproved: nextIsApproved,
+      dateApproved: nextIsApproved
+        ? (existingUdf.dateApproved || now)
+        : null,
+      updatedAt: now,
+    })
+
+    validateNormalizedUdfRecord(updatedUdf, mockUdfsStore, normalizedUdfId)
+    mockUdfsStore = mockUdfsStore.map(candidate => candidate.id === normalizedUdfId ? updatedUdf : candidate)
+    return updatedUdf
+  }
+
+  const response = await fetchWithUserId(`${ADMIN_UDFS_PATH}/${encodeURIComponent(normalizedUdfId)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/plain',
+    },
+    body: JSON.stringify(payload),
+  })
+  const updatedPayload = await ensureOkResponse(response, 'Failed to update UDF approval status')
+  return normalizeAdminUDF(updatedPayload)
+}
+
+export async function deleteAdminUDF(udfId, useMock = true) {
+  const normalizedUdfId = asTrimmedString(udfId)
+
+  if (useMock) {
+    await new Promise(resolve => setTimeout(resolve, 80))
+    const existingCount = mockUdfsStore.length
+    mockUdfsStore = mockUdfsStore.filter(udf => udf.id !== normalizedUdfId)
+
+    if (mockUdfsStore.length === existingCount) {
+      throw new Error(`UDF "${normalizedUdfId}" was not found.`)
+    }
+
+    return { success: true }
+  }
+
+  const response = await fetchWithUserId(`${ADMIN_UDFS_PATH}/${encodeURIComponent(normalizedUdfId)}`, {
+    method: 'DELETE',
+    headers: {
+      Accept: 'application/json, text/plain',
+    },
+  })
+  await ensureOkResponse(response, 'Failed to delete UDF')
+  return { success: true }
 }
 
 export async function createAdminUser(user, useMock = true) {

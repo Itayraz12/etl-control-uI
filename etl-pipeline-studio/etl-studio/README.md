@@ -51,6 +51,10 @@ The UI reads these Vite environment variables at build time:
 | `VITE_API_BASE` | `http://localhost:8080/api` | Base URL for all live backend API calls |
 | `VITE_AUTH_AES_KEY` | `MDEyMzQ1Njc4OWFiY2RlZg==` | Base64-encoded shared AES key used to AES-GCM encrypt the live-login `username` and `password` payload fields |
 | `VITE_APP_VERSION` | `package.json` version | UI version label override shown in the app chrome |
+| `VITE_PRODUCT_CODE_LABEL` | `Product Code` | Display label used for the metadata product code field |
+| `VITE_SHADOW_LABEL` | `SHADOW` | Display label used for the data-catalog shadow option in sink configuration |
+| `VITE_ASG_LABEL` | `ASG` | Display label used for the data-catalog ASG option in sink configuration |
+| `VITE_SAKNAY_LABEL` | `Saknay` | Display label used for Saknay routing controls in field mapping and sink configuration |
 | `VITE_IDLE_LOGOUT_MINUTES` | `15` | Logs out the active user after this many minutes of inactivity |
 | `VITE_SCOPE_RESET_GRACE_MINUTES` | `10` | Clears a timed-out user's saved wizard scope after this many additional minutes |
 
@@ -60,6 +64,10 @@ Example `.env` values:
 VITE_API_BASE=http://localhost:8080/api
 VITE_AUTH_AES_KEY=MDEyMzQ1Njc4OWFiY2RlZg==
 VITE_APP_VERSION=1.2.3-build.7
+VITE_PRODUCT_CODE_LABEL=External Param
+VITE_SHADOW_LABEL=Shadow
+VITE_ASG_LABEL=Asgard
+VITE_SAKNAY_LABEL=Saknay
 VITE_IDLE_LOGOUT_MINUTES=20
 VITE_SCOPE_RESET_GRACE_MINUTES=15
 ```
@@ -70,6 +78,10 @@ Example `.env.development` values for local proxy-based development:
 VITE_API_BASE=/api
 VITE_AUTH_AES_KEY=MDEyMzQ1Njc4OWFiY2RlZg==
 VITE_APP_VERSION=
+VITE_PRODUCT_CODE_LABEL=Product Code
+VITE_SHADOW_LABEL=SHADOW
+VITE_ASG_LABEL=ASG
+VITE_SAKNAY_LABEL=Saknay
 VITE_IDLE_LOGOUT_MINUTES=15
 VITE_SCOPE_RESET_GRACE_MINUTES=10
 ```

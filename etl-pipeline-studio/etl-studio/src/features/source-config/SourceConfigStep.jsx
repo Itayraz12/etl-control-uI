@@ -1,7 +1,7 @@
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useEffect, useState } from 'react'
 import { Card, CardTitle, FormRow, FormGroup, CfgPanel, Btn, Tooltip } from '../../shared/components/index.jsx'
-import { SOURCE_TYPES, ENVIRONMENTS } from '../../shared/types/index.js'
+import { ENVIRONMENT_OPTIONS, SOURCE_TYPES } from '../../shared/types/index.js'
 import { testKafkaConnection } from '../../shared/services/kafkaService.js'
 import { testRabbitMqConnection } from '../../shared/services/rabbitmqService.js'
 
@@ -54,7 +54,7 @@ function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
     }
 
     setKafkaTestState({ status: 'idle', message: '' })
-  }, [type, state.kafkaTopic, state.kafkaEnv, metadata?.environment])
+  }, [type, state.kafkaTopic, state.kafkaEnv])
 
   useEffect(() => {
     if (type !== 'rabbitmq') {
@@ -69,12 +69,12 @@ function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
     if (readOnly) return
 
     const topic = String(state.kafkaTopic || '').trim()
-    const environment = String(state.kafkaEnv || metadata?.environment || '').trim()
+    const environment = String(state.kafkaEnv || '').trim()
 
     if (!topic || !environment) {
       setKafkaTestState({
         status: 'error',
-        message: 'Topic and environment are required to test the Kafka connection.',
+        message: 'Topic and Kafka environment are required to test the Kafka connection.',
       })
       return
     }
@@ -136,9 +136,11 @@ function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
     <CfgPanel title="☕ Kafka Source">
       <FormRow>
         <FormGroup label="Environment" required>
-          <select value={state.kafkaEnv || metadata?.environment || ''} onChange={e => u('kafkaEnv', e.target.value)}>
+          <select aria-label="Environment" value={state.kafkaEnv || ''} onChange={e => u('kafkaEnv', e.target.value)}>
             <option value="">select an environment...</option>
-            {ENVIRONMENTS.map(o => <option key={o} value={o}>{o}</option>)}
+            {ENVIRONMENT_OPTIONS.map(option => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
           </select>
         </FormGroup>
         <FormGroup label="Topic" required>

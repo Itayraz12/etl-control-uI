@@ -33,7 +33,7 @@ export function parsePersistedWizardState(raw) {
       upload: parsed.upload && typeof parsed.upload === 'object' ? parsed.upload : undefined,
       targetSchema: Array.isArray(parsed.targetSchema) || (parsed.targetSchema && typeof parsed.targetSchema === 'object') ? parsed.targetSchema : undefined,
       sink: parsed.sink && typeof parsed.sink === 'object' ? parsed.sink : undefined,
-      navigationMode: ['menu', 'etl-config', 'etl-management', 'etl-admin'].includes(parsed.navigationMode) ? parsed.navigationMode : 'menu',
+      navigationMode: ['menu', 'etl-config', 'etl-management', 'etl-admin', 'udf-admin'].includes(parsed.navigationMode) ? parsed.navigationMode : 'menu',
       theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'dark',
     }
   } catch {
@@ -81,6 +81,9 @@ export function buildStateFromPersisted(baseState, persistedState) {
   const metadata = persistedState.metadata
     ? { ...baseState.metadata, ...persistedState.metadata }
     : baseState.metadata
+  const metadataEnvironment = String(metadata?.environment || '').trim()
+  const source = persistedState.source ? { ...baseState.source, ...persistedState.source } : baseState.source
+  const sink = persistedState.sink ? { ...baseState.sink, ...persistedState.sink } : baseState.sink
 
   return {
     ...baseState,
@@ -89,10 +92,16 @@ export function buildStateFromPersisted(baseState, persistedState) {
       ...metadata,
       location: normalizeMetadataLocation(metadata?.location, metadata?.environment),
     },
-    source: persistedState.source ? { ...baseState.source, ...persistedState.source } : baseState.source,
+    source: {
+      ...source,
+      kafkaEnv: String(source?.kafkaEnv || '').trim() || metadataEnvironment,
+    },
     upload: persistedState.upload ? { ...baseState.upload, ...persistedState.upload } : baseState.upload,
     targetSchema: persistedState.targetSchema ?? baseState.targetSchema,
-    sink: persistedState.sink ? { ...baseState.sink, ...persistedState.sink } : baseState.sink,
+    sink: {
+      ...sink,
+      sinkKafkaEnv: String(sink?.sinkKafkaEnv || '').trim() || metadataEnvironment,
+    },
   }
 }
 

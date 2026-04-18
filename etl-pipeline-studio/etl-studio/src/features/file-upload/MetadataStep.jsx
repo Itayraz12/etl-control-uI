@@ -9,11 +9,12 @@ import {
 } from '../../shared/services/configService.js'
 import {
   normalizeSourceSchema,
-  ENVIRONMENTS,
+  ENVIRONMENT_OPTIONS,
   getAllowedMetadataLocations,
   isProductionEnvironment,
   normalizeMetadataLocation,
 } from '../../shared/types/index.js'
+import { PRODUCT_CODE_LABEL } from '../../shared/services/appConfig.js'
 import { Card, CardTitle, FormRow, FormGroup } from '../../shared/components/index.jsx'
 
 export default function MetadataStep() {
@@ -120,7 +121,7 @@ export default function MetadataStep() {
             </FormGroup>
           </FormRow>
           <FormRow>
-            <FormGroup label="Product Code">
+            <FormGroup label={PRODUCT_CODE_LABEL}>
               <input
                 value={metadata.productCode || ''}
                 onChange={e => handleProductCodeChange(e.target.value)}
@@ -155,7 +156,9 @@ export default function MetadataStep() {
                 })}
               >
                 <option value="">select an environment...</option>
-                {ENVIRONMENTS.map(o => <option key={o} value={o}>{o}</option>)}
+                {ENVIRONMENT_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </FormGroup>
             <FormGroup label="Location" required={hasEnvironment}>

@@ -22,6 +22,45 @@ const TABLE_CELL_STYLE = {
   verticalAlign: 'middle',
 }
 
+const MESSAGE_SLOT_STYLE = {
+  minHeight: 44,
+  marginBottom: 12,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+  gap: 8,
+}
+
+const NOTICE_BANNER_STYLE = {
+  padding: '10px 12px',
+  borderRadius: 8,
+  border: '1px solid rgba(34,197,94,.28)',
+  background: 'rgba(34,197,94,.10)',
+  color: 'var(--success)',
+  fontSize: 12,
+  fontWeight: 600,
+}
+
+const ERROR_BANNER_STYLE = {
+  padding: '10px 12px',
+  borderRadius: 8,
+  border: '1px solid rgba(239,68,68,.28)',
+  background: 'rgba(239,68,68,.10)',
+  color: 'var(--danger)',
+  fontSize: 12,
+  fontWeight: 600,
+}
+
+const FORM_ERROR_BANNER_STYLE = {
+  padding: '10px 12px',
+  borderRadius: 8,
+  border: '1px solid rgba(245,158,11,.28)',
+  background: 'rgba(245,158,11,.10)',
+  color: 'var(--warning)',
+  fontSize: 12,
+  fontWeight: 600,
+}
+
 const INPUT_STYLE = {
   width: '100%',
   padding: '8px 10px',
@@ -190,23 +229,25 @@ export default function UserManagementTable() {
           </Btn>
         </CardTitle>
 
-        {notice && (
-          <div data-testid="user-management-notice" style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(34,197,94,.28)', background: 'rgba(34,197,94,.10)', color: 'var(--success)', fontSize: 12, fontWeight: 600 }}>
-            {notice}
-          </div>
-        )}
+        <div data-testid="user-management-message-slot" style={MESSAGE_SLOT_STYLE}>
+          {notice && (
+            <div data-testid="user-management-notice" style={NOTICE_BANNER_STYLE}>
+              {notice}
+            </div>
+          )}
 
-        {screenError && (
-          <div data-testid="user-management-error" style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(239,68,68,.28)', background: 'rgba(239,68,68,.10)', color: 'var(--danger)', fontSize: 12, fontWeight: 600 }}>
-            {screenError}
-          </div>
-        )}
+          {screenError && (
+            <div data-testid="user-management-error" style={ERROR_BANNER_STYLE}>
+              {screenError}
+            </div>
+          )}
 
-        {formError && editingKey && (
-          <div data-testid="user-management-form-error" style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(245,158,11,.28)', background: 'rgba(245,158,11,.10)', color: 'var(--warning)', fontSize: 12, fontWeight: 600 }}>
-            {formError}
-          </div>
-        )}
+          {formError && editingKey && (
+            <div data-testid="user-management-form-error" style={FORM_ERROR_BANNER_STYLE}>
+              {formError}
+            </div>
+          )}
+        </div>
 
         {loading ? (
           <div style={{ minHeight: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

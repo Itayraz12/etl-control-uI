@@ -1,6 +1,10 @@
 import { MOCK_SCHEMA, normalizeSourceSchema, TARGET_FIELDS } from '../types/index.js'
 import { upsertSavedDraftDeployment } from './deploymentsService.js'
-import { API_BASE } from './appConfig.js'
+import {
+  API_BASE,
+  SAKNAY_TOPIC_YAML_KEY,
+  TARGET_SAKNAY_YAML_KEY,
+} from './appConfig.js'
 import { compactYamlDocument } from './configurationYaml.js'
 import { fetchWithUserId } from './requestHeaders.js'
 
@@ -618,15 +622,17 @@ output:
     - inName: productName
       outName: name
       sendToGP: true
-      sendToSaknay: true
+      ${TARGET_SAKNAY_YAML_KEY}: true
     - inName: price
       outName: unitPrice
       sendToGP: true
-      sendToSaknay: true
+      ${TARGET_SAKNAY_YAML_KEY}: true
   transformations:
     - "Uppercase(string, productName) -> (string, name)"
   filters:
     - "(isActive equals true)"
+  saknay:
+    ${SAKNAY_TOPIC_YAML_KEY}: 
 
 sink:
   type: kafka
@@ -695,15 +701,17 @@ output:
     - inName: productName
       outName: name
       sendToGP: true
-      sendToSaknay: true
+      ${TARGET_SAKNAY_YAML_KEY}: true
     - inName: price
       outName: unitPrice
       sendToGP: true
-      sendToSaknay: true
+      ${TARGET_SAKNAY_YAML_KEY}: true
   transformations:
     - "Uppercase(string, productName) -> (string, name)"
   filters:
     - "(isActive equals true)"
+  saknay:
+    ${SAKNAY_TOPIC_YAML_KEY}: 
 
 sink:
   type: kafka

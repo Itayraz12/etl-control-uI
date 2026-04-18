@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
+import { SAKNAY_LABEL } from '../../shared/services/appConfig.js'
 import { resolveSourceSchema, resolveTargetSchema } from '../../shared/types/index.js'
 import {
   findTransformer,
@@ -1278,7 +1279,7 @@ export default function FieldMappingStep() {
   const hasCanvasTargetNodes = canvasTargetNodes.length > 0
   const areAllCanvasTargetNodesSaknayEnabled = hasCanvasTargetNodes && canvasTargetNodes.every(node => node.sendToSaknay ?? true)
   const shouldEnableAllCanvasTargetSaknay = !areAllCanvasTargetNodesSaknayEnabled
-  const bulkTargetSaknayButtonLabel = shouldEnableAllCanvasTargetSaknay ? '✓ Enable All Saknay' : '⊘ Disable All Saknay'
+  const bulkTargetSaknayButtonLabel = shouldEnableAllCanvasTargetSaknay ? `✓ Enable All ${SAKNAY_LABEL}` : `⊘ Disable All ${SAKNAY_LABEL}`
 
   const handleZoomIn = () => setZoom(currentZoom => clampZoom(currentZoom + ZOOM_STEP))
   const handleZoomOut = () => setZoom(currentZoom => clampZoom(currentZoom - ZOOM_STEP))
@@ -1472,7 +1473,7 @@ export default function FieldMappingStep() {
               </div>
               <button
                 type="button"
-                aria-label={shouldEnableAllCanvasTargetSaknay ? 'Enable Saknay for all target fields' : 'Disable Saknay for all target fields'}
+                aria-label={shouldEnableAllCanvasTargetSaknay ? `Enable ${SAKNAY_LABEL} for all target fields` : `Disable ${SAKNAY_LABEL} for all target fields`}
                 data-testid="bulk-target-saknay-toggle"
                 onClick={toggleAllTargetNodeSaknay}
                 disabled={isReadOnly || !hasCanvasTargetNodes}
@@ -2186,8 +2187,8 @@ export default function FieldMappingStep() {
                               <button
                                 type="button"
                                 data-testid={`target-saknay-toggle-${node.id}`}
-                                title={node.sendToSaknay ? 'Send to Saknay: Yes' : 'Send to Saknay: No'}
-                                aria-label={`Toggle Saknay for ${node.name}`}
+                                title={node.sendToSaknay ? `Send to ${SAKNAY_LABEL}: Yes` : `Send to ${SAKNAY_LABEL}: No`}
+                                aria-label={`Toggle ${SAKNAY_LABEL} for ${node.name}`}
                                 disabled={isReadOnly}
                                 onMouseDown={(e) => {
                                   e.preventDefault()
@@ -2221,7 +2222,7 @@ export default function FieldMappingStep() {
                                 }}
                               >
                                 <span style={{ fontSize: '10px', lineHeight: 1 }}>{node.sendToSaknay ? '✓' : '⊘'}</span>
-                                <span>Saknay</span>
+                                <span>{SAKNAY_LABEL}</span>
                               </button>
                             </div>
                           )}
@@ -2536,7 +2537,7 @@ export default function FieldMappingStep() {
 
               <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', fontSize: '13px', color: 'var(--text)' }}>
-                  <span>Saknay</span>
+                  <span>{SAKNAY_LABEL}</span>
                   <input
                     data-testid="ctxmenu-saknay-toggle"
                     type="checkbox"

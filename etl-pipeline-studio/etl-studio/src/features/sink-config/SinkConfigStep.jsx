@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { Card, CardTitle, FormRow, FormGroup, CfgPanel, Btn, InfoHint, Tooltip } from '../../shared/components/index.jsx'
-import { ENVIRONMENTS } from '../../shared/types/index.js'
+import { ASG_LABEL, SAKNAY_LABEL, SHADOW_LABEL } from '../../shared/services/appConfig.js'
+import { ENVIRONMENT_OPTIONS } from '../../shared/types/index.js'
 import { testRabbitMqConnection } from '../../shared/services/rabbitmqService.js'
 
 const SINK_TYPES = [
@@ -59,6 +60,8 @@ function ConnectionTestStatus({ status, message, label }) {
 }
 
 function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets, readOnly = false }) {
+  const saknaySectionLabel = String(SAKNAY_LABEL || 'Saknay').toUpperCase()
+  const saknayTopicLabel = `${SAKNAY_LABEL} Topic`
   const hasCatalogOption = sink?.shadow || hasSaknayTargets
   const kafkaAdditionalProperties = normalizeKafkaAdditionalProperties(sink?.sinkKafkaAdditionalProperties)
   const isApssPropertiesEnabled = sink?.sinkKafkaAdditionalPropertiesEnabled ?? kafkaAdditionalProperties.length > 0
@@ -140,9 +143,11 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets, readOnly =
         <input value={sink.sinkKafkaTopic || ''} onChange={e => u('sinkKafkaTopic', e.target.value)} placeholder={hasCatalogOption ? 'Leave empty for auto-generation' : 'products.output'} />
       </FormGroup>
       <FormGroup label="Bootstrap Environment" required>
-        <select value={sink.sinkKafkaEnv || metadata?.environment || ''} onChange={e => u('sinkKafkaEnv', e.target.value)}>
+        <select aria-label="Bootstrap Environment" value={sink.sinkKafkaEnv || ''} onChange={e => u('sinkKafkaEnv', e.target.value)}>
           <option value="">select an environment...</option>
-          {ENVIRONMENTS.map(o => <option key={o} value={o}>{o}</option>)}
+          {ENVIRONMENT_OPTIONS.map(option => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
         </select>
       </FormGroup>
 
@@ -206,15 +211,15 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets, readOnly =
       </div>
 
       {hasSaknayTargets && (
-        <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+        <div data-testid="sink-saknay-section" style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span>🦆 SAKNAY</span>
-            <InfoHint text="Enabled automatically because at least one target field is marked to send to Saknay in Field Mapping." />
+            <span>{`🦆 ${saknaySectionLabel}`}</span>
+            <InfoHint text={`Enabled automatically because at least one target field is marked to send to ${SAKNAY_LABEL} in Field Mapping.`} />
           </div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>
             Enabled automatically from Field Mapping target settings.
           </div>
-          <FormGroup label="Saknay Topic" hint="Optional - system will auto-generate if empty">
+          <FormGroup label={saknayTopicLabel} hint="Optional - system will auto-generate if empty">
             <input value={sink.saknayTopic || ''} onChange={e => u('saknayTopic', e.target.value)} placeholder="Leave empty for auto-generation" />
           </FormGroup>
         </div>
@@ -224,7 +229,7 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets, readOnly =
       <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>🏷️ Data Catalog Options</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div>
+            <div data-testid="sink-shadow-row">
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '8px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px' }}>
                 <input
@@ -233,7 +238,7 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets, readOnly =
                   onChange={e => u('shadow', e.target.checked)}
                   style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                 />
-                <span>🌬️ SHADOW</span>
+                <span>{`🌬️ ${SHADOW_LABEL}`}</span>
               </label>
               <InfoHint text="Mirrors output data to a shadow topic for audit and validation purposes" />
             </div>
@@ -257,7 +262,7 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets, readOnly =
               />
             )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div data-testid="sink-asg-row" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px' }}>
               <input
                 type="checkbox"
@@ -265,7 +270,7 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets, readOnly =
                 onChange={e => u('asg', e.target.checked)}
                 style={{ width: '16px', height: '16px', cursor: 'pointer' }}
               />
-              <span>📊 ASG</span>
+              <span>{`📊 ${ASG_LABEL}`}</span>
             </label>
             <InfoHint text="Asgard data governance system for compliance and metadata management" />
           </div>
@@ -344,12 +349,6 @@ export default function SinkConfigStep() {
   const hasSaknayTargets = hasSaknayTargetMappings(state.mappings)
   const u = (k, v) => actions.updateSink({ [k]: v })
 
-  // Sync Kafka environment with metadata environment
-  useEffect(() => {
-    if (metadata?.environment) {
-      actions.updateSink({ sinkKafkaEnv: metadata.environment })
-    }
-  }, [metadata?.environment, actions])
 
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>

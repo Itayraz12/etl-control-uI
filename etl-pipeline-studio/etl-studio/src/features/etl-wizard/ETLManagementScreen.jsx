@@ -9,6 +9,7 @@ import { copyTextToClipboard } from '../../shared/services/clipboard.js';
 import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js';
 import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js';
 import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js';
+import { formatEnvironmentLabel, normalizeEnvironmentValue } from '../../shared/types/index.js'
 import { useWizard } from '../../shared/store/wizardStore.jsx';
 import { useMockMode } from '../../shared/store/mockModeContext.jsx';
 import { useUser } from '../../shared/store/userContext.jsx';
@@ -97,9 +98,8 @@ function buildPreviewStorageKey(deploymentId, previewSource) {
 
 const MANAGEMENT_TABS = [
   { id: 'all', label: 'All' },
-  { id: 'prod', label: 'Prod' },
-  { id: 'stage', label: 'Stage' },
-  { id: 'dev', label: 'Dev' },
+  { id: 'prod', label: 'PROD' },
+  { id: 'stage', label: 'CAP' },
   { id: 'deleted', label: 'Deleted' },
 ];
 
@@ -125,16 +125,14 @@ const MANAGEMENT_DEPLOYMENT_COPY = {
 };
 
 function matchesManagementTab(deployment, tabId) {
-  const environment = String(deployment?.environment || '').toLowerCase();
+  const environment = normalizeEnvironmentValue(deployment?.environment);
   const status = String(deployment?.deploymentStatus || '').toLowerCase();
 
   switch (tabId) {
     case 'prod':
-      return environment === 'production' || environment === 'prod';
+      return environment === 'production';
     case 'stage':
-      return environment === 'staging' || environment === 'stage';
-    case 'dev':
-      return environment === 'development' || environment === 'dev';
+      return environment === 'staging';
     case 'deleted':
       return status === 'deleted';
     case 'all':
@@ -161,6 +159,14 @@ function getManagementSearchValue(deployment, columnKey) {
     const formattedValue = Number.isNaN(date.getTime()) ? '' : formatDateShort(value)
 
     return [String(value), formattedValue]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+  }
+
+  if (columnKey === 'environment') {
+    const normalizedEnvironment = normalizeEnvironmentValue(value)
+    return [String(value), normalizedEnvironment, formatEnvironmentLabel(value)]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
@@ -239,6 +245,10 @@ function buildDeploymentRowKey(deploymentRow, fallbackTeamName = 'default') {
   const environment = String(deploymentRow?.environment || 'production').trim().toLowerCase()
 
   return [backendId, team, source, productType, environment].join('::')
+}
+
+function getDeploymentSourceValue(deploymentRow) {
+  return String(deploymentRow?.productSource || deploymentRow?.source || '').trim()
 }
 
 export default function ETLManagementScreen() {
@@ -746,6 +756,7 @@ export default function ETLManagementScreen() {
 
   const handleEdit = async (dep) => {
     const rowKey = getDeploymentRowKey(dep)
+    const deploymentSource = getDeploymentSourceValue(dep)
     setActionLoading(a => ({ ...a, [rowKey]: 'edit' }));
     setScreenError('');
     setScreenNotice(null);
@@ -756,14 +767,14 @@ export default function ETLManagementScreen() {
       const deploymentTeamName = getDeploymentTeamName(dep)
       const yamlText = await fetchDraftConfiguration({
         productType: dep.productType,
-        source: dep.productSource,
+        source: deploymentSource,
         team: deploymentTeamName,
         environment,
       }, useMock);
 
       const loadedState = hydrateWizardStateFromYaml(yamlText, {
         productType: dep.productType,
-        source: dep.productSource,
+        source: deploymentSource,
         teamName: deploymentTeamName,
         environment,
       });
@@ -791,6 +802,7 @@ export default function ETLManagementScreen() {
    */
   const handleViewSavedVersion = async (dep) => {
     const savedVersionActionKey = `${getDeploymentRowKey(dep)}_savedVersion`
+    const deploymentSource = getDeploymentSourceValue(dep)
     setActionLoading(a => ({ ...a, [savedVersionActionKey]: true }));
     setScreenError('');
     setScreenNotice(null);
@@ -801,7 +813,7 @@ export default function ETLManagementScreen() {
 
       const yamlText = await fetchSavedDraftYaml({
         productType: dep.productType,
-        source: dep.productSource,
+        source: deploymentSource,
         team: deploymentTeamName,
         environment,
       }, useMock);
@@ -813,7 +825,7 @@ export default function ETLManagementScreen() {
 
       const loadedState = hydrateWizardStateFromYaml(yamlText, {
         productType: dep.productType,
-        source: dep.productSource,
+        source: deploymentSource,
         teamName: deploymentTeamName,
         environment,
       });
@@ -850,6 +862,7 @@ export default function ETLManagementScreen() {
    */
   const handleViewDeployedVersion = async (dep) => {
     const deployedVersionActionKey = `${getDeploymentRowKey(dep)}_deployedVersion`
+    const deploymentSource = getDeploymentSourceValue(dep)
     setActionLoading(a => ({ ...a, [deployedVersionActionKey]: true }));
     setScreenError('');
     setScreenNotice(null);
@@ -860,7 +873,7 @@ export default function ETLManagementScreen() {
 
       const yamlText = await fetchDraftConfiguration({
         productType: dep.productType,
-        source: dep.productSource,
+        source: deploymentSource,
         team: deploymentTeamName,
         environment,
       }, useMock);
@@ -872,7 +885,7 @@ export default function ETLManagementScreen() {
 
       const loadedState = hydrateWizardStateFromYaml(yamlText, {
         productType: dep.productType,
-        source: dep.productSource,
+        source: deploymentSource,
         teamName: deploymentTeamName,
         environment,
       });
@@ -939,7 +952,7 @@ export default function ETLManagementScreen() {
   function requestDelete(dep) {
     setConfirmDialog({
       title: 'Delete deployment?',
-      message: `Delete ${dep.productSource} / ${dep.productType}? This will move the pipeline to the Deleted tab.`,
+      message: `Delete ${getDeploymentSourceValue(dep)} / ${dep.productType}? This will move the pipeline to the Deleted tab.`,
       tone: 'danger',
       icon: '🗑️',
       confirmLabel: 'Delete',
@@ -985,7 +998,7 @@ export default function ETLManagementScreen() {
   function requestEdit(dep) {
     setConfirmDialog({
       title: 'Open deployment for editing?',
-      message: `You are about to open ${dep.productSource} / ${dep.productType} in the wizard. Continue to the editable configuration flow?`,
+      message: `You are about to open ${getDeploymentSourceValue(dep)} / ${dep.productType} in the wizard. Continue to the editable configuration flow?`,
       tone: 'accent',
       icon: '✏️',
       confirmLabel: 'Continue',
@@ -1345,9 +1358,9 @@ export default function ETLManagementScreen() {
                           height: 44,
                         }}
                       >
-                        <td style={{ padding: 8 }}>{dep.productSource}</td>
+                        <td style={{ padding: 8 }}>{getDeploymentSourceValue(dep)}</td>
                         <td style={{ padding: 8 }}>{dep.productType}</td>
-                        <td style={{ padding: 8 }}>{dep.environment || 'production'}</td>
+                        <td style={{ padding: 8 }}>{formatEnvironmentLabel(dep.environment || 'production', dep.environment || 'production')}</td>
                         <td style={{ padding: 8 }}>
                           <Chip
                             c={STATUS_COLORS[dep.deploymentStatus] || 'muted'}
@@ -1829,7 +1842,7 @@ export default function ETLManagementScreen() {
               ['Pipeline ID',     successInfo.pipelineId],
               ['Product Type',    successInfo.productType],
               ['Product Source',  successInfo.productSource],
-              ['Environment',     successInfo.environment],
+              ['Environment',     formatEnvironmentLabel(successInfo.environment, successInfo.environment)],
             ].map(([k, v]) => (
               <div key={k} style={{
                 display: 'flex', justifyContent: 'space-between',

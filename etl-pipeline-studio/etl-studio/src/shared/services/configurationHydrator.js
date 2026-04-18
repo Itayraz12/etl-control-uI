@@ -1,8 +1,17 @@
 import { parse } from 'yaml'
-import { FIELD_TYPES, normalizeMetadataLocation, normalizeSourceSchema } from '../types/index.js'
+import { FIELD_TYPES, normalizeEnvironmentValue, normalizeMetadataLocation, normalizeSourceSchema } from '../types/index.js'
+import {
+  ASG_YAML_FLAG_KEY,
+  PRODUCT_CODE_YAML_KEY,
+  SAKNAY_TOPIC_YAML_KEY,
+  SAKNAY_YAML_FLAG_KEY,
+  SAKNAY_YAML_SECTION_KEY,
+  SHADOW_TOPIC_YAML_KEY,
+  SHADOW_YAML_FLAG_KEY,
+  TARGET_SAKNAY_YAML_KEY,
+} from './appConfig.js'
 import { MOCK_FILTER_OPERATORS } from './configService.js'
 
-const VALID_ENVS = new Set(['dev', 'staging', 'production'])
 const VALID_SOURCE_TYPES = new Set(['kafka', 'rabbitmq', 'file', 'db', 'http', 's3'])
 const VALID_SINK_TYPES = new Set(['kafka', 'file', 'db', 'rabbitmq'])
 const TUPLE_TYPES = new Set([...FIELD_TYPES, 'any', 'unknown'])
@@ -15,6 +24,24 @@ function asString(value, fallback = '') {
   return String(value)
 }
 
+function hasOwnKey(source, key) {
+  return Boolean(source) && Object.prototype.hasOwnProperty.call(source, key)
+}
+
+function getFirstDefinedValue(source, keys = []) {
+  for (const key of keys) {
+    if (hasOwnKey(source, key) && source[key] !== undefined) {
+      return source[key]
+    }
+  }
+
+  return undefined
+}
+
+function hasAnyKey(source, keys = []) {
+  return keys.some(key => hasOwnKey(source, key))
+}
+
 function normalizeKafkaKeys(value) {
   if (Array.isArray(value)) {
     return value.map(asString).map(item => item.trim()).filter(Boolean).join(', ')
@@ -24,8 +51,7 @@ function normalizeKafkaKeys(value) {
 }
 
 function normalizeEnvironment(value, fallback = 'production') {
-  const normalized = asString(value, fallback).toLowerCase()
-  return VALID_ENVS.has(normalized) ? normalized : fallback
+  return normalizeEnvironmentValue(asString(value, fallback), fallback)
 }
 
 function normalizeSourceType(value, fallback = 'kafka') {
@@ -51,6 +77,29 @@ function resolveSourceDefinition(source = {}) {
     : source
 
   return { sourceType, sourceConfig }
+}
+
+function resolveSinkDefinition(sink = {}, output = {}) {
+  const legacySinkType = normalizeSinkType(sink?.type)
+
+  if (sink?.type) {
+    return { sinkType: legacySinkType, sinkConfig: sink }
+  }
+
+  const nestedSinkType = Array.from(VALID_SINK_TYPES).find(type => (
+    output?.[type]
+    && typeof output[type] === 'object'
+    && !Array.isArray(output[type])
+  ))
+
+  if (nestedSinkType) {
+    return {
+      sinkType: nestedSinkType,
+      sinkConfig: output[nestedSinkType] || {},
+    }
+  }
+
+  return { sinkType: legacySinkType, sinkConfig: sink }
 }
 
 function extractBracketGroups(text = '') {
@@ -605,7 +654,7 @@ function buildMappings(mappings, transformations) {
           expression: asString(mapping?.src_expression),
         },
         tgtMetadata: {
-          sendToSaknay: mapping?.sendToSaknay ?? true,
+          sendToSaknay: getFirstDefinedValue(mapping, [TARGET_SAKNAY_YAML_KEY, 'sendToSaknay']) ?? true,
           expression: asString(mapping?.expression ?? mapping?.tgt_expression),
         },
         transformer: transformation?.transformer || 'none',
@@ -643,6 +692,7 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
   const sink = parsed.sink || {}
   const environment = normalizeEnvironment(metadata.environment ?? fallback.environment)
   const { sourceType, sourceConfig } = resolveSourceDefinition(source)
+  const { sinkType, sinkConfig } = resolveSinkDefinition(sink, output)
   const sourceFormatToken = asString(general.inputFormat ?? general.outputFormat ?? general.format ?? source.format, 'JSON').trim()
   const normalizedSourceFormatToken = sourceFormatToken.toLowerCase()
   const sourceFormat = normalizedSourceFormatToken === 'delimited'
@@ -650,22 +700,45 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
     : sourceFormatToken.toUpperCase()
   const csvDelimiter = asString(input.delimited?.columnDelimiter ?? sourceConfig.csvDelimiter ?? source.csvDelimiter ?? ',', ',')
   const rowDelimiter = asString(general.split?.delimiter ?? sourceConfig.rowDelimiter ?? source.rowDelimiter)
-  const sinkType = normalizeSinkType(sink.type)
   const sourceTopic = asString(sourceConfig.topic ?? source.topic)
-  const sinkTopic = asString(sink.topic)
-  const hasGeneralShadowFlag = Object.prototype.hasOwnProperty.call(general, 'isShadowEnabled')
-  const hasGeneralSaknayFlag = Object.prototype.hasOwnProperty.call(general, 'isSaknayEnabled')
-  const hasGeneralAsgFlag = Object.prototype.hasOwnProperty.call(general, 'isAsgEnabled')
+  const sinkTopic = asString(sinkConfig.topic ?? sink.topic)
+  const hasGeneralShadowFlag = hasAnyKey(general, [SHADOW_YAML_FLAG_KEY, 'isShadowEnabled'])
+  const hasGeneralSaknayFlag = hasAnyKey(general, [SAKNAY_YAML_FLAG_KEY, 'isSaknayEnabled'])
+  const hasGeneralAsgFlag = hasAnyKey(general, [ASG_YAML_FLAG_KEY, 'isAsgEnabled'])
   const sinkKafkaAdditionalProperties = sinkType === 'kafka'
-    ? buildKeyValueEntries(parsed.additionalConfig ?? sink.additional_properties ?? sink.additionalProperties, 'sink-kafka-prop')
+    ? buildKeyValueEntries(
+        parsed.additionalConfig
+        ?? sinkConfig.additional_properties
+        ?? sinkConfig.additionalProperties
+        ?? sink.additional_properties
+        ?? sink.additionalProperties,
+        'sink-kafka-prop'
+      )
     : []
   const filtersDefinition = parsed.filters ?? output.filters
+  const saknayOutput = [SAKNAY_YAML_SECTION_KEY, 'saknay']
+    .map(sectionKey => output?.[sectionKey])
+    .find(section => section && typeof section === 'object' && !Array.isArray(section)) || {}
+  const productCode = getFirstDefinedValue(saknayOutput, [PRODUCT_CODE_YAML_KEY, 'productCode', 'product_code'])
+    ?? getFirstDefinedValue(metadata, [PRODUCT_CODE_YAML_KEY, 'productCode', 'product_code'])
+  const shadowEnabled = getFirstDefinedValue(general, [SHADOW_YAML_FLAG_KEY, 'isShadowEnabled'])
+  const saknayEnabled = getFirstDefinedValue(general, [SAKNAY_YAML_FLAG_KEY, 'isSaknayEnabled'])
+  const asgEnabled = getFirstDefinedValue(general, [ASG_YAML_FLAG_KEY, 'isAsgEnabled'])
+  const shadowTopic = asString(
+    getFirstDefinedValue(sinkConfig, [SHADOW_TOPIC_YAML_KEY, 'shadow_topic'])
+    ?? getFirstDefinedValue(sink, [SHADOW_TOPIC_YAML_KEY, 'shadow_topic'])
+  )
+  const saknayTopic = asString(
+    getFirstDefinedValue(saknayOutput, [SAKNAY_TOPIC_YAML_KEY, 'saknay_topic'])
+    ?? getFirstDefinedValue(sinkConfig, [SAKNAY_TOPIC_YAML_KEY, 'saknay_topic'])
+    ?? getFirstDefinedValue(sink, [SAKNAY_TOPIC_YAML_KEY, 'saknay_topic'])
+  )
 
   return {
     metadata: {
       productSource: asString(metadata.productSource ?? metadata.product_source, fallback.source),
       productType: asString(metadata.productType ?? metadata.product_type, fallback.productType),
-      productCode: asString(metadata.productCode ?? metadata.product_code),
+      productCode: asString(productCode),
       location: normalizeMetadataLocation(metadata.location, environment),
       team: asString(fallback.teamName || metadata.owner || metadata.team),
       environment,
@@ -710,11 +783,11 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       sinkKafkaAdditionalPropertiesEnabled: sinkKafkaAdditionalProperties.length > 0,
       sinkKafkaAdditionalProperties,
       sinkRmqQueue: sinkType === 'rabbitmq' ? sinkTopic : '',
-      shadow: hasGeneralShadowFlag ? general.isShadowEnabled === true : sink.shadow === true,
-      shadowTopic: asString(sink.shadow_topic) === 'auto' ? '' : asString(sink.shadow_topic),
-      saknay: hasGeneralSaknayFlag ? general.isSaknayEnabled === true : sink.saknay === true,
-      saknayTopic: asString(sink.saknay_topic) === 'auto' ? '' : asString(sink.saknay_topic),
-      asg: hasGeneralAsgFlag ? general.isAsgEnabled === true : sink.asg === true,
+      shadow: hasGeneralShadowFlag ? shadowEnabled === true : (sinkConfig.shadow === true || sink.shadow === true),
+      shadowTopic: shadowTopic === 'auto' ? '' : shadowTopic,
+      saknay: hasGeneralSaknayFlag ? saknayEnabled === true : (sinkConfig.saknay === true || sink.saknay === true),
+      saknayTopic: saknayTopic === 'auto' ? '' : saknayTopic,
+      asg: hasGeneralAsgFlag ? asgEnabled === true : (sinkConfig.asg === true || sink.asg === true),
     },
   }
 }

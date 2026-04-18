@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SourceConfigStep from './SourceConfigStep.jsx'
@@ -107,6 +107,41 @@ describe('SourceConfigStep Kafka test connection', () => {
     expect(topicInput).toBeRequired()
   })
 
+  it('defaults the Kafka environment from metadata and still allows independent selection', async () => {
+    const user = userEvent.setup()
+
+    renderStep({ kafkaEnv: '' }, { environment: 'staging' })
+
+    const environmentSelect = screen.getByRole('combobox', { name: 'Environment' })
+
+    expect(environmentSelect).not.toBeDisabled()
+    expect(environmentSelect).toHaveValue('staging')
+    expect(screen.getByRole('option', { name: 'CAP' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'PROD' })).toBeInTheDocument()
+    expect(within(environmentSelect).queryByRole('option', { name: /dev/i })).not.toBeInTheDocument()
+
+    await user.selectOptions(environmentSelect, 'production')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.metadata?.environment).toBe('staging')
+      expect(persisted.source?.kafkaEnv).toBe('production')
+    })
+  })
+
+  it('keeps the selected source Kafka environment when metadata changes', async () => {
+    renderStep({ kafkaEnv: 'production' }, { environment: 'staging' })
+
+    await waitFor(() => {
+      const environmentSelect = screen.getByRole('combobox', { name: 'Environment' })
+      expect(environmentSelect).toHaveValue('production')
+
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.metadata?.environment).toBe('staging')
+      expect(persisted.source?.kafkaEnv).toBe('production')
+    })
+  })
+
   it('persists the selected Kafka offset', async () => {
     const user = userEvent.setup()
 
@@ -164,14 +199,14 @@ describe('SourceConfigStep Kafka test connection', () => {
     const user = userEvent.setup()
     testKafkaConnection.mockResolvedValue({ success: true, message: 'Kafka source reachable' })
 
-    renderStep({ kafkaTopic: 'source_products_raw' })
+    renderStep({ kafkaEnv: 'staging', kafkaTopic: 'source_products_raw' }, { environment: 'production' })
 
     await user.click(screen.getByRole('button', { name: /test connection/i }))
 
     await waitFor(() => {
       expect(testKafkaConnection).toHaveBeenCalledWith({
         topic: 'source_products_raw',
-        environment: 'production',
+        environment: 'staging',
       })
     })
 
@@ -257,7 +292,7 @@ describe('SourceConfigStep Kafka test connection', () => {
 
     expect(testKafkaConnection).not.toHaveBeenCalled()
     expect(await screen.findByLabelText('Kafka connection test failed')).toBeInTheDocument()
-    expect(screen.getByText('Topic and environment are required to test the Kafka connection.')).toBeInTheDocument()
+    expect(screen.getByText('Topic and Kafka environment are required to test the Kafka connection.')).toBeInTheDocument()
   })
 
   it('calls the RabbitMQ test endpoint and shows an inline success message instead of a popup', async () => {

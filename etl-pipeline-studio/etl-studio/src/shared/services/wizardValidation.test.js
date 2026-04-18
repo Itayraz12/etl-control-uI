@@ -168,6 +168,27 @@ describe('canNavigateToWizardStep', () => {
     expect(sourceValidation.text).toContain('offset')
   })
 
+  it('keeps the source Kafka configuration valid when metadata environment is missing', () => {
+    const state = buildState({
+      metadata: {
+        environment: '',
+        location: '',
+      },
+      source: {
+        sourceType: 'kafka',
+        kafkaEnv: 'production',
+        kafkaTopic: 'source_products_raw',
+        kafkaOffset: 'earliest',
+      },
+    })
+
+    expect(isWizardStepValid(1, state)).toBe(true)
+
+    const sourceValidation = getSummaryValidations(state, undefined, transformers).find(item => item.key === 'sourceConfigured')
+    expect(sourceValidation.type).toBe('ok')
+    expect(sourceValidation.text).toContain('Kafka')
+  })
+
   it('treats CSV source config as invalid when the column delimiter is missing', () => {
     const state = buildState({
       source: {
@@ -211,6 +232,25 @@ describe('canNavigateToWizardStep', () => {
 
     expect(sinkValidation.type).toBe('err')
     expect(sinkValidation.text).toContain('bootstrap environment')
+  })
+
+  it('keeps the sink Kafka configuration valid when metadata environment is missing', () => {
+    const state = buildState({
+      metadata: {
+        environment: '',
+        location: '',
+      },
+      sink: {
+        sinkType: 'kafka',
+        sinkKafkaEnv: 'production',
+      },
+    })
+
+    expect(isWizardStepValid(5, state)).toBe(true)
+
+    const sinkValidation = getSummaryValidations(state, undefined, transformers).find(item => item.key === 'sinkConfigured')
+    expect(sinkValidation.type).toBe('ok')
+    expect(sinkValidation.text).toContain('Sink configured: kafka')
   })
 
   it('allows completed future steps to remain clickable after loading an edited deployment', () => {

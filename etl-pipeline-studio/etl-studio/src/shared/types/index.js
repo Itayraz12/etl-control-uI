@@ -1,15 +1,51 @@
 // ── Schema Types ──────────────────────────────────────────────────────────
 
 export const FIELD_TYPES = ['string', 'number', 'boolean', 'date', 'object', 'array', 'null']
-export const ENVIRONMENTS = ['dev', 'staging', 'production']
+export const ENVIRONMENT_OPTIONS = [
+  { value: 'staging', label: 'CAP' },
+  { value: 'production', label: 'PROD' },
+]
+export const ENVIRONMENTS = ENVIRONMENT_OPTIONS.map(option => option.value)
 export const METADATA_LOCATIONS = ['HOME', 'OFFICE']
 
+const ENVIRONMENT_VALUE_ALIASES = {
+  cap: 'staging',
+  stage: 'staging',
+  staging: 'staging',
+  prod: 'production',
+  production: 'production',
+  dev: 'dev',
+  development: 'dev',
+}
+
+const ENVIRONMENT_LABELS = {
+  staging: 'CAP',
+  production: 'PROD',
+  dev: 'DEV',
+}
+
+export function normalizeEnvironmentValue(value, fallback = '') {
+  const normalizedValue = String(value ?? '').trim().toLowerCase()
+  if (!normalizedValue) return fallback
+  return ENVIRONMENT_VALUE_ALIASES[normalizedValue] || fallback || normalizedValue
+}
+
+export function formatEnvironmentLabel(value, fallback = '') {
+  const normalizedValue = normalizeEnvironmentValue(value)
+  if (normalizedValue && ENVIRONMENT_LABELS[normalizedValue]) {
+    return ENVIRONMENT_LABELS[normalizedValue]
+  }
+
+  const rawValue = String(value ?? '').trim()
+  return rawValue || fallback
+}
+
 export function isProductionEnvironment(value) {
-  return String(value ?? '').trim().toLowerCase() === 'production'
+  return normalizeEnvironmentValue(value) === 'production'
 }
 
 export function getAllowedMetadataLocations(environment) {
-  const normalizedEnvironment = String(environment ?? '').trim().toLowerCase()
+  const normalizedEnvironment = normalizeEnvironmentValue(environment)
 
   if (normalizedEnvironment === 'production') return METADATA_LOCATIONS
   if (normalizedEnvironment) return ['HOME']
@@ -17,7 +53,7 @@ export function getAllowedMetadataLocations(environment) {
 }
 
 export function normalizeMetadataLocation(value, environment) {
-  const normalizedEnvironment = String(environment ?? '').trim().toLowerCase()
+  const normalizedEnvironment = normalizeEnvironmentValue(environment)
   const normalizedValue = String(value ?? '').trim().toUpperCase()
   const canonicalValue = normalizedValue === 'OFFIC' ? 'OFFICE' : normalizedValue
 
@@ -68,7 +104,7 @@ export function normalizeMetadataLocation(value, environment) {
  * @property {string} productType
  * @property {string} location
  * @property {string} team
- * @property {'dev'|'staging'|'production'} environment
+ * @property {'staging'|'production'|'dev'} environment
  * @property {string} entityName
  * @property {string} schemaVersion
  * @property {string} tags
@@ -597,9 +633,8 @@ export const MOCK_TEAMS = [
 ]
 
 export const MOCK_ENVIRONMENTS = [
-  { id: 'dev', name: 'Development', icon: '🔧', color: '#f59e0b' },
-  { id: 'staging', name: 'Staging', icon: '🧪', color: '#8b5cf6' },
-  { id: 'production', name: 'Production', icon: '✅', color: '#22c55e' },
+  { id: 'staging', name: 'CAP', icon: '🧪', color: '#8b5cf6' },
+  { id: 'production', name: 'PROD', icon: '✅', color: '#22c55e' },
 ]
 
 export const MOCK_PRODUCT_SOURCES = [

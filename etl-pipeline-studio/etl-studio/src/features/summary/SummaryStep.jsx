@@ -3,7 +3,7 @@ import { useWizard } from "../../shared/store/wizardStore.jsx";
 import { useConfig } from "../../shared/store/configContext.jsx";
 import { Card, CardTitle, ValidationItem, Btn, DeployProgressModal } from '../../shared/components/index.jsx'
 import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js'
-import { SOURCE_TYPES, normalizeMetadataLocation, resolveSourceSchema, resolveTargetSchema } from '../../shared/types/index.js'
+import { SOURCE_TYPES, formatEnvironmentLabel, normalizeMetadataLocation, resolveSourceSchema, resolveTargetSchema } from '../../shared/types/index.js'
 import { saveDraftConfiguration } from '../../shared/services/configService.js'
 import { fetchDeploymentSteps, deployFromYaml, subscribeToDeploymentProgress }
   from '../../shared/services/deploymentsService.js'
@@ -13,6 +13,16 @@ import { formatInputFieldsYamlSection } from '../../shared/services/configuratio
 import { copyTextToClipboard } from '../../shared/services/clipboard.js'
 import { hydrateWizardStateFromYaml } from '../../shared/services/configurationHydrator.js'
 import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js'
+import {
+  ASG_YAML_FLAG_KEY,
+  PRODUCT_CODE_YAML_KEY,
+  SAKNAY_TOPIC_YAML_KEY,
+  SAKNAY_YAML_FLAG_KEY,
+  SAKNAY_YAML_SECTION_KEY,
+  SHADOW_TOPIC_YAML_KEY,
+  SHADOW_YAML_FLAG_KEY,
+  TARGET_SAKNAY_YAML_KEY,
+} from '../../shared/services/appConfig.js'
 import { canDeployFromSummaryChecklist, getSummaryValidations } from '../../shared/services/wizardValidation.js'
 import { useSummaryFooter } from './summaryFooterContext.jsx'
 
@@ -426,12 +436,26 @@ ${nestedInputMappingYaml}` : ''}
         return [
           '  kafka:',
           `    topic: ${String(state.sink.sinkKafkaTopic || '').trim()}`,
-          ...(state.sink.shadow ? [`    shadow_topic: ${String(state.sink.shadowTopic || '').trim()}`] : []),
-          ...(hasSaknayTargets ? [`    saknay_topic: ${String(state.sink.saknayTopic || '').trim()}`] : []),
+          ...(state.sink.shadow ? [`    ${SHADOW_TOPIC_YAML_KEY}: ${String(state.sink.shadowTopic || '').trim()}`] : []),
         ].join('\n')
       }
 
       return ''
+    })()
+    const outputSaknayYaml = (() => {
+      const productCode = String(state.metadata.productCode || '').trim()
+      const saknayTopic = String(state.sink.saknayTopic || '').trim()
+      const saknaySectionKey = SAKNAY_YAML_SECTION_KEY || 'saknay'
+
+      if (!productCode && !hasSaknayTargets) {
+        return ''
+      }
+
+      return [
+        `  ${saknaySectionKey}:`,
+        ...(productCode ? [`    ${PRODUCT_CODE_YAML_KEY}: ${quoteYamlDoubleQuoted(productCode)}`] : []),
+        ...(hasSaknayTargets || saknayTopic ? [`    ${SAKNAY_TOPIC_YAML_KEY}: ${saknayTopic}`] : []),
+      ].join('\n')
     })()
     const metadataLocation = normalizeMetadataLocation(state.metadata.location, state.metadata.environment)
 
@@ -439,8 +463,7 @@ ${nestedInputMappingYaml}` : ''}
 
     return `metadata:
   genomeEntity: ${state.metadata.entityName}
-${state.metadata.productCode ? `  productCode: ${quoteYamlDoubleQuoted(String(state.metadata.productCode).trim())}
-` : ''}${metadataLocation ? `  location: ${quoteYamlDoubleQuoted(String(metadataLocation).trim())}
+${metadataLocation ? `  location: ${quoteYamlDoubleQuoted(String(metadataLocation).trim())}
 ` : ''}  productSource: ${state.metadata.productSource}
   productType: ${state.metadata.productType}
   environment: ${state.metadata.environment}
@@ -454,9 +477,9 @@ general:
   outputFormat: ${generalFormat}
 ${state.source.format === 'CSV' && rowDelimiter ? `  split:
     delimiter: ${quoteYamlDoubleQuoted(rowDelimiter)}
-` : ''}  isShadowEnabled: ${state.sink.shadow ? 'true' : 'false'}
-  isSaknayEnabled: ${hasSaknayTargets ? 'true' : 'false'}
-  isAsgEnabled: ${state.sink.asg ? 'true' : 'false'}
+` : ''}  ${SHADOW_YAML_FLAG_KEY}: ${state.sink.shadow ? 'true' : 'false'}
+  ${SAKNAY_YAML_FLAG_KEY}: ${hasSaknayTargets ? 'true' : 'false'}
+  ${ASG_YAML_FLAG_KEY}: ${state.sink.asg ? 'true' : 'false'}
 
 source:
 ${sourceSectionYaml}
@@ -472,7 +495,7 @@ ${state.mappings.map(m => {
     ? `    - inName: ${m.src}\n      outName: ${m.tgt}`
     : `    - outName: ${m.tgt}`
   mapping += `\n      sendToGP: true`
-  mapping += `\n      sendToSaknay: ${m.tgtMetadata?.sendToSaknay ?? true}`
+  mapping += `\n      ${TARGET_SAKNAY_YAML_KEY}: ${m.tgtMetadata?.sendToSaknay ?? true}`
   const additionalInputs = Array.isArray(m.extraInputs) ? m.extraInputs.map(input => input?.field).filter(Boolean) : []
   if (additionalInputs.length > 0) {
     mapping += `\n      additionalInputs:\n${additionalInputs.map(input => `        - ${input}`).join('\n')}`
@@ -487,6 +510,8 @@ ${state.mappings.map(m => {
 }).join('\n')}
 ${outputSinkYaml ? `
 ${outputSinkYaml}` : ''}
+${outputSaknayYaml ? `
+${outputSaknayYaml}` : ''}
 ${transformations.length > 0 ? `
 transformations:
 ${transformations.join('\n')}` : ''}
@@ -511,9 +536,11 @@ ${sinkAdditionalConfigYaml}` : ''}
         )
       : ''
   )
+  const originalDraftYaml = compactYamlDocument(state.originalDraftYaml || '')
   const hasChangesComparedToOriginalDraft = !state.originalDraftYaml
     || !originalPipelineSignature
     || originalPipelineSignature !== currentPipelineSignature
+    || originalDraftYaml !== yaml
 
   const validations = getSummaryValidations(state, targetSchema, transformers)
   const canDeployFromChecklist = canDeployFromSummaryChecklist(state, targetSchema, transformers)
@@ -811,7 +838,7 @@ ${sinkAdditionalConfigYaml}` : ''}
               ['Pipeline ID', pipelineId],
               ['Entity',      state.metadata.entityName],
               ['Mappings',    state.mappings.length],
-              ['Environment', state.metadata.environment],
+              ['Environment', formatEnvironmentLabel(state.metadata.environment, state.metadata.environment)],
             ].map(([k, v]) => (
               <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
                 <span style={{ color: 'var(--muted)' }}>{k}</span>

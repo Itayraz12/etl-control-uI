@@ -22,7 +22,7 @@ function getPreviewStateStorageKey(search = window.location.search) {
 
 const initialState = {
   // Global navigation mode
-  navigationMode: 'menu', // 'menu' | 'etl-config' | 'etl-management' | 'etl-admin'
+  navigationMode: 'menu', // 'menu' | 'etl-config' | 'etl-management' | 'etl-admin' | 'udf-admin'
   currentStep: 0,
   furthestStepVisited: 0,
   completedSteps: new Set(),
@@ -49,7 +49,7 @@ const initialState = {
   // Step 2 — Source Config
   source: {
     sourceType:           'kafka',
-    kafkaEnv:             'production',
+    kafkaEnv:             '',
     kafkaTopic:           '',
     kafkaOffset:          '',
     kafkaKeys:            '',
@@ -89,7 +89,7 @@ const initialState = {
   sink: {
     sinkType:        'kafka',
     sinkKafkaTopic:  '',
-    sinkKafkaEnv:    'production',
+    sinkKafkaEnv:    '',
     sinkKafkaAdditionalPropertiesEnabled: false,
     sinkKafkaAdditionalProperties: [],
     shadow:          false,
@@ -107,6 +107,30 @@ function normalizeMetadataState(metadata = {}) {
     ...nextMetadata,
     location: normalizeMetadataLocation(nextMetadata.location, nextMetadata.environment),
   }
+}
+
+function defaultKafkaEnvironments(nextState, previousMetadataEnvironment = '') {
+  const metadataEnvironment = String(nextState?.metadata?.environment || '').trim()
+  const previousEnvironment = String(previousMetadataEnvironment || '').trim()
+
+  const sourceKafkaEnv = String(nextState?.source?.kafkaEnv || '').trim()
+  const sinkKafkaEnv = String(nextState?.sink?.sinkKafkaEnv || '').trim()
+
+  return {
+    ...nextState,
+    source: {
+      ...(nextState?.source || {}),
+      kafkaEnv: sourceKafkaEnv || metadataEnvironment || previousEnvironment,
+    },
+    sink: {
+      ...(nextState?.sink || {}),
+      sinkKafkaEnv: sinkKafkaEnv || metadataEnvironment || previousEnvironment,
+    },
+  }
+}
+
+function syncStepEnvironments(nextState) {
+  return nextState
 }
 
 function resolveFurthestStepVisited(currentStep = 0, completedSteps = [], furthestStepVisited = null) {
@@ -154,7 +178,7 @@ function wizardReducer(state, action) {
       )
       const currentStep = Number.isInteger(payload.currentStep) ? payload.currentStep : 0
 
-      return {
+      return defaultKafkaEnvironments({
         ...initialState,
         ...payload,
         theme: state.theme,
@@ -174,16 +198,16 @@ function wizardReducer(state, action) {
         mappings: Array.isArray(payload.mappings) ? payload.mappings : [],
         filters: Array.isArray(payload.filters) ? payload.filters : [],
         sink: { ...initialState.sink, ...(payload.sink || {}) },
-      }
+      })
     }
     case 'UPDATE_METADATA':
-      return {
+      return defaultKafkaEnvironments({
         ...state,
         metadata: normalizeMetadataState({
           ...state.metadata,
           ...action.payload,
         }),
-      }
+      }, state.metadata?.environment)
     case 'UPDATE_SOURCE':
       return { ...state, source: { ...state.source, ...action.payload } }
     case 'UPDATE_UPLOAD':
@@ -223,7 +247,7 @@ export function WizardProvider({ children, user = null }) {
           if (raw) {
             const { wizardState } = JSON.parse(raw)
             if (wizardState) {
-              return {
+              return defaultKafkaEnvironments({
                 ...initialState,
                 ...wizardState,
                 metadata: normalizeMetadataState(wizardState.metadata),
@@ -235,7 +259,7 @@ export function WizardProvider({ children, user = null }) {
                   Array.isArray(wizardState.completedSteps) ? wizardState.completedSteps : [],
                   wizardState.furthestStepVisited,
                 ),
-              }
+              })
             }
           }
         }
@@ -319,7 +343,6 @@ export function WizardProvider({ children, user = null }) {
     setFilters:     (filters) => dispatch({ type: 'SET_FILTERS',      payload: filters }),
     updateSink:     (patch)   => dispatch({ type: 'UPDATE_SINK',      payload: patch }),
 
-    setTheme:       (theme)   => dispatch({ type: 'SET_THEME',       payload: theme }),
     toggleTheme:    ()        => dispatch({ type: 'TOGGLE_THEME' }),
 
     goNext: (current) => {

@@ -764,6 +764,7 @@ describe('FieldMappingStep transformer modal regression', () => {
     renderWithPersistedState()
 
     const saknayToggle = await screen.findByTestId('target-saknay-toggle-tgt-name')
+    expect(saknayToggle).toHaveTextContent('Saknay')
     expect(saknayToggle).toHaveAttribute('title', 'Send to Saknay: Yes')
     expect(screen.queryByText('GP')).not.toBeInTheDocument()
 
@@ -985,6 +986,7 @@ describe('FieldMappingStep transformer modal regression', () => {
     const expressionInput = await screen.findByTestId('ctxmenu-expression-input')
 
     expect(modal).toHaveStyle({ width: '120px' })
+    expect(screen.getByText('Saknay')).toBeInTheDocument()
     expect(saknayToggle).toBeChecked()
     expect(expressionInput).toHaveValue('')
 

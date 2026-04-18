@@ -118,7 +118,11 @@ describe('AdminScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('data-platform')).toBeInTheDocument()
       expect(screen.getByText('analytics')).toBeInTheDocument()
+      expect(screen.getByTestId('team-management-message-slot')).toBeInTheDocument()
     })
+
+    expect(screen.queryByTestId('team-management-notice')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('team-management-error')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /add team/i }))
     await user.type(screen.getByTestId('team-management-team-name-input'), 'data-quality')
@@ -128,6 +132,7 @@ describe('AdminScreen', () => {
     await waitFor(() => {
       expect(mockCreateAdminTeam).toHaveBeenCalledWith({ teamName: 'data-quality', devopsName: 'quality-devops' }, true)
       expect(screen.getByText('data-quality')).toBeInTheDocument()
+      expect(within(screen.getByTestId('team-management-message-slot')).getByTestId('team-management-notice')).toHaveTextContent('was created')
     })
 
     const createdRow = screen.getByText('data-quality').closest('tr')
@@ -137,6 +142,7 @@ describe('AdminScreen', () => {
     await waitFor(() => {
       expect(mockDeleteAdminTeam).toHaveBeenCalledWith('team-data-quality', true)
       expect(screen.queryByText('data-quality')).not.toBeInTheDocument()
+      expect(within(screen.getByTestId('team-management-message-slot')).getByTestId('team-management-notice')).toHaveTextContent('was deleted')
     })
   }, 10000)
 
@@ -146,7 +152,11 @@ describe('AdminScreen', () => {
 
     await waitFor(() => {
       expect(screen.getByText('alice')).toBeInTheDocument()
+      expect(screen.getByTestId('user-management-message-slot')).toBeInTheDocument()
     })
+
+    expect(screen.queryByTestId('user-management-notice')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('user-management-error')).not.toBeInTheDocument()
 
     const aliceRow = screen.getByText('alice').closest('tr')
     await user.click(within(aliceRow).getByRole('button', { name: /edit/i }))
@@ -156,6 +166,7 @@ describe('AdminScreen', () => {
     await waitFor(() => {
       expect(mockUpdateAdminUser).toHaveBeenCalledWith('alice', { userId: 'alice', teamName: 'analytics' }, true)
       expect(screen.getByText('analytics')).toBeInTheDocument()
+      expect(within(screen.getByTestId('user-management-message-slot')).getByTestId('user-management-notice')).toHaveTextContent('was updated')
     })
   }, 10000)
 })

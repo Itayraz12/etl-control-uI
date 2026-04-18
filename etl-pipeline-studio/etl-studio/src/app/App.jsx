@@ -92,7 +92,7 @@ function AppContent() {
   }
 
   // Show management/admin workspace
-  if (state.navigationMode === 'etl-management' || state.navigationMode === 'etl-admin') {
+  if (['etl-management', 'etl-admin', 'udf-admin'].includes(state.navigationMode)) {
     return (
       <div style={{
         display: 'flex',

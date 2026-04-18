@@ -25,7 +25,7 @@ const READ_ONLY_CSS = `
   }
 `
 
-function renderStep(initialSink = {}, initialMappings = []) {
+function renderStep(initialSink = {}, initialMappings = [], initialMetadata = {}) {
   localStorage.setItem(
     WIZARD_STORAGE_KEY,
     JSON.stringify({
@@ -39,6 +39,7 @@ function renderStep(initialSink = {}, initialMappings = []) {
         environment: 'production',
         entityName: 'Product',
         tags: '',
+        ...initialMetadata,
       },
       source: {
         sourceType: 'kafka',
@@ -189,6 +190,41 @@ describe('SinkConfigStep Kafka additional properties', () => {
     expect(outputTopicInput).toHaveValue('')
   })
 
+  it('defaults the Kafka bootstrap environment from metadata and still allows independent selection', async () => {
+    const user = userEvent.setup()
+
+    renderStep({ sinkKafkaEnv: '' }, [], { environment: 'staging' })
+
+    const environmentSelect = screen.getByRole('combobox', { name: 'Bootstrap Environment' })
+
+    expect(environmentSelect).not.toBeDisabled()
+    expect(environmentSelect).toHaveValue('staging')
+    expect(screen.getByRole('option', { name: 'CAP' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'PROD' })).toBeInTheDocument()
+    expect(within(environmentSelect).queryByRole('option', { name: /dev/i })).not.toBeInTheDocument()
+
+    await user.selectOptions(environmentSelect, 'production')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.metadata?.environment).toBe('staging')
+      expect(persisted.sink?.sinkKafkaEnv).toBe('production')
+    })
+  })
+
+  it('keeps the selected sink Kafka environment when metadata changes', async () => {
+    renderStep({ sinkKafkaEnv: 'production' }, [], { environment: 'staging' })
+
+    await waitFor(() => {
+      const environmentSelect = screen.getByRole('combobox', { name: 'Bootstrap Environment' })
+      expect(environmentSelect).toHaveValue('production')
+
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.metadata?.environment).toBe('staging')
+      expect(persisted.sink?.sinkKafkaEnv).toBe('production')
+    })
+  })
+
   it('renders persisted Kafka additional properties when reopening the step', () => {
     renderStep({
       sinkKafkaAdditionalPropertiesEnabled: true,
@@ -218,7 +254,7 @@ describe('SinkConfigStep Kafka additional properties', () => {
       ]
     )
 
-    expect(screen.getByText('🦆 SAKNAY')).toBeInTheDocument()
+    expect(screen.getByTestId('sink-saknay-section')).toBeInTheDocument()
     expect(screen.getByText('Enabled automatically from Field Mapping target settings.')).toBeInTheDocument()
     expect(screen.getByDisplayValue('saknay.products')).toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: /saknay/i })).not.toBeInTheDocument()
@@ -359,8 +395,8 @@ describe('SinkConfigStep Kafka additional properties', () => {
   it('keeps SHADOW and ASG hints visible in read-only mode', () => {
     renderReadOnlyStep()
 
-    const shadowRow = screen.getByText('🌬️ SHADOW').closest('label')?.parentElement
-    const asgRow = screen.getByText('📊 ASG').closest('label')?.parentElement
+    const shadowRow = screen.getByTestId('sink-shadow-row')
+    const asgRow = screen.getByTestId('sink-asg-row')
 
     expect(shadowRow).toBeTruthy()
     expect(asgRow).toBeTruthy()

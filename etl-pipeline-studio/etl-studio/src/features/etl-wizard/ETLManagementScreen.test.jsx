@@ -316,11 +316,15 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByText('Catalog')).toBeInTheDocument()
       expect(screen.getByText('Pricing')).toBeInTheDocument()
       expect(screen.getByText('Legacy')).toBeInTheDocument()
+      expect(screen.getAllByText('PROD').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('CAP').length).toBeGreaterThan(0)
     })
 
     expect(screen.getByRole('button', { name: /All/i })).toHaveAttribute('aria-pressed', 'true')
 
-    await user.click(screen.getByRole('button', { name: /Stage/i }))
+    expect(screen.queryByRole('button', { name: /dev/i })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^CAP/i }))
 
     await waitFor(() => {
       expect(screen.getByText('Catalog')).toBeInTheDocument()
@@ -328,7 +332,7 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.queryByText('Pricing')).not.toBeInTheDocument()
     })
 
-    await user.click(screen.getByRole('button', { name: /Prod/i }))
+    await user.click(screen.getByRole('button', { name: /^PROD/i }))
 
     await waitFor(() => {
       expect(screen.getByText('Inventory')).toBeInTheDocument()
@@ -357,7 +361,7 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByText('0 failed')).toBeInTheDocument()
     })
 
-    await user.click(screen.getByRole('button', { name: /Stage/i }))
+    await user.click(screen.getByRole('button', { name: /^CAP/i }))
 
     await waitFor(() => {
       expect(screen.getByText('1 pipeline')).toBeInTheDocument()
@@ -383,7 +387,7 @@ describe('ETLManagementScreen table layout stability', () => {
 
     expect(matchesManagementSearch(baseMockDeployments[0], 'ERP running')).toBe(true)
     expect(matchesManagementSearch(baseMockDeployments[1], 'ERP running')).toBe(false)
-    expect(matchesManagementSearch(baseMockDeployments[1], 'CRM staging')).toBe(true)
+    expect(matchesManagementSearch(baseMockDeployments[1], 'CRM cap')).toBe(true)
     expect(matchesManagementSearch(baseMockDeployments[1], '13 Mar 2026')).toBe(true)
     expect(matchesManagementSearch(baseMockDeployments[0], '13 Mar 2026')).toBe(false)
     expect(matchesManagementSearch(baseMockDeployments[1], '2026-03-13')).toBe(true)
@@ -416,7 +420,7 @@ describe('ETLManagementScreen table layout stability', () => {
     })
 
     await user.clear(filterInput)
-    await user.type(filterInput, 'CRM staging')
+    await user.type(filterInput, 'CRM CAP')
 
     await waitFor(() => {
       const rows = screen.getAllByRole('row')
@@ -430,7 +434,7 @@ describe('ETLManagementScreen table layout stability', () => {
     const { rerender } = render(<ETLManagementScreen />)
 
     await waitFor(() => {
-      expect(mockFetchDeployments).toHaveBeenCalledWith('data-platform', true, { includeAllTeams: false, forceRefresh: false })
+      expect(mockFetchDeployments).toHaveBeenCalledWith('data-platform', true, { includeAllTeams: false })
     })
 
     mockFetchDeployments.mockClear()
@@ -439,7 +443,7 @@ describe('ETLManagementScreen table layout stability', () => {
     rerender(<ETLManagementScreen />)
 
     await waitFor(() => {
-      expect(mockFetchDeployments).toHaveBeenCalledWith('data-platform', true, { includeAllTeams: true, forceRefresh: false })
+      expect(mockFetchDeployments).toHaveBeenCalledWith('data-platform', true, { includeAllTeams: true })
     })
   })
 
@@ -869,7 +873,7 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByText('Pipeline restored successfully.')).toBeInTheDocument()
     })
 
-    await user.click(screen.getByRole('button', { name: /Prod/i }))
+    await user.click(screen.getByRole('button', { name: /^PROD/i }))
 
     await waitFor(() => {
       expect(screen.getByText('Legacy')).toBeInTheDocument()
@@ -1090,6 +1094,69 @@ describe('ETLManagementScreen table layout stability', () => {
       readOnly: true,
       currentStep: 0,
       completedSteps: [0, 1, 2, 3, 4, 5, 6],
+    })
+  })
+
+  it('uses the source alias when editing and previewing deployments that do not expose productSource', async () => {
+    const user = userEvent.setup()
+    mockDeployments = [
+      {
+        id: 'dep-source-only',
+        teamName: 'data-platform',
+        productType: 'Inventory',
+        source: 'ERP-Alias',
+        environment: 'production',
+        deploymentStatus: 'running',
+        savedVersion: '1.0.0',
+        deployedVersion: '1.0.0',
+        lastStatusChange: '2026-03-15T10:00:00.000Z',
+        createdAt: '2026-03-14T09:00:00.000Z',
+      },
+    ]
+
+    render(<ETLManagementScreen />)
+
+    await waitFor(() => {
+      expect(screen.getByText('ERP-Alias')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getAllByRole('button', { name: '1.0.0' })[0])
+
+    await waitFor(() => {
+      expect(mockFetchSavedDraftYaml).toHaveBeenCalledWith({
+        productType: 'Inventory',
+        source: 'ERP-Alias',
+        team: 'data-platform',
+        environment: 'production',
+      }, true)
+      expect(mockHydrateWizardStateFromYaml).toHaveBeenCalledWith('saved: yaml', {
+        productType: 'Inventory',
+        source: 'ERP-Alias',
+        teamName: 'data-platform',
+        environment: 'production',
+      })
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Edit configuration' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Open deployment for editing?')).toBeInTheDocument()
+      expect(screen.getByText(/ERP-Alias \/ Inventory/)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => {
+      expect(mockFetchDraftConfiguration).toHaveBeenCalledWith({
+        productType: 'Inventory',
+        source: 'ERP-Alias',
+        team: 'data-platform',
+        environment: 'production',
+      }, true)
+      expect(mockActions.loadState).toHaveBeenCalledWith(expect.objectContaining({
+        navigationMode: 'etl-config',
+        originalDraftYaml: 'pipeline: yaml',
+      }))
     })
   })
 

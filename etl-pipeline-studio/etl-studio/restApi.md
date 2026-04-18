@@ -420,6 +420,84 @@ Deletes a user row.
 - Service: `src/shared/services/adminService.js`
 - Consumed by: `src/features/admin/UserManagementTable.jsx`
 
+### GET `/backend/admin/udfs`
+Fetches UDF rows for the dedicated UDF management page.
+
+- Method: `GET`
+- Full default URL: `http://localhost:8080/api/backend/admin/udfs`
+- Headers used by frontend:
+  - `Accept: application/json, text/plain`
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/UDFManagementTable.jsx`
+
+Expected response shape used by the frontend:
+
+```json
+[
+  {
+    "id": "udf-1",
+    "name": "data_cleaner",
+    "type": "transformer",
+    "description": "Cleans and normalizes data fields",
+    "isActive": true,
+    "isApproved": true,
+    "version": "1.2.0",
+    "filePath": "/path/to/udf/file",
+    "team": "data_team",
+    "dateApproved": "2026-04-10T10:30:00.000Z",
+    "createdAt": "2026-03-18T10:30:00.000Z",
+    "updatedAt": "2026-04-12T10:30:00.000Z"
+  }
+]
+```
+
+The frontend also accepts these aliases when normalizing the payload:
+
+- `id` / `udfId` / `udf_id`
+- `name` / `udfName` / `udf_name`
+- `type` / `udfType` / `udf_type`
+- `description` / `details` / `summary`
+- `isActive` / `active` / `is_active`
+- `isApproved` / `approved` / `is_approved`
+- `filePath` / `path` / `file_path`
+- `team` / `teamName` / `team_name`
+- `dateApproved` / `approvedAt` / `date_approved`
+- `createdAt` / `dateOfCreate` / `createdDate` / `created_at`
+- `updatedAt` / `dateOfChange` / `modifiedAt` / `updated_at`
+
+### PUT `/backend/admin/udfs/{id}`
+Updates only the approval state of an existing UDF.
+
+- Method: `PUT`
+- Full default URL example: `http://localhost:8080/api/backend/admin/udfs/udf-1`
+- Path params:
+  - `id`
+- Headers used by frontend:
+  - `Content-Type: application/json`
+  - `Accept: application/json, text/plain`
+- Body:
+
+```json
+{
+  "isApproved": true
+}
+```
+
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/UDFManagementTable.jsx`
+
+### DELETE `/backend/admin/udfs/{id}`
+Deletes a UDF row.
+
+- Method: `DELETE`
+- Full default URL example: `http://localhost:8080/api/backend/admin/udfs/udf-1`
+- Path params:
+  - `id`
+- Headers used by frontend:
+  - `Accept: application/json, text/plain`
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/UDFManagementTable.jsx`
+
 ---
 
 ## Quick List
@@ -457,6 +535,10 @@ GET    /backend/admin/users
 POST   /backend/admin/users
 PUT    /backend/admin/users/{id}
 DELETE /backend/admin/users/{id}
+
+GET    /backend/admin/udfs
+PUT    /backend/admin/udfs/{id}
+DELETE /backend/admin/udfs/{id}
 ```
 
 ---

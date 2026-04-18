@@ -40,7 +40,7 @@ function getMissingMetadataRequiredFields(metadata = {}, source = {}) {
   return missingFields
 }
 
-function getMissingSourceRequiredFields(source = {}, metadata = {}) {
+function getMissingSourceRequiredFields(source = {}) {
   const missingFields = []
   const sourceType = String(source.sourceType || '').trim().toLowerCase()
 
@@ -55,7 +55,7 @@ function getMissingSourceRequiredFields(source = {}, metadata = {}) {
   }
 
   if (sourceType === 'kafka') {
-    if (!hasRequiredValue(source.kafkaEnv || metadata.environment)) missingFields.push('environment')
+    if (!hasRequiredValue(source.kafkaEnv)) missingFields.push('environment')
     if (!hasRequiredValue(source.kafkaTopic)) missingFields.push('topic')
     if (!hasRequiredValue(source.kafkaOffset)) missingFields.push('offset')
   }
@@ -71,7 +71,7 @@ function getMissingSourceRequiredFields(source = {}, metadata = {}) {
   return missingFields
 }
 
-function getMissingSinkRequiredFields(sink = {}, metadata = {}) {
+function getMissingSinkRequiredFields(sink = {}) {
   const missingFields = []
   const sinkType = String(sink.sinkType || '').trim().toLowerCase()
 
@@ -81,7 +81,7 @@ function getMissingSinkRequiredFields(sink = {}, metadata = {}) {
   }
 
   if (sinkType === 'kafka') {
-    if (!hasRequiredValue(sink.sinkKafkaEnv || metadata.environment)) missingFields.push('bootstrap environment')
+    if (!hasRequiredValue(sink.sinkKafkaEnv)) missingFields.push('bootstrap environment')
   }
 
   if (sinkType === 'rabbitmq') {

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MetadataStep from './MetadataStep.jsx'
@@ -199,6 +199,8 @@ describe('MetadataStep entity target schema', () => {
 
     renderStep()
 
+    expect(screen.getByText('Product Code')).toBeInTheDocument()
+
     const productCodeInput = screen.getByPlaceholderText('Numbers only')
     await user.type(productCodeInput, 'ab12-34x')
 
@@ -253,6 +255,16 @@ describe('MetadataStep entity target schema', () => {
       expect(persisted.metadata?.environment).toBe('staging')
       expect(persisted.metadata?.location).toBe('HOME')
     })
+  })
+
+  it('shows CAP and PROD in the environment dropdown and hides dev', () => {
+    renderStep()
+
+    const environmentSelect = screen.getByRole('combobox', { name: 'Environment' })
+
+    expect(screen.getByRole('option', { name: 'CAP' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'PROD' })).toBeInTheDocument()
+    expect(within(environmentSelect).queryByRole('option', { name: /dev/i })).not.toBeInTheDocument()
   })
 
   it('fetches entity schema on selection and persists parsed target fields', async () => {

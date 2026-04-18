@@ -175,14 +175,11 @@ Tabs appear above the table in a bordered tab bar.
 #### `All`
 Shows all deployments.
 
-#### `Prod`
+#### `PROD`
 Shows production deployments.
 
-#### `Stage`
+#### `CAP`
 Shows staging deployments.
-
-#### `Dev`
-Shows development deployments.
 
 #### `Deleted`
 Shows deleted pipelines only.
@@ -524,9 +521,8 @@ Required dropdown.
 
 Options:
 
-- `dev`
-- `staging`
-- `production`
+- `CAP`
+- `PROD`
 
 #### `Entity Name`
 Required dropdown.
@@ -916,6 +912,8 @@ Small badge button on target nodes.
 
 Use it to decide whether this target field should also be sent to Saknay.
 
+The visible label can be customized by deployment environment.
+
 ### `exp` badge
 Shown when a target expression exists.
 
@@ -1086,6 +1084,8 @@ Deletes the row.
 
 ### `🦆 SAKNAY` section
 Shown when at least one target field is configured to send to Saknay.
+
+The visible label can be customized by deployment environment.
 
 #### `Saknay Topic`
 Optional topic override.
@@ -1261,9 +1261,8 @@ This opens a new browser window with the wizard preloaded in read-only mode.
 ## Management tabs
 
 - `All`
-- `Prod`
-- `Stage`
-- `Dev`
+- `PROD`
+- `CAP`
 - `Deleted`
 
 ## Wizard step tabs
