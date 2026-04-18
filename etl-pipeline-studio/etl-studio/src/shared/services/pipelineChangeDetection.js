@@ -63,10 +63,12 @@ function normalizeFilterGroup(group = {}) {
   return {
     logic: group.logic || 'AND',
     mode: group.mode || 'include',
+    ...(group.isRevertible === false ? { isRevertible: false } : {}),
     rules: Array.isArray(group.rules)
       ? group.rules.map(rule => ({
           field: rule.field || '',
           op: rule.op || '',
+          isReverted: Boolean(rule.isReverted),
           value: rule.value || '',
         }))
       : [],

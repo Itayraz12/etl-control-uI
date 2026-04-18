@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ConfigProvider, STEP_FILTERS, STEP_METADATA, useConfig } from './configContext.jsx'
+import { ConfigProvider, STEP_FILTERS, STEP_METADATA, STEP_SUMMARY, useConfig } from './configContext.jsx'
 
 const fetchEntities = vi.fn()
 const fetchEntitySchema = vi.fn()
@@ -147,6 +147,19 @@ describe('ConfigProvider metadata prefetching', () => {
       expect(fetchStreamingContinuities).toHaveBeenCalledTimes(2)
       expect(fetchRecordsPerDay).toHaveBeenCalledTimes(2)
       expect(fetchEntitySchema).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('prefetches filter metadata when the user enters the summary step', async () => {
+    render(
+      <ConfigProvider>
+        <PrefetchProbe step={STEP_SUMMARY} entityName="Product" />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchFilters).toHaveBeenCalledTimes(1)
+      expect(fetchTransformers).toHaveBeenCalledTimes(1)
     })
   })
 })

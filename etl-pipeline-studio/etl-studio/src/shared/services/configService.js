@@ -216,13 +216,13 @@ export const MOCK_TRANSFORMERS = RAW_MOCK_TRANSFORMERS.map(t => ({
  */
 export const MOCK_FILTER_OPERATORS = [
   { id: 'eq',         name: 'Equals',           symbol: '=',  additionalProperties: {} },
-  { id: 'neq',        name: 'Not Equals',        symbol: '≠',  additionalProperties: {} },
+  { id: 'neq',        name: 'Not Equals',        symbol: '≠',  isRevertible: false, additionalProperties: {} },
   { id: 'gt',         name: 'Greater Than',      symbol: '>',  additionalProperties: {} },
   { id: 'gte',        name: 'Greater or Equal',  symbol: '≥',  additionalProperties: {} },
   { id: 'lt',         name: 'Less Than',         symbol: '<',  additionalProperties: {} },
   { id: 'lte',        name: 'Less or Equal',     symbol: '≤',  additionalProperties: {} },
   { id: 'in',         name: 'In List',           symbol: '∈',  additionalProperties: { options: ['1', '2', '3', '5', '10', 'custom'] } },
-  { id: 'nin',        name: 'Not In List',       symbol: '∉',  additionalProperties: { options: ['1', '2', '3', '5', '10', 'custom'] } },
+  { id: 'nin',        name: 'Not In List',       symbol: '∉',  isRevertible: false, additionalProperties: { options: ['1', '2', '3', '5', '10', 'custom'] } },
   { id: 'contains',   name: 'Contains',          symbol: '⊇',  additionalProperties: {} },
   { id: 'startswith', name: 'Starts With',       symbol: '⊢',  additionalProperties: {} },
   { id: 'endswith',   name: 'Ends With',         symbol: '⊣',  additionalProperties: {} },
@@ -234,8 +234,8 @@ export const MOCK_FILTER_OPERATORS = [
       { key: 'include_edges', label: 'Include Edges', type: 'boolean', default: 'true' }
     ] 
   } },
-  { id: 'isnull',     name: 'Is Null',           symbol: '∅',  additionalProperties: {} },
-  { id: 'isnotnull',  name: 'Is Not Null',       symbol: '∃',  additionalProperties: {} },
+  { id: 'isnull',     name: 'Is Null',           symbol: '∅',  isRevertible: false, additionalProperties: {} },
+  { id: 'isnotnull',  name: 'Is Not Null',       symbol: '∃',  isRevertible: false, additionalProperties: {} },
   { id: 'status',     name: 'Status',            symbol: '◉',  additionalProperties: { options: ['active', 'inactive', 'pending', 'archived'] } },
   { id: 'priority',   name: 'Priority Level',    symbol: '▲',  additionalProperties: { options: ['low', 'medium', 'high', 'critical'] } },
   { id: 'inrange',    name: 'In Range',          symbol: '⊗',  additionalProperties: { 
@@ -280,6 +280,63 @@ export const MOCK_RECORDS_PER_DAY = [
 ]
 
 const configRequestCache = new Map()
+
+function normalizeBooleanFlag(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+
+  const normalizedValue = String(value).trim().toLowerCase()
+  if (!normalizedValue) return fallback
+  if (['true', '1', 'yes', 'y', 'on'].includes(normalizedValue)) return true
+  if (['false', '0', 'no', 'n', 'off'].includes(normalizedValue)) return false
+  return fallback
+}
+
+function buildRevertedFilterName(name = '') {
+  const normalizedName = asString(name).trim()
+  if (!normalizedName) return 'not'
+  if (/^not\s+/i.test(normalizedName)) return normalizedName
+  return `not ${normalizedName}`
+}
+
+function normalizeFilterOperator(operator = {}) {
+  return {
+    ...operator,
+    id: asString(operator.id ?? operator.rule ?? operator.name).trim(),
+    name: asString(operator.name ?? operator.id ?? operator.rule).trim(),
+    symbol: asString(operator.symbol ?? operator.rule ?? operator.id).trim(),
+    isInclude: operator.isInclude,
+    isRevertible: normalizeBooleanFlag(operator.isRevertible ?? operator.is_revertible, true),
+    isReverted: normalizeBooleanFlag(operator.isReverted ?? operator.is_reverted, false),
+    additionalProperties: operator.additionalProperties ?? operator.additional_properties ?? {},
+  }
+}
+
+function expandRevertibleFilterOperators(operators = []) {
+  return (Array.isArray(operators) ? operators : []).flatMap((operator) => {
+    const normalizedOperator = normalizeFilterOperator(operator)
+    if (!normalizedOperator.id) return []
+
+    const regularOperator = {
+      ...normalizedOperator,
+      isReverted: false,
+    }
+
+    if (!regularOperator.isRevertible) {
+      return [regularOperator]
+    }
+
+    return [
+      regularOperator,
+      {
+        ...regularOperator,
+        name: buildRevertedFilterName(regularOperator.name),
+        isReverted: true,
+      },
+    ]
+  })
+}
 
 function loadInFlightConfigRequest(cacheKey, loader) {
   if (configRequestCache.has(cacheKey)) {
@@ -520,15 +577,10 @@ export async function fetchTransformers(useMock = true) {
 export async function fetchFilters(useMock = true) {
   if (useMock) {
     await new Promise(r => setTimeout(r, 150))
-    return MOCK_FILTER_OPERATORS
+    return expandRevertibleFilterOperators(MOCK_FILTER_OPERATORS)
   }
   const raw = await fetchJson(`${API_BASE}/config/filters`)
-  return raw.map(f => ({
-    id:        f.id,
-    name:      f.name,
-    symbol:    f.rule || f.id,
-    isInclude: f.isInclude,
-  }))
+  return expandRevertibleFilterOperators(raw)
 }
 
 /**

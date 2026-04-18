@@ -57,6 +57,7 @@ const mockWizardState = {
   sink: {
     sinkType: 'kafka',
     sinkKafkaTopic: 'catalog-sink',
+    sinkKafkaEnv: 'production',
     sinkKafkaAdditionalProperties: [],
     sinkRmqVhost: '',
     sinkRmqPort: '',
@@ -179,6 +180,7 @@ describe('SummaryStep save draft behavior', () => {
     mockWizardState.sink.asg = false
     mockWizardState.sink.sinkType = 'kafka'
     mockWizardState.sink.sinkKafkaTopic = 'catalog-sink'
+    mockWizardState.sink.sinkKafkaEnv = 'production'
     mockWizardState.sink.sinkKafkaAdditionalProperties = []
     mockWizardState.sink.sinkRmqVhost = ''
     mockWizardState.sink.sinkRmqPort = ''
@@ -364,7 +366,8 @@ filters:
     - rule:
         and:
           - field: sku
-            op: EQ
+            isReverted: false
+            type: EQ
             values:
               - ABC-123`
     mockWizardState.originalDraftSignature = buildPipelineChangeSignature(mockWizardState)
@@ -461,7 +464,7 @@ filters:
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('additional_inputs:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('streamingContinuity: continuous')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('avgRecordsAmount: millions')
-    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('filters:\n  dependencies:\n    - type: EQ\n  config:\n    - rule:\n        and:\n          - field: sku\n            op: EQ\n            values:\n              - ABC-123')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('filters:\n  dependencies:\n    - type: EQ\n  config:\n    - rule:\n        and:\n          - field: sku\n            isReverted: false\n            type: EQ\n            values:\n              - ABC-123')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('filters:\n  - ')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('streaming_continuity:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('avg_records_amount:')

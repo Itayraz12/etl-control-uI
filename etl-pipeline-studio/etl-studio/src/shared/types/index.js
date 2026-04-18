@@ -136,6 +136,7 @@ export function normalizeMetadataLocation(value, environment) {
  * @property {string} id
  * @property {string} field
  * @property {string} op
+ * @property {boolean} [isReverted]
  * @property {string} value
  */
 
@@ -143,9 +144,75 @@ export function normalizeMetadataLocation(value, environment) {
  * @typedef {Object} FilterGroup
  * @property {string}      id
  * @property {'AND'|'OR'}  logic
+ * @property {'include'|'exclude'} [mode]
+ * @property {boolean}     [isRevertible]
  * @property {FilterRule[]} rules
  * @property {FilterGroup[]} subgroups
  */
+
+export const DEFAULT_FILTER_MODE = 'include'
+export const DEFAULT_FILTER_IS_REVERTIBLE = true
+
+function normalizeBooleanFlag(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+
+  const normalizedValue = String(value).trim().toLowerCase()
+  if (!normalizedValue) return fallback
+  if (['true', '1', 'yes', 'y', 'on'].includes(normalizedValue)) return true
+  if (['false', '0', 'no', 'n', 'off'].includes(normalizedValue)) return false
+  return fallback
+}
+
+export function normalizeFilterLogic(value, fallback = 'AND') {
+  return String(value || fallback).trim().toUpperCase() === 'OR'
+    ? 'OR'
+    : 'AND'
+}
+
+export function normalizeFilterMode(value, fallback = DEFAULT_FILTER_MODE) {
+  return String(value || fallback).trim().toLowerCase() === 'exclude'
+    ? 'exclude'
+    : 'include'
+}
+
+export function normalizeFilterRule(rule = {}, fallbackId = 'rule') {
+  return {
+    ...(rule && typeof rule === 'object' ? rule : {}),
+    id: rule?.id == null ? fallbackId : String(rule.id),
+    field: rule?.field == null ? '' : String(rule.field),
+    op: rule?.op == null ? '' : String(rule.op),
+    isReverted: normalizeBooleanFlag(rule?.isReverted ?? rule?.is_reverted, false),
+    value: rule?.value == null ? '' : String(rule.value),
+  }
+}
+
+export function normalizeFilterGroup(group = {}, fallbackId = 'group') {
+  const safeGroup = group && typeof group === 'object' ? group : {}
+
+  return {
+    ...safeGroup,
+    id: safeGroup.id == null ? fallbackId : String(safeGroup.id),
+    logic: normalizeFilterLogic(safeGroup.logic),
+    mode: normalizeFilterMode(safeGroup.mode),
+    isRevertible: normalizeBooleanFlag(
+      safeGroup.isRevertible ?? safeGroup.is_revertible,
+      DEFAULT_FILTER_IS_REVERTIBLE,
+    ),
+    rules: Array.isArray(safeGroup.rules)
+      ? safeGroup.rules.map((rule, index) => normalizeFilterRule(rule, `${safeGroup.id ?? fallbackId}-rule-${index}`))
+      : [],
+    subgroups: Array.isArray(safeGroup.subgroups)
+      ? safeGroup.subgroups.map((subgroup, index) => normalizeFilterGroup(subgroup, `${safeGroup.id ?? fallbackId}-group-${index}`))
+      : [],
+  }
+}
+
+export function normalizeFilterGroups(groups = []) {
+  if (!Array.isArray(groups)) return []
+  return groups.map((group, index) => normalizeFilterGroup(group, `group-${index}`))
+}
 
 /**
  * @typedef {Object} KeyValueEntry

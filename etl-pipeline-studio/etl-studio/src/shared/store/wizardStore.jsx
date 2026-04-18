@@ -5,7 +5,7 @@ import {
   loadPersistedWizardStateForUser,
   serializeWizardState,
 } from './wizardPersistence.js'
-import { normalizeMetadataLocation } from '../types/index.js'
+import { normalizeFilterGroups, normalizeMetadataLocation } from '../types/index.js'
 
 function getPreviewStateStorageKey(search = window.location.search) {
   const params = new URLSearchParams(search)
@@ -196,7 +196,7 @@ function wizardReducer(state, action) {
           ? payload.targetSchema
           : [],
         mappings: Array.isArray(payload.mappings) ? payload.mappings : [],
-        filters: Array.isArray(payload.filters) ? payload.filters : [],
+        filters: normalizeFilterGroups(payload.filters),
         sink: { ...initialState.sink, ...(payload.sink || {}) },
       })
     }
@@ -219,7 +219,7 @@ function wizardReducer(state, action) {
     case 'SET_MAPPINGS':
       return { ...state, mappings: action.payload }
     case 'SET_FILTERS':
-      return { ...state, filters: action.payload }
+      return { ...state, filters: normalizeFilterGroups(action.payload) }
     case 'UPDATE_SINK':
       return { ...state, sink: { ...state.sink, ...action.payload } }
     case 'SET_THEME':
@@ -251,6 +251,7 @@ export function WizardProvider({ children, user = null }) {
                 ...initialState,
                 ...wizardState,
                 metadata: normalizeMetadataState(wizardState.metadata),
+                filters: normalizeFilterGroups(wizardState.filters),
                 readOnly: true,
                 theme: 'dark',
                 completedSteps: new Set(Array.isArray(wizardState.completedSteps) ? wizardState.completedSteps : []),

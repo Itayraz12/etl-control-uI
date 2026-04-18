@@ -197,6 +197,50 @@ describe('UDFManagementTable', () => {
     await waitFor(() => {
       expect(screen.getByTestId('udf-column-name-col')).toHaveStyle({ width: '260px' })
     })
+
+    expect(screen.getByTestId('udf-description-udf-1')).toHaveStyle({ maxWidth: '236px' })
+
+    fireEvent.mouseDown(screen.getByTestId('udf-column-resizer-description'), { clientX: 260 })
+    fireEvent.mouseMove(document, { clientX: 340 })
+    fireEvent.mouseUp(document)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('udf-column-description-col')).toHaveStyle({ width: '340px' })
+      expect(screen.getByTestId('udf-description-udf-1')).toHaveStyle({ maxWidth: '316px' })
+    })
+  })
+
+  it('auto-fits a column to the widest visible content when the header is double-clicked', async () => {
+    render(<UDFManagementTable />)
+
+    await waitFor(() => {
+      expect(screen.getByText('data_cleaner')).toBeInTheDocument()
+    })
+
+    const headerContent = document.querySelector('[data-udf-column-header-content="description"]')
+    const descriptionContentNodes = Array.from(document.querySelectorAll('[data-udf-column-content="description"]'))
+
+    expect(headerContent).not.toBeNull()
+    expect(descriptionContentNodes.length).toBeGreaterThan(0)
+
+    Object.defineProperty(headerContent, 'scrollWidth', {
+      configurable: true,
+      get: () => 90,
+    })
+
+    descriptionContentNodes.forEach((node, index) => {
+      Object.defineProperty(node, 'scrollWidth', {
+        configurable: true,
+        get: () => (index === 1 ? 420 : 240),
+      })
+    })
+
+    fireEvent.doubleClick(screen.getByText('Description'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('udf-column-description-col')).toHaveStyle({ width: '444px' })
+      expect(screen.getByTestId('udf-description-udf-2')).toHaveStyle({ maxWidth: '420px' })
+    })
   })
 
   it('deletes a UDF after confirmation', async () => {

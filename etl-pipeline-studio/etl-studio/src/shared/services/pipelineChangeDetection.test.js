@@ -60,5 +60,60 @@ describe('buildPipelineChangeSignature', () => {
 
     expect(changedSignature).not.toBe(baseSignature)
   })
+
+  it('changes when a filter is marked as not revertible', () => {
+    const baseSignature = buildPipelineChangeSignature(buildState({
+      filters: [
+        {
+          id: 'group-1',
+          logic: 'AND',
+          mode: 'include',
+          rules: [{ id: 'rule-1', field: 'sku', op: 'eq', value: 'ABC' }],
+          subgroups: [],
+        },
+      ],
+    }))
+    const changedSignature = buildPipelineChangeSignature(buildState({
+      filters: [
+        {
+          id: 'group-1',
+          logic: 'AND',
+          mode: 'include',
+          isRevertible: false,
+          rules: [{ id: 'rule-1', field: 'sku', op: 'eq', value: 'ABC' }],
+          subgroups: [],
+        },
+      ],
+    }))
+
+    expect(changedSignature).not.toBe(baseSignature)
+  })
+
+  it('changes when a filter rule switches between regular and reverted', () => {
+    const baseSignature = buildPipelineChangeSignature(buildState({
+      filters: [
+        {
+          id: 'group-1',
+          logic: 'AND',
+          mode: 'include',
+          rules: [{ id: 'rule-1', field: 'sku', op: 'eq', isReverted: false, value: 'ABC' }],
+          subgroups: [],
+        },
+      ],
+    }))
+    const changedSignature = buildPipelineChangeSignature(buildState({
+      filters: [
+        {
+          id: 'group-1',
+          logic: 'AND',
+          mode: 'include',
+          rules: [{ id: 'rule-1', field: 'sku', op: 'eq', isReverted: true, value: 'ABC' }],
+          subgroups: [],
+        },
+      ],
+    }))
+
+    expect(changedSignature).not.toBe(baseSignature)
+  })
 })
 

@@ -94,7 +94,63 @@ function normalizeFilterLogic(value = '') {
     : 'and'
 }
 
-function buildStructuredFilterConfigEntries(groups = [], dependencyTypes = [], inheritedMode = 'include') {
+function normalizeBooleanFlag(value, fallback = true) {
+  if (value === undefined || value === null || value === '') return fallback
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+
+  const normalizedValue = String(value).trim().toLowerCase()
+  if (!normalizedValue) return fallback
+  if (['true', '1', 'yes', 'y', 'on'].includes(normalizedValue)) return true
+  if (['false', '0', 'no', 'n', 'off'].includes(normalizedValue)) return false
+  return fallback
+}
+
+function buildFilterOperatorIndex(filterOperators = []) {
+  const index = new Map()
+
+  ;(Array.isArray(filterOperators) ? filterOperators : []).forEach((operator) => {
+    if (!operator || typeof operator !== 'object') return
+
+    const normalizedOperator = {
+      ...operator,
+      isRevertible: normalizeBooleanFlag(operator.isRevertible ?? operator.is_revertible, true),
+    }
+
+    ;[operator.id, operator.name, operator.symbol, operator.rule]
+      .map(value => String(value ?? '').trim().toLowerCase())
+      .filter(Boolean)
+      .forEach(key => {
+        if (!index.has(key)) index.set(key, normalizedOperator)
+      })
+  })
+
+  return index
+}
+
+function resolveConditionIsRevertible(rule = {}, group = {}, operatorIndex = new Map()) {
+  const explicitRuleValue = rule?.isRevertible ?? rule?.is_revertible
+  if (explicitRuleValue !== undefined && explicitRuleValue !== null && explicitRuleValue !== '') {
+    return normalizeBooleanFlag(explicitRuleValue, true)
+  }
+
+  const operatorKey = String(rule?.op ?? '').trim().toLowerCase()
+  if (operatorKey && operatorIndex.has(operatorKey)) {
+    return normalizeBooleanFlag(operatorIndex.get(operatorKey)?.isRevertible, true)
+  }
+
+  if (group?.isRevertible !== undefined && group?.isRevertible !== null && group?.isRevertible !== '') {
+    return normalizeBooleanFlag(group.isRevertible, true)
+  }
+
+  return true
+}
+
+function resolveConditionIsReverted(rule = {}) {
+  return normalizeBooleanFlag(rule?.isReverted ?? rule?.is_reverted, false)
+}
+
+function buildStructuredFilterConfigEntries(groups = [], dependencyTypes = [], inheritedMode = 'include', operatorIndex = new Map()) {
   if (!Array.isArray(groups)) return []
 
   return groups
@@ -112,9 +168,12 @@ function buildStructuredFilterConfigEntries(groups = [], dependencyTypes = [], i
 
         const values = Array.from(new Set(parseFilterTextValues(rule?.value)))
         const dependencyType = normalizeFilterDependencyType(rule?.op)
-        const conditionKey = `${field}::${groupMode}::${dependencyType}`
+        const isReverted = resolveConditionIsReverted(rule)
+        const conditionKey = `${field}::${groupMode}::${dependencyType}::${isReverted ? 'reverted' : 'regular'}`
         const existingCondition = groupedConditions.get(conditionKey) || {
           field,
+          isRevertible: resolveConditionIsRevertible(rule, group, operatorIndex),
+          isReverted,
           op: dependencyType,
           ...(groupMode !== 'include' ? { mode: groupMode } : {}),
           values: [],
@@ -132,15 +191,18 @@ function buildStructuredFilterConfigEntries(groups = [], dependencyTypes = [], i
         })
       })
 
-      const subgroupEntries = buildStructuredFilterConfigEntries(group.subgroups, dependencyTypes, groupMode)
+      const subgroupEntries = buildStructuredFilterConfigEntries(group.subgroups, dependencyTypes, groupMode, operatorIndex)
       subgroupEntries.forEach((entry) => {
         ruleItems.push(entry)
       })
 
       if (ruleItems.length === 0) return null
 
+      const hasDirectConditions = groupedConditions.size > 0
+
       return {
         rule: {
+          ...(group?.isRevertible === false && !hasDirectConditions ? { isRevertible: false } : {}),
           [logicKey]: ruleItems,
         },
       }
@@ -155,8 +217,9 @@ function formatFilterConditionYaml(condition, indent = '') {
 
   return [
     `${indent}- field: ${formatYamlTextValue(condition.field)}`,
+    `${indent}  isReverted: ${condition.isReverted === true ? 'true' : 'false'}`,
     ...(condition.mode ? [`${indent}  mode: ${formatYamlTextValue(condition.mode)}`] : []),
-    `${indent}  op: ${formatYamlTextValue(formatFilterDependencyType(condition.op))}`,
+    `${indent}  type: ${formatYamlTextValue(formatFilterDependencyType(condition.op))}`,
     valuesYaml,
   ].join('\n')
 }
@@ -184,9 +247,10 @@ function formatFilterRuleYaml(entry, indent = '') {
   ].filter(Boolean).join('\n')
 }
 
-export function formatFiltersYamlSection(filters = [], indent = '') {
+export function formatFiltersYamlSection(filters = [], filterOperators = [], indent = '') {
   const dependencyTypes = []
-  const configEntries = buildStructuredFilterConfigEntries(filters, dependencyTypes)
+  const operatorIndex = buildFilterOperatorIndex(filterOperators)
+  const configEntries = buildStructuredFilterConfigEntries(filters, dependencyTypes, 'include', operatorIndex)
   if (configEntries.length === 0) return ''
 
   const normalizedDependencyTypes = dependencyTypes.filter(Boolean)

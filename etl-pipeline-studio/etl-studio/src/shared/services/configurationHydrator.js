@@ -1,5 +1,5 @@
 import { parse } from 'yaml'
-import { FIELD_TYPES, normalizeEnvironmentValue, normalizeMetadataLocation, normalizeSourceSchema } from '../types/index.js'
+import { FIELD_TYPES, normalizeEnvironmentValue, normalizeFilterGroups, normalizeMetadataLocation, normalizeSourceSchema } from '../types/index.js'
 import {
   ASG_YAML_FLAG_KEY,
   PRODUCT_CODE_YAML_KEY,
@@ -430,12 +430,48 @@ function extractStructuredFilterMode(...values) {
 
 function extractStructuredFilterOperator(entry, resolveDependencyType) {
   const explicitOperator = normalizeStructuredFilterDependencyType(
-    entry?.op
+    (['include', 'exclude'].includes(asString(entry?.type).trim().toLowerCase()) ? '' : entry?.type)
+      ?? entry?.op
       ?? entry?.operator
-      ?? (['include', 'exclude'].includes(asString(entry?.type).trim().toLowerCase()) ? '' : entry?.type)
   )
 
   return explicitOperator || resolveDependencyType()
+}
+
+function extractStructuredFilterIsRevertible(...candidates) {
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null || candidate === '') continue
+    if (typeof candidate === 'boolean') return candidate
+    const normalizedValue = String(candidate).trim().toLowerCase()
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalizedValue)) return true
+    if (['false', '0', 'no', 'n', 'off'].includes(normalizedValue)) return false
+  }
+
+  return true
+}
+
+function readStructuredFilterIsRevertible(...candidates) {
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null || candidate === '') continue
+    if (typeof candidate === 'boolean') return candidate
+    const normalizedValue = String(candidate).trim().toLowerCase()
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalizedValue)) return true
+    if (['false', '0', 'no', 'n', 'off'].includes(normalizedValue)) return false
+  }
+
+  return undefined
+}
+
+function extractStructuredFilterIsReverted(...candidates) {
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null || candidate === '') continue
+    if (typeof candidate === 'boolean') return candidate
+    const normalizedValue = String(candidate).trim().toLowerCase()
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalizedValue)) return true
+    if (['false', '0', 'no', 'n', 'off'].includes(normalizedValue)) return false
+  }
+
+  return false
 }
 
 function createStructuredDependencyResolver(dependencyTypes = []) {
@@ -457,10 +493,12 @@ function buildStructuredFilterRuleGroup(rule, resolveDependencyType, idPrefix = 
 
   const logicKey = Array.isArray(rule.or) ? 'or' : 'and'
   const entries = Array.isArray(rule[logicKey]) ? rule[logicKey] : []
+  const ruleIsRevertible = readStructuredFilterIsRevertible(rule?.isRevertible, rule?.is_revertible)
   const group = {
     id: idPrefix,
     logic: logicKey === 'or' ? 'OR' : 'AND',
     mode: normalizeStructuredFilterMode(inheritedMode),
+    isRevertible: ruleIsRevertible ?? true,
     rules: [],
     subgroups: [],
   }
@@ -485,6 +523,8 @@ function buildStructuredFilterRuleGroup(rule, resolveDependencyType, idPrefix = 
     if (!field) return
 
     const mode = extractStructuredFilterMode(entry.mode, entry.type, inheritedMode)
+    const entryIsRevertible = readStructuredFilterIsRevertible(entry?.isRevertible, entry?.is_revertible)
+    const entryIsReverted = extractStructuredFilterIsReverted(entry?.isReverted, entry?.is_reverted)
     const values = normalizeStructuredFilterValues(entry.values)
     const operator = extractStructuredFilterOperator(entry, resolveDependencyType)
     const ruleValues = values.length > 0 ? values : ['']
@@ -493,11 +533,16 @@ function buildStructuredFilterRuleGroup(rule, resolveDependencyType, idPrefix = 
       group.mode = mode
     }
 
+    if (ruleIsRevertible === undefined && entryIsRevertible === false) {
+      group.isRevertible = false
+    }
+
     ruleValues.forEach((value, valueIndex) => {
       group.rules.push({
         id: `${idPrefix}-rule-${index}-${valueIndex}`,
         field,
         op: operator,
+        isReverted: entryIsReverted,
         value,
       })
     })
@@ -544,7 +589,7 @@ function parseFilterRule(text, ruleId) {
 function parseFilterGroup(expression, idPrefix = 'group') {
   const text = stripSingleOuterPair(stripWrappingQuotes(asString(expression).trim()))
   if (!text) {
-    return { id: idPrefix, logic: 'AND', rules: [], subgroups: [] }
+    return { id: idPrefix, logic: 'AND', mode: 'include', isRevertible: true, rules: [], subgroups: [] }
   }
 
   const logic = splitTopLevel(text, ' AND ').length > 1 ? 'AND' : (splitTopLevel(text, ' OR ').length > 1 ? 'OR' : 'AND')
@@ -569,6 +614,8 @@ function parseFilterGroup(expression, idPrefix = 'group') {
   return {
     id: idPrefix,
     logic,
+    mode: 'include',
+    isRevertible: true,
     rules,
     subgroups,
   }
@@ -608,10 +655,12 @@ function buildStructuredFilterGroups(filters = {}) {
         id: `group-${index}`,
         logic: 'OR',
         mode,
+        isRevertible: extractStructuredFilterIsRevertible(entry?.isRevertible, entry?.is_revertible),
         rules: ruleValues.map((value, valueIndex) => ({
           id: `group-${index}-rule-${valueIndex}`,
           field,
           op: operator,
+          isReverted: extractStructuredFilterIsReverted(entry?.isReverted, entry?.is_reverted),
           value,
         })),
         subgroups: [],
@@ -773,9 +822,11 @@ export function hydrateWizardStateFromYaml(yamlText, fallback = {}) {
       schemaName: asString(schema.inputSchema ?? fallback.upload?.schemaName),
     },
     mappings: buildMappings(output.mapping || output.mappings || parsed.mapping || parsed.mappings, output.transformations || parsed.transformations),
-    filters: Array.isArray(filtersDefinition)
-      ? buildFilterGroups(filtersDefinition)
-      : buildStructuredFilterGroups(filtersDefinition),
+    filters: normalizeFilterGroups(
+      Array.isArray(filtersDefinition)
+        ? buildFilterGroups(filtersDefinition)
+        : buildStructuredFilterGroups(filtersDefinition)
+    ),
     sink: {
       sinkType,
       sinkKafkaTopic: sinkType === 'kafka' ? sinkTopic : '',

@@ -1,4 +1,4 @@
-import { normalizeMetadataLocation } from '../types/index.js'
+import { normalizeFilterGroups, normalizeMetadataLocation } from '../types/index.js'
 
 export const LEGACY_WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
 
@@ -27,7 +27,7 @@ export function parsePersistedWizardState(raw) {
       currentStep: Number.isInteger(parsed.currentStep) ? parsed.currentStep : 0,
       completedSteps: new Set(Array.isArray(parsed.completedSteps) ? parsed.completedSteps : []),
       mappings: Array.isArray(parsed.mappings) ? parsed.mappings : [],
-      filters: Array.isArray(parsed.filters) ? parsed.filters : [],
+      filters: normalizeFilterGroups(parsed.filters),
       metadata: parsed.metadata && typeof parsed.metadata === 'object' ? parsed.metadata : undefined,
       source: parsed.source && typeof parsed.source === 'object' ? parsed.source : undefined,
       upload: parsed.upload && typeof parsed.upload === 'object' ? parsed.upload : undefined,
@@ -47,6 +47,7 @@ export function serializeWizardState(state) {
   return JSON.stringify({
     ...persistedState,
     completedSteps: Array.from(state?.completedSteps || []),
+    filters: normalizeFilterGroups(state?.filters),
   })
 }
 
@@ -98,6 +99,7 @@ export function buildStateFromPersisted(baseState, persistedState) {
     },
     upload: persistedState.upload ? { ...baseState.upload, ...persistedState.upload } : baseState.upload,
     targetSchema: persistedState.targetSchema ?? baseState.targetSchema,
+    filters: normalizeFilterGroups(persistedState.filters),
     sink: {
       ...sink,
       sinkKafkaEnv: String(sink?.sinkKafkaEnv || '').trim() || metadataEnvironment,

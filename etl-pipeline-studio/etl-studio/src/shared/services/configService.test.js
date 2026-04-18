@@ -3,6 +3,7 @@ import {
   buildConfigurationYamlUrl,
   buildSchemaByExampleUrl,
   fetchEntitySchema,
+  fetchFilters,
   fetchRecordsPerDay,
   fetchStreamingContinuities,
   resetConfigServiceRequestCache,
@@ -137,6 +138,79 @@ describe('configService', () => {
 
     await expect(fetchRecordsPerDay(false)).resolves.toEqual(first)
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('preserves filter operator metadata from /api/config/filters', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([
+      {
+        id: 'smaller',
+        name: 'Smaller',
+        rule: '<',
+        isInclude: true,
+        isRevertible: false,
+        additionalProperties: { precision: 'strict' },
+      },
+    ]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(fetchFilters(false)).resolves.toEqual([
+      {
+        id: 'smaller',
+        name: 'Smaller',
+        rule: '<',
+        symbol: '<',
+        isInclude: true,
+        isRevertible: false,
+        isReverted: false,
+        additionalProperties: { precision: 'strict' },
+      },
+    ])
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8080/api/config/filters',
+      { headers: { 'X-user-ID': 'user-123' } },
+    )
+  })
+
+  it('adds a synthetic "not ..." option for revertible filters and marks isReverted on each variant', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([
+      {
+        id: 'startswith',
+        name: 'Starts With',
+        rule: '^=',
+        isInclude: true,
+        isRevertible: true,
+        additionalProperties: { options: ['sku', 'catalog'] },
+      },
+    ]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(fetchFilters(false)).resolves.toEqual([
+      {
+        id: 'startswith',
+        name: 'Starts With',
+        rule: '^=',
+        symbol: '^=',
+        isInclude: true,
+        isRevertible: true,
+        isReverted: false,
+        additionalProperties: { options: ['sku', 'catalog'] },
+      },
+      {
+        id: 'startswith',
+        name: 'not Starts With',
+        rule: '^=',
+        symbol: '^=',
+        isInclude: true,
+        isRevertible: true,
+        isReverted: true,
+        additionalProperties: { options: ['sku', 'catalog'] },
+      },
+    ])
   })
 
   it('deduplicates concurrent entity schema fetches for the same entity but refetches on a later revisit', async () => {

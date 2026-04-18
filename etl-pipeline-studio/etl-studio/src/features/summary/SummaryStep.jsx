@@ -122,7 +122,7 @@ function YamlPreview({ yaml, theme = 'dark' }) {
 
 export default function SummaryStep() {
   const { state, actions } = useWizard()
-  const { transformers } = useConfig()
+  const { transformers, filters: filterOperators = [] } = useConfig()
   const summaryFooter = useSummaryFooter()
   const sourceSchema = resolveSourceSchema(state.upload)
   const targetSchema = resolveTargetSchema(state.targetSchema)
@@ -413,7 +413,7 @@ ${nestedInputMappingYaml}` : ''}
         return formatTransformationYamlItem(expression)
       })
 
-    const filtersYaml = formatFiltersYamlSection(state.filters)
+    const filtersYaml = formatFiltersYamlSection(state.filters, filterOperators)
     const sinkAdditionalConfigYaml = state.sink.sinkType === 'kafka'
       ? formatKeyValueYamlSection('additionalConfig', state.sink.sinkKafkaAdditionalProperties, '')
       : ''

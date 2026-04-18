@@ -146,7 +146,7 @@ export function ConfigProvider({ children }) {
       }
     }
 
-    if (step === STEP_FILTERS && !fetchingFilters.current) {
+    if ((step === STEP_FILTERS || step === STEP_SUMMARY) && !fetchingFilters.current) {
       fetchingFilters.current = true
       setLoadingFilters(true)
       fetchFilters(useMock)

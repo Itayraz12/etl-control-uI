@@ -4,32 +4,49 @@ import { Card, CardTitle, Btn } from '../../shared/components/index.jsx'
 import { resolveSourceSchema } from '../../shared/types/index.js'
 
 function createDefaultRootGroup() {
-  return { id: 'root-group', logic: 'AND', mode: 'include', rules: [], subgroups: [] }
+  return { id: 'root-group', logic: 'AND', mode: 'include', isRevertible: true, rules: [], subgroups: [] }
+}
+
+function getOperatorSelectionValue(operatorLike = {}) {
+  const operatorId = String(operatorLike?.id ?? operatorLike?.op ?? '').trim()
+  const isReverted = operatorLike?.isReverted === true
+  return `${operatorId}::${isReverted ? '1' : '0'}`
+}
+
+function parseOperatorSelectionValue(value = '') {
+  const [rawOperatorId = '', revertedToken = '0'] = String(value ?? '').split('::')
+  return {
+    op: rawOperatorId.trim(),
+    isReverted: revertedToken === '1',
+  }
 }
 
 function getDefaultRuleOperator(group = {}, operators = []) {
-  const availableOperatorIds = new Set(
+  const availableSelectionValues = new Set(
     (Array.isArray(operators) ? operators : [])
-      .map(operator => String(operator?.id || '').trim())
+      .map(getOperatorSelectionValue)
       .filter(Boolean)
   )
 
   const lastRuleOperator = [...(Array.isArray(group?.rules) ? group.rules : [])]
     .reverse()
-    .map(rule => String(rule?.op || '').trim())
-    .find(operatorId => availableOperatorIds.has(operatorId))
+    .map(rule => getOperatorSelectionValue({ op: rule?.op, isReverted: rule?.isReverted }))
+    .find(selectionValue => availableSelectionValues.has(selectionValue))
 
   if (lastRuleOperator) return lastRuleOperator
-  return String(operators?.[0]?.id || 'eq').trim() || 'eq'
+  return getOperatorSelectionValue(operators?.[0] || { id: 'eq', isReverted: false }) || 'eq::0'
 }
 
 function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions }) {
-  const currentOperator = operators.find(o => o.id === rule.op)
+  const currentSelectionValue = getOperatorSelectionValue({ op: rule.op, isReverted: rule.isReverted })
+  const currentOperator = operators.find(o => getOperatorSelectionValue(o) === currentSelectionValue)
+    || operators.find(o => o.id === rule.op)
   const additionalProps = currentOperator?.additionalProperties || {}
   const valueOptions = additionalProps.options || []
   const complexProps = additionalProps.properties || []
   const isSelect = valueOptions.length > 0
   const hasComplexProps = complexProps.length > 0
+  const operatorId = String(currentOperator?.id ?? rule.op ?? '').trim()
 
   let parsedValues = {}
   if (hasComplexProps) {
@@ -53,10 +70,12 @@ function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions
         <select value={rule.field} onChange={e => onChange({ ...rule, field: e.target.value })} style={{ flex: 1.5 }}>
           {fieldOptions.map(f => <option key={f}>{f}</option>)}
         </select>
-        <select value={rule.op} onChange={e => onChange({ ...rule, op: e.target.value })} style={{ flex: 1.2 }}>
-          {operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+        <select value={currentSelectionValue} onChange={e => onChange({ ...rule, ...parseOperatorSelectionValue(e.target.value) })} style={{ flex: 1.2 }}>
+          {operators.map(o => (
+            <option key={`${o.id}-${o.isReverted === true ? 'reverted' : 'regular'}`} value={getOperatorSelectionValue(o)}>{o.name}</option>
+          ))}
         </select>
-        {!rule.op.includes('null') && !hasComplexProps && (
+        {!operatorId.includes('null') && !hasComplexProps && (
           isSelect ? (
             <select value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} style={{ flex: 1 }}>
               <option value="">-- Select --</option>
@@ -68,7 +87,7 @@ function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions
         )}
         <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 16, lineHeight: 1, padding: '0 4px' }}>×</button>
       </div>
-      {hasComplexProps && !rule.op.includes('null') && (
+      {hasComplexProps && !operatorId.includes('null') && (
         <div style={{ display: 'flex', gap: 6, marginLeft: 26, flexWrap: 'wrap' }}>
           {complexProps.map(prop => (
             <div key={prop.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -98,10 +117,11 @@ function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions
 function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions, readOnly = false }) {
   const addRule = () => {
     const defaultOperator = getDefaultRuleOperator(group, operators)
+    const defaultRuleOperator = parseOperatorSelectionValue(defaultOperator)
 
     onUpdate({
       ...group,
-      rules: [...group.rules, { id: `r-${Date.now()}`, field: fieldOptions[0] || 'id', op: defaultOperator, value: '1' }]
+      rules: [...group.rules, { id: `r-${Date.now()}`, field: fieldOptions[0] || 'id', ...defaultRuleOperator, value: '1' }]
     })
   }
   const updateRule = (id, updated) => onUpdate({ ...group, rules: group.rules.map(r => r.id === id ? updated : r) })
@@ -112,6 +132,7 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions,
   const colors = ['rgba(79,110,247,.12)', 'rgba(124,58,237,.12)', 'rgba(236,72,153,.1)']
   const borderColors = ['rgba(79,110,247,.4)', 'rgba(124,58,237,.4)', 'rgba(236,72,153,.4)']
   const disableRootGroupButtons = readOnly && depth === 0
+  const canToggleGroupMode = depth === 0 && group.isRevertible !== false
 
   return (
     <div style={{
@@ -138,7 +159,7 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions,
         <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>
           {group.logic === 'AND' ? 'All must match' : 'Any must match'}
         </span>
-        {depth === 0 && (
+        {canToggleGroupMode && (
           <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 5, overflow: 'hidden' }}>
             {['include', 'exclude'].map(mode => (
               <button key={mode} onClick={() => onUpdate({ ...group, mode: mode || 'include' })} disabled={disableRootGroupButtons} style={{
@@ -263,8 +284,8 @@ export default function   FiltersStep() {
                 <span key={r.id}>
                   {ri > 0 && <span style={{ color: 'var(--muted)' }}> {g.logic} </span>}
                   <span style={{ color: 'var(--accent2)' }}>{r.field}</span>
-                  <span style={{ color: 'var(--warning)' }}> {r.op} </span>
-                  {!r.op.includes('null') && <span style={{ color: 'var(--success)' }}>[{formatRuleValue(r)}]</span>}
+                  <span style={{ color: 'var(--warning)' }}> {r.isReverted ? 'not ' : ''}{r.op} </span>
+                  {!String(r.op || '').includes('null') && <span style={{ color: 'var(--success)' }}>[{formatRuleValue(r)}]</span>}
                 </span>
               ))}
               {g.subgroups.map(sg => (
@@ -275,8 +296,8 @@ export default function   FiltersStep() {
                     <span key={r.id}>
                       {ri > 0 && <span style={{ color: 'var(--muted)' }}> {sg.logic} </span>}
                       <span style={{ color: 'var(--accent2)' }}>{r.field}</span>
-                      <span style={{ color: 'var(--warning)' }}> {r.op} </span>
-                      {!r.op.includes('null') && <span style={{ color: 'var(--success)' }}>[{formatRuleValue(r)}]</span>}
+                      <span style={{ color: 'var(--warning)' }}> {r.isReverted ? 'not ' : ''}{r.op} </span>
+                      {!String(r.op || '').includes('null') && <span style={{ color: 'var(--success)' }}>[{formatRuleValue(r)}]</span>}
                     </span>
                   ))}
                   <span style={{ color: 'var(--muted)' }}>)</span>
