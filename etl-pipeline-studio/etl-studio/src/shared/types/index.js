@@ -1,3 +1,8 @@
+import {
+  DEFAULT_METADATA_LOCATION,
+  METADATA_LOCATIONS as CONFIGURED_METADATA_LOCATIONS,
+} from '../services/appConfig.js'
+
 // ── Schema Types ──────────────────────────────────────────────────────────
 
 export const FIELD_TYPES = ['string', 'number', 'boolean', 'date', 'object', 'array', 'null']
@@ -6,7 +11,7 @@ export const ENVIRONMENT_OPTIONS = [
   { value: 'production', label: 'PROD' },
 ]
 export const ENVIRONMENTS = ENVIRONMENT_OPTIONS.map(option => option.value)
-export const METADATA_LOCATIONS = ['HOME', 'OFFICE']
+export const METADATA_LOCATIONS = CONFIGURED_METADATA_LOCATIONS
 
 const ENVIRONMENT_VALUE_ALIASES = {
   cap: 'staging',
@@ -48,21 +53,23 @@ export function getAllowedMetadataLocations(environment) {
   const normalizedEnvironment = normalizeEnvironmentValue(environment)
 
   if (normalizedEnvironment === 'production') return METADATA_LOCATIONS
-  if (normalizedEnvironment) return ['HOME']
+  if (normalizedEnvironment) return DEFAULT_METADATA_LOCATION ? [DEFAULT_METADATA_LOCATION] : []
   return []
 }
 
 export function normalizeMetadataLocation(value, environment) {
   const normalizedEnvironment = normalizeEnvironmentValue(environment)
   const normalizedValue = String(value ?? '').trim().toUpperCase()
-  const canonicalValue = normalizedValue === 'OFFIC' ? 'OFFICE' : normalizedValue
+  const canonicalValue = normalizedValue === 'OFFIC' && METADATA_LOCATIONS.includes('OFFICE')
+    ? 'OFFICE'
+    : normalizedValue
 
   if (normalizedEnvironment === 'production') {
     return METADATA_LOCATIONS.includes(canonicalValue) ? canonicalValue : ''
   }
 
   if (normalizedEnvironment) {
-    return 'HOME'
+    return DEFAULT_METADATA_LOCATION || ''
   }
 
   return ''

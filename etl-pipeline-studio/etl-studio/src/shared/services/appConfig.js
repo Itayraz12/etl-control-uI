@@ -3,6 +3,7 @@ const DEFAULT_PRODUCT_CODE_LABEL = 'Product Code'
 const DEFAULT_SHADOW_LABEL = 'SHADOW'
 const DEFAULT_ASG_LABEL = 'ASG'
 const DEFAULT_SAKNAY_LABEL = 'Saknay'
+const DEFAULT_METADATA_LOCATIONS = ['HOME', 'OFFICE']
 
 function normalizeApiBase(value, fallback = DEFAULT_API_BASE) {
   const candidate = String(value ?? '').trim()
@@ -18,6 +19,16 @@ function normalizeVersion(value, fallback = '') {
 function normalizeDisplayLabel(value, fallback = '') {
   const candidate = String(value ?? '').trim()
   return candidate || fallback
+}
+
+function normalizeMetadataLocations(value, fallback = DEFAULT_METADATA_LOCATIONS) {
+  const candidateValues = String(value ?? '')
+    .split(',')
+    .map(item => item.trim().toUpperCase())
+    .filter(Boolean)
+
+  const normalizedValues = Array.from(new Set(candidateValues))
+  return normalizedValues.length > 0 ? normalizedValues : [...fallback]
 }
 
 function normalizeLabelTokens(value, fallback = '') {
@@ -89,6 +100,8 @@ export const PRODUCT_CODE_LABEL = normalizeDisplayLabel(import.meta.env.VITE_PRO
 export const SHADOW_LABEL = normalizeDisplayLabel(import.meta.env.VITE_SHADOW_LABEL, DEFAULT_SHADOW_LABEL)
 export const ASG_LABEL = normalizeDisplayLabel(import.meta.env.VITE_ASG_LABEL, DEFAULT_ASG_LABEL)
 export const SAKNAY_LABEL = normalizeDisplayLabel(import.meta.env.VITE_SAKNAY_LABEL, DEFAULT_SAKNAY_LABEL)
+export const METADATA_LOCATIONS = normalizeMetadataLocations(import.meta.env.VITE_METADATA_LOCATIONS, DEFAULT_METADATA_LOCATIONS)
+export const DEFAULT_METADATA_LOCATION = METADATA_LOCATIONS[0] || DEFAULT_METADATA_LOCATIONS[0]
 export const SAKNAY_YAML_SECTION_KEY = buildSnakeCaseKey(normalizeLabelTokens(SAKNAY_LABEL, DEFAULT_SAKNAY_LABEL)) || 'saknay'
 export const YAML_LABEL_ALIASES = buildYamlAliasKeys({
   productCodeLabel: PRODUCT_CODE_LABEL,
@@ -111,6 +124,7 @@ export const APP_CONFIG = {
   shadowLabel: SHADOW_LABEL,
   asgLabel: ASG_LABEL,
   saknayLabel: SAKNAY_LABEL,
+  metadataLocations: METADATA_LOCATIONS,
   saknaySectionKey: SAKNAY_YAML_SECTION_KEY,
   yamlAliases: YAML_LABEL_ALIASES,
 }
@@ -121,9 +135,11 @@ export {
   DEFAULT_SHADOW_LABEL,
   DEFAULT_ASG_LABEL,
   DEFAULT_SAKNAY_LABEL,
+  DEFAULT_METADATA_LOCATIONS,
   normalizeApiBase,
   normalizeVersion,
   normalizeDisplayLabel,
+  normalizeMetadataLocations,
   normalizeLabelTokens,
   buildCamelCaseKey,
   buildPascalCaseKey,

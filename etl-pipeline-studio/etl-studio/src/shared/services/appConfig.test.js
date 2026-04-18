@@ -14,6 +14,7 @@ describe('appConfig', () => {
     vi.stubEnv('VITE_API_BASE', '')
     vi.stubEnv('VITE_APP_VERSION', '')
     vi.stubEnv('VITE_PRODUCT_CODE_LABEL', '')
+    vi.stubEnv('VITE_METADATA_LOCATIONS', '')
     vi.stubEnv('VITE_SHADOW_LABEL', '')
     vi.stubEnv('VITE_ASG_LABEL', '')
     vi.stubEnv('VITE_SAKNAY_LABEL', '')
@@ -22,6 +23,8 @@ describe('appConfig', () => {
       API_BASE,
       APP_VERSION,
       PRODUCT_CODE_LABEL,
+      METADATA_LOCATIONS,
+      DEFAULT_METADATA_LOCATION,
       SHADOW_LABEL,
       ASG_LABEL,
       SAKNAY_LABEL,
@@ -37,6 +40,8 @@ describe('appConfig', () => {
     expect(API_BASE).toBe('http://localhost:8080/api')
     expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+/)
     expect(PRODUCT_CODE_LABEL).toBe('Product Code')
+    expect(METADATA_LOCATIONS).toEqual(['HOME', 'OFFICE'])
+    expect(DEFAULT_METADATA_LOCATION).toBe('HOME')
     expect(SHADOW_LABEL).toBe('SHADOW')
     expect(ASG_LABEL).toBe('ASG')
     expect(SAKNAY_LABEL).toBe('Saknay')
@@ -53,6 +58,7 @@ describe('appConfig', () => {
     vi.stubEnv('VITE_API_BASE', 'https://example.internal/api/')
     vi.stubEnv('VITE_APP_VERSION', '9.9.9-rc.1')
     vi.stubEnv('VITE_PRODUCT_CODE_LABEL', 'External Param')
+    vi.stubEnv('VITE_METADATA_LOCATIONS', 'remote, branch-office, remote')
     vi.stubEnv('VITE_SHADOW_LABEL', 'Shaldag')
     vi.stubEnv('VITE_ASG_LABEL', 'Asgard')
     vi.stubEnv('VITE_SAKNAY_LABEL', 'Golden Path')
@@ -61,6 +67,8 @@ describe('appConfig', () => {
       API_BASE,
       APP_VERSION,
       PRODUCT_CODE_LABEL,
+      METADATA_LOCATIONS,
+      DEFAULT_METADATA_LOCATION,
       SHADOW_LABEL,
       ASG_LABEL,
       SAKNAY_LABEL,
@@ -77,6 +85,8 @@ describe('appConfig', () => {
     expect(API_BASE).toBe('https://example.internal/api')
     expect(APP_VERSION).toBe('9.9.9-rc.1')
     expect(PRODUCT_CODE_LABEL).toBe('External Param')
+    expect(METADATA_LOCATIONS).toEqual(['REMOTE', 'BRANCH-OFFICE'])
+    expect(DEFAULT_METADATA_LOCATION).toBe('REMOTE')
     expect(SHADOW_LABEL).toBe('Shaldag')
     expect(ASG_LABEL).toBe('Asgard')
     expect(SAKNAY_LABEL).toBe('Golden Path')
@@ -91,9 +101,11 @@ describe('appConfig', () => {
       apiBase: 'https://example.internal/api',
       version: '9.9.9-rc.1',
       productCodeLabel: 'External Param',
+      metadataLocations: ['REMOTE', 'BRANCH-OFFICE'],
       shadowLabel: 'Shaldag',
       asgLabel: 'Asgard',
       saknayLabel: 'Golden Path',
+      saknaySectionKey: 'golden_path',
       yamlAliases: {
         productCode: 'externalParam',
         shadowFlag: 'isShaldagEnabled',
