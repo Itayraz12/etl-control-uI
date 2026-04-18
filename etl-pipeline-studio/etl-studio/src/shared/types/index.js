@@ -170,7 +170,7 @@ export const STEPS = [
   { id: 0, key: 'metadata',      label: 'Metadata'      },
   { id: 1, key: 'source-config', label: 'Source Config' },
   { id: 2, key: 'source-upload', label: 'Source Upload' },
-  { id: 3, key: 'filters',       label: 'Filters'       },
+  { id: 3, key: 'filters',       label: 'Filter out'    },
   { id: 4, key: 'field-mapping', label: 'Field Mapping' },
   { id: 5, key: 'sink-config',   label: 'Sink Config'   },
   { id: 6, key: 'summary',       label: 'Summary'       },

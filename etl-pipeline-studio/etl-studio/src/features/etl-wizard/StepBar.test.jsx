@@ -75,10 +75,10 @@ describe('StepBar', () => {
     expect(mockSetStep).not.toHaveBeenCalled()
   })
 
-  it('shows Filters as completed after the user advances past it even with no filters configured', () => {
+  it('shows Filter out as completed after the user advances past it even with no filters configured', () => {
     render(<StepBar />)
 
-    const filtersLabel = screen.getByText('Filters')
+    const filtersLabel = screen.getByText('Filter out')
     const filtersCircle = filtersLabel.parentElement?.querySelector('div')
 
     expect(filtersLabel).toHaveStyle({ color: 'var(--success)' })
@@ -165,7 +165,7 @@ describe('StepBar', () => {
 
     render(<StepBar />)
 
-    const filtersLabel = screen.getByText('Filters')
+    const filtersLabel = screen.getByText('Filter out')
     const filtersCircle = filtersLabel.parentElement?.querySelector('div')
 
     expect(filtersLabel).not.toHaveStyle({ color: '#ef6c4d' })
@@ -186,7 +186,7 @@ describe('StepBar', () => {
 
     render(<StepBar />)
 
-    const filtersLabel = screen.getByText('Filters')
+    const filtersLabel = screen.getByText('Filter out')
     const filtersCircle = filtersLabel.parentElement?.querySelector('div')
 
     expect(filtersLabel).toHaveStyle({ color: '#ef6c4d' })
@@ -208,7 +208,7 @@ describe('StepBar', () => {
 
     render(<StepBar />)
 
-    const filtersLabel = screen.getByText('Filters')
+    const filtersLabel = screen.getByText('Filter out')
     const filtersCircle = filtersLabel.parentElement?.querySelector('div')
 
     expect(filtersLabel).not.toHaveStyle({ color: '#ef6c4d' })

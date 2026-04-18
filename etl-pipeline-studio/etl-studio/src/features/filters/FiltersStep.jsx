@@ -3,6 +3,10 @@ import { useConfig } from '../../shared/store/configContext.jsx'
 import { Card, CardTitle, Btn } from '../../shared/components/index.jsx'
 import { resolveSourceSchema } from '../../shared/types/index.js'
 
+function createDefaultRootGroup() {
+  return { id: 'root-group', logic: 'AND', mode: 'include', rules: [], subgroups: [] }
+}
+
 function getDefaultRuleOperator(group = {}, operators = []) {
   const availableOperatorIds = new Set(
     (Array.isArray(operators) ? operators : [])
@@ -100,10 +104,6 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions,
       rules: [...group.rules, { id: `r-${Date.now()}`, field: fieldOptions[0] || 'id', op: defaultOperator, value: '1' }]
     })
   }
-  const addSubgroup = () => onUpdate({
-    ...group,
-    subgroups: [...group.subgroups, { id: `g-${Date.now()}`, logic: 'OR', rules: [], subgroups: [] }]
-  })
   const updateRule = (id, updated) => onUpdate({ ...group, rules: group.rules.map(r => r.id === id ? updated : r) })
   const removeRule = id => onUpdate({ ...group, rules: group.rules.filter(r => r.id !== id) })
   const updateSubgroup = (id, updated) => onUpdate({ ...group, subgroups: group.subgroups.map(g => g.id === id ? updated : g) })
@@ -187,7 +187,6 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions,
       {/* Add buttons */}
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <Btn sm v="ghost" onClick={addRule}>+ Add Condition</Btn>
-        {depth < 2 && <Btn sm v="ghost" onClick={addSubgroup}>+ Add Group</Btn>}
       </div>
     </div>
   )
@@ -200,6 +199,8 @@ export default function   FiltersStep() {
   const setFilters = actions.setFilters
   const isReadOnly = state.readOnly === true
   const fieldOptions = resolveSourceSchema(state.upload).map(f => f.id)
+  const displayedFilters = filters.length > 0 ? filters : [createDefaultRootGroup()]
+  const previewFilters = filters.length > 0 ? filters : []
 
   const formatRuleValue = (rule) => {
     try {
@@ -211,10 +212,18 @@ export default function   FiltersStep() {
     return rule.value
   }
 
-  const totalRules = filters.reduce((sum, g) => sum + g.rules.length + g.subgroups.reduce((s2, sg) => s2 + sg.rules.length, 0), 0)
+  const totalRules = displayedFilters.reduce((sum, g) => sum + g.rules.length + g.subgroups.reduce((s2, sg) => s2 + sg.rules.length, 0), 0)
 
   const updateGroup = (id, updated) => setFilters(filters.map(g => g.id === id ? updated : g))
   const removeGroup = id => setFilters(filters.filter(g => g.id !== id))
+  const handleRootGroupUpdate = (id, updated) => {
+    if (filters.length === 0) {
+      setFilters([updated])
+      return
+    }
+
+    updateGroup(id, updated)
+  }
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '24px 30px' }}>
@@ -224,18 +233,15 @@ export default function   FiltersStep() {
           {totalRules} rule{totalRules !== 1 ? 's' : ''} active
         </span>
         <div style={{ flex: 1 }} />
-        <Btn sm v="ghost" onClick={() => setFilters([...filters, { id: `g-${Date.now()}`, logic: 'AND', rules: [], subgroups: [] }])}>
-          + Add Group
-        </Btn>
       </div>
 
-      {filters.map(g => (
+      {displayedFilters.map(g => (
         <GroupBlock
           key={g.id}
           group={g}
           depth={0}
-          onUpdate={u => updateGroup(g.id, u)}
-          onRemove={() => removeGroup(g.id)}
+          onUpdate={u => handleRootGroupUpdate(g.id, u)}
+          onRemove={filters.length > 0 ? () => removeGroup(g.id) : undefined}
           operators={operators}
           fieldOptions={fieldOptions}
           readOnly={isReadOnly}
@@ -248,7 +254,7 @@ export default function   FiltersStep() {
           Generated Filter Expression
         </CardTitle>
         <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', lineHeight: 1.8, overflowX: 'auto', padding: '4px 0' }}>
-          {filters.map((g, gi) => (
+          {previewFilters.map((g, gi) => (
             <div key={g.id}>
               {gi > 0 && <span style={{ color: 'var(--muted)' }}>  {g.logic === 'AND' ? 'AND' : 'OR'} </span>}
               {(g.mode === 'exclude') && <span style={{ color: 'var(--danger)', fontWeight: 700 }}>NOT </span>}
@@ -279,7 +285,7 @@ export default function   FiltersStep() {
               <span style={{ color: 'var(--muted)' }}>)</span>
             </div>
           ))}
-          {filters.length === 0 && <span style={{ color: 'var(--muted)' }}>— No filters defined (all records will pass) —</span>}
+          {filters.length === 0 && totalRules === 0 && <span style={{ color: 'var(--muted)' }}>— No filters defined (all records will pass) —</span>}
         </div>
       </Card>
     </div>
