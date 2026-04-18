@@ -1,12 +1,13 @@
 import { API_BASE } from './appConfig.js'
 import { fetchWithUserId } from './requestHeaders.js'
+import { normalizeEnvironmentValue } from '../types/index.js'
 
 const KAFKA_TEST_CONNECTION_PATH = `${API_BASE}/backend/kafka/test-connection`
 
 export function buildKafkaTestConnectionUrl({ topic, environment }) {
   const url = new URL(KAFKA_TEST_CONNECTION_PATH)
   url.searchParams.set('topicName', String(topic ?? '').trim())
-  url.searchParams.set('environment', String(environment ?? '').trim())
+  url.searchParams.set('environment', normalizeEnvironmentValue(environment, String(environment ?? '').trim()))
   return url.toString()
 }
 
@@ -44,7 +45,7 @@ function normalizeResponseMessage(payload, fallbackMessage) {
 
 export async function testKafkaConnection({ topic, environment }) {
   const normalizedTopic = String(topic ?? '').trim()
-  const normalizedEnvironment = String(environment ?? '').trim()
+  const normalizedEnvironment = normalizeEnvironmentValue(environment, String(environment ?? '').trim())
 
   if (!normalizedTopic || !normalizedEnvironment) {
     throw new Error('Topic and environment are required.')

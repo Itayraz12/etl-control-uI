@@ -27,6 +27,7 @@ const mockWizardState = {
   },
   source: {
     sourceType: 'kafka',
+    kafkaEnv: 'production',
     kafkaTopic: 'catalog-topic',
     kafkaOffset: 'earliest',
     kafkaKeys: 'sku-key, inventory-key',
@@ -158,6 +159,7 @@ describe('SummaryStep save draft behavior', () => {
     mockWizardState.originalDraftSignature = ''
     mockWizardState.metadata.location = ''
     mockWizardState.source.format = 'JSON'
+    mockWizardState.source.kafkaEnv = 'production'
     mockWizardState.source.csvDelimiter = undefined
     mockWizardState.source.rowDelimiter = ''
     mockWizardState.source.jsonSplit = ''
@@ -323,7 +325,7 @@ describe('SummaryStep save draft behavior', () => {
   location: "OFFICE"
   productSource: ERP
   productType: Catalog
-  environment: production
+  environment: PROD
   owner: data-platform
   dataStreamInfo:
     streamingContinuity: continuous
@@ -338,6 +340,7 @@ general:
 
 source:
   kafka:
+    brokers: PROD
     topic: catalog-topic
     offset: earliest
     filter: "sku-key, inventory-key"
@@ -356,6 +359,7 @@ output:
       additionalInputs:
         - skuVariant
   kafka:
+    brokers: PROD
     topic: catalog-sink
   saknay:
     ${SAKNAY_TOPIC_YAML_KEY}:
@@ -426,7 +430,7 @@ filters:
       productType: 'Catalog',
       source: 'ERP',
       team: 'data-platform',
-      environment: 'production',
+      environment: 'PROD',
       isDeploy: true,
       configurationYaml: expect.stringContaining('productType: Catalog'),
     }))
@@ -437,15 +441,15 @@ filters:
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('\n  entity:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('location: "OFFICE"')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toMatch(/metadata:[\s\S]*?general:[\s\S]*?source:/)
-    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('source:\n  kafka:\n    topic: catalog-topic')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('source:\n  kafka:\n    brokers: PROD\n    topic: catalog-topic')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('offset: earliest')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('filter: "sku-key, inventory-key"')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('input:\n  convert:\n    mapping:\n      - name: sku')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('output:\n  mapping:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('output:\n  mapping:')
-    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('  kafka:\n    topic: catalog-sink')
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('  kafka:\n    brokers: PROD\n    topic: catalog-sink')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain(`  saknay:\n    ${SAKNAY_TOPIC_YAML_KEY}:`)
-    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain(`  kafka:\n    topic: catalog-sink\n    ${SAKNAY_TOPIC_YAML_KEY}:`)
+    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain(`  kafka:\n    brokers: PROD\n    topic: catalog-sink\n    ${SAKNAY_TOPIC_YAML_KEY}:`)
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('additionalConfig:\n  "acks": "all"\n  "compression.type": "gzip"')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('additional_properties:')
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).not.toContain('\nsink:\n')
@@ -567,7 +571,7 @@ filters:
     })
 
     const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
-    expect(yaml).toContain(`  kafka:\n    topic: catalog-sink\n    ${SHADOW_TOPIC_YAML_KEY}:`)
+    expect(yaml).toContain(`  kafka:\n    brokers: PROD\n    topic: catalog-sink\n    ${SHADOW_TOPIC_YAML_KEY}:`)
     expect(yaml).not.toContain(`${SHADOW_TOPIC_YAML_KEY}: auto`)
   })
 
@@ -583,8 +587,24 @@ filters:
     })
 
     const yaml = mockDeployFromYaml.mock.calls[0][0].configurationYaml
-    expect(yaml).toContain('  kafka:\n    topic:')
+    expect(yaml).toContain('  kafka:\n    brokers: PROD\n    topic:')
     expect(yaml).not.toContain('topic: N/A')
+  })
+
+  it('renders source and sink kafka brokers from their own selected environments in the YAML preview', () => {
+    setPassingValidationChecklist()
+    mockWizardState.metadata.environment = 'PROD'
+    mockWizardState.source.kafkaEnv = 'CAP'
+    mockWizardState.sink.sinkKafkaEnv = 'PROD'
+
+    render(<SummaryStep />)
+
+    const yamlPreview = screen.getByTestId('yaml-preview')
+    expect(yamlPreview).toHaveTextContent('source:')
+    expect(yamlPreview).toHaveTextContent('brokers: CAP')
+    expect(yamlPreview).toHaveTextContent('brokers: PROD')
+    expect(yamlPreview).toHaveTextContent('topic: catalog-topic')
+    expect(yamlPreview).toHaveTextContent('topic: catalog-sink')
   })
 
   it('highlights additionalConfig and nested kafka section keys in the YAML preview', () => {

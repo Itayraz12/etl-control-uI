@@ -32,7 +32,7 @@ describe('deploymentsService', () => {
       deploymentId: 'run-123',
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/deployments/deploy?productType=Catalog&source=ERP&team=data-platform&environment=production&isDeploy=true&isSavedVersion=true', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/deployments/deploy?productType=Catalog&source=ERP&team=data-platform&environment=PROD&isDeploy=true&isSavedVersion=true', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain', 'X-user-ID': 'user-123' },
       body: 'pipeline: test',
@@ -58,7 +58,7 @@ describe('deploymentsService', () => {
       deploymentId: 'run-upgrade-1',
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/deployments/deploy?productType=Inventory&source=CRM&team=data-platform&environment=staging&isDeploy=false&isSavedVersion=false', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/deployments/deploy?productType=Inventory&source=CRM&team=data-platform&environment=CAP&isDeploy=false&isSavedVersion=false', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain', 'X-user-ID': 'user-123' },
       body: 'pipeline: upgrade',
@@ -102,10 +102,10 @@ describe('deploymentsService', () => {
 
     await expect(fetchDeployments('data-platform', false)).resolves.toEqual([
       expect.objectContaining({
-        id: 'local-draft:data-platform::erp::catalog::production',
+        id: 'local-draft:data-platform::erp::catalog::PROD',
         productSource: 'ERP',
         productType: 'Catalog',
-        environment: 'production',
+        environment: 'PROD',
         deploymentStatus: 'draft',
         savedVersion: '1.0',
         isLocalDraft: true,
@@ -121,9 +121,9 @@ describe('deploymentsService', () => {
       environment: 'production',
     })
 
-    await expect(deleteDeployment('local-draft:data-platform::erp::catalog::production', false)).resolves.toEqual({
+    await expect(deleteDeployment('local-draft:data-platform::erp::catalog::PROD', false)).resolves.toEqual({
       success: true,
-      id: 'local-draft:data-platform::erp::catalog::production',
+      id: 'local-draft:data-platform::erp::catalog::PROD',
     })
 
     expect(fetchMock).not.toHaveBeenCalled()
@@ -135,7 +135,7 @@ describe('deploymentsService', () => {
 
     await expect(fetchDeployments('data-platform', false)).resolves.toEqual([
       expect.objectContaining({
-        id: 'local-draft:data-platform::erp::catalog::production',
+        id: 'local-draft:data-platform::erp::catalog::PROD',
         deploymentStatus: 'deleted',
         previousDeploymentStatus: 'draft',
         isLocalDraft: true,
@@ -158,7 +158,7 @@ describe('deploymentsService', () => {
     }, false)).resolves.toEqual({ success: true })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8080/api/backend/deployments/delete?productType=Catalog&source=CRM&team=data-platform&environment=staging&isPermanent=false',
+      'http://localhost:8080/api/backend/deployments/delete?productType=Catalog&source=CRM&team=data-platform&environment=CAP&isPermanent=false',
       { method: 'DELETE', headers: { 'X-user-ID': 'user-123' } },
     )
   })
@@ -178,7 +178,7 @@ describe('deploymentsService', () => {
     }, false)).resolves.toEqual({ success: true })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8080/api/backend/deployments/delete?productType=Legacy&source=Archive&team=data-platform&environment=production&isPermanent=true',
+      'http://localhost:8080/api/backend/deployments/delete?productType=Legacy&source=Archive&team=data-platform&environment=PROD&isPermanent=true',
       { method: 'DELETE', headers: { 'X-user-ID': 'user-123' } },
     )
   })
@@ -198,7 +198,7 @@ describe('deploymentsService', () => {
     }, false)).resolves.toEqual({ success: true })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8080/api/backend/deployments/stop?productType=Inventory&source=ERP&team=data-platform&environment=production',
+      'http://localhost:8080/api/backend/deployments/stop?productType=Inventory&source=ERP&team=data-platform&environment=PROD',
       { method: 'POST', headers: { 'X-user-ID': 'user-123' } },
     )
   })

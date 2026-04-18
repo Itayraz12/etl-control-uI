@@ -1,5 +1,6 @@
 import { API_BASE } from './appConfig.js'
 import { fetchWithUserId } from './requestHeaders.js'
+import { normalizeEnvironmentValue } from '../types/index.js'
 
 const RABBITMQ_TEST_CONNECTION_PATH = `${API_BASE}/backend/rabbitmq/test-connection`
 
@@ -13,7 +14,7 @@ export function buildRabbitMqTestConnectionUrl({ ip, port, username, password, q
   const normalizedVhost = String(vhost ?? '').trim()
 
   const normalizedExchange = String(exchange ?? '').trim()
-  const normalizedEnvironment = String(environment ?? '').trim()
+  const normalizedEnvironment = normalizeEnvironmentValue(environment, String(environment ?? '').trim())
 
   if (normalizedVhost) {
     url.searchParams.set('vhost', normalizedVhost)

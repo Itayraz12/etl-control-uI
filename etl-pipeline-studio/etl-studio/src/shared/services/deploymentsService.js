@@ -1,5 +1,6 @@
 import { API_BASE } from './appConfig.js'
 import { fetchWithUserId } from './requestHeaders.js'
+import { normalizeEnvironmentValue } from '../types/index.js'
 
 // Backend service for deployments data
 
@@ -42,11 +43,13 @@ export function resetDeploymentsServiceRequestCache() {
 }
 
 function buildLocalDraftId({ teamName, productSource, productType, environment }) {
-  return `local-draft:${teamName}::${(productSource || '').toLowerCase()}::${(productType || '').toLowerCase()}::${environment}`
+  const normalizedEnvironment = normalizeEnvironmentValue(environment, String(environment || '').trim())
+  return `local-draft:${teamName}::${(productSource || '').toLowerCase()}::${(productType || '').toLowerCase()}::${normalizedEnvironment}`
 }
 
 function buildDeploymentStatusOverrideKey({ teamName, productSource, productType, environment }) {
-  return `${teamName}::${(productSource || '').toLowerCase()}::${(productType || '').toLowerCase()}::${environment || ''}`
+  const normalizedEnvironment = normalizeEnvironmentValue(environment, String(environment || '').trim())
+  return `${teamName}::${(productSource || '').toLowerCase()}::${(productType || '').toLowerCase()}::${normalizedEnvironment}`
 }
 
 function readLocalDrafts() {
@@ -84,7 +87,8 @@ function writeDeploymentStatusOverrides(overrides) {
  * Called by configService.saveDraftConfiguration after a successful save.
  */
 export function upsertSavedDraftDeployment({ teamName, productSource, productType, environment, savedVersion, deployedVersion, deploymentStatus }) {
-  const id     = buildLocalDraftId({ teamName, productSource, productType, environment })
+  const normalizedEnvironment = normalizeEnvironmentValue(environment, String(environment || '').trim())
+  const id     = buildLocalDraftId({ teamName, productSource, productType, environment: normalizedEnvironment })
   const drafts = readLocalDrafts()
   drafts[id] = {
     ...drafts[id],
@@ -92,7 +96,7 @@ export function upsertSavedDraftDeployment({ teamName, productSource, productTyp
     teamName,
     productSource,
     productType,
-    environment,
+    environment: normalizedEnvironment,
     deploymentStatus: deploymentStatus ?? drafts[id]?.deploymentStatus ?? 'draft',
     savedVersion:     savedVersion ?? drafts[id]?.savedVersion ?? null,
     deployedVersion:  deployedVersion ?? drafts[id]?.deployedVersion ?? null,
@@ -104,7 +108,8 @@ export function upsertSavedDraftDeployment({ teamName, productSource, productTyp
 }
 
 export function setDeploymentStatus({ teamName, productSource, productType, environment, deploymentStatus, savedVersion, deployedVersion, clearOverride = false }) {
-  const overrideKey = buildDeploymentStatusOverrideKey({ teamName, productSource, productType, environment })
+  const normalizedEnvironment = normalizeEnvironmentValue(environment, String(environment || '').trim())
+  const overrideKey = buildDeploymentStatusOverrideKey({ teamName, productSource, productType, environment: normalizedEnvironment })
   const overrides = readDeploymentStatusOverrides()
 
   if (clearOverride) {
@@ -121,10 +126,11 @@ export function setDeploymentStatus({ teamName, productSource, productType, envi
   }
 
   const drafts = readLocalDrafts()
-  const draftId = buildLocalDraftId({ teamName, productSource, productType, environment })
+  const draftId = buildLocalDraftId({ teamName, productSource, productType, environment: normalizedEnvironment })
   if (drafts[draftId]) {
     drafts[draftId] = {
       ...drafts[draftId],
+      environment: normalizedEnvironment,
       deploymentStatus: clearOverride ? (drafts[draftId].deploymentStatus || 'draft') : deploymentStatus,
       savedVersion: savedVersion ?? drafts[draftId].savedVersion ?? null,
       deployedVersion: deployedVersion ?? drafts[draftId].deployedVersion ?? null,
@@ -175,7 +181,7 @@ export async function deployFromYaml({
   productType,
   source,
   team,
-  environment = 'production',
+  environment = 'PROD',
   isDeploy = true,
   isSavedVersion = true,
   configurationYaml,
@@ -713,11 +719,12 @@ function normalizeDeploymentTarget(target) {
 
 function buildDeploymentIdentityParams(target, extraParams = {}) {
   const deployment = normalizeDeploymentTarget(target)
+  const normalizedEnvironment = normalizeEnvironmentValue(deployment.environment, 'PROD')
   const params = new URLSearchParams({
     productType: String(deployment.productType || ''),
     source: String(deployment.productSource || deployment.source || ''),
     team: String(deployment.teamName || deployment.team || ''),
-    environment: String(deployment.environment || 'production'),
+    environment: normalizedEnvironment,
     ...Object.fromEntries(Object.entries(extraParams).map(([key, value]) => [key, String(value)])),
   })
 

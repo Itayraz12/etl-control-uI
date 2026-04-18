@@ -50,7 +50,7 @@ function normalizeKafkaKeys(value) {
   return asString(value).trim()
 }
 
-function normalizeEnvironment(value, fallback = 'production') {
+function normalizeEnvironment(value, fallback = 'PROD') {
   return normalizeEnvironmentValue(asString(value, fallback), fallback)
 }
 

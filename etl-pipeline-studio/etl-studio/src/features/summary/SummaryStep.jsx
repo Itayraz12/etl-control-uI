@@ -3,7 +3,7 @@ import { useWizard } from "../../shared/store/wizardStore.jsx";
 import { useConfig } from "../../shared/store/configContext.jsx";
 import { Card, CardTitle, ValidationItem, Btn, DeployProgressModal } from '../../shared/components/index.jsx'
 import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js'
-import { SOURCE_TYPES, formatEnvironmentLabel, normalizeMetadataLocation, resolveSourceSchema, resolveTargetSchema } from '../../shared/types/index.js'
+import { SOURCE_TYPES, formatEnvironmentLabel, normalizeEnvironmentValue, normalizeMetadataLocation, resolveSourceSchema, resolveTargetSchema } from '../../shared/types/index.js'
 import { saveDraftConfiguration } from '../../shared/services/configService.js'
 import { fetchDeploymentSteps, deployFromYaml, subscribeToDeploymentProgress }
   from '../../shared/services/deploymentsService.js'
@@ -127,6 +127,7 @@ export default function SummaryStep() {
   const sourceSchema = resolveSourceSchema(state.upload)
   const targetSchema = resolveTargetSchema(state.targetSchema)
   const srcMeta = SOURCE_TYPES.find(t => t.id === state.source.sourceType)
+  const normalizedMetadataEnvironment = normalizeEnvironmentValue(state.metadata.environment, state.metadata.environment)
   const hasSaknayTargets = state.mappings.some(mapping => Boolean(mapping?.tgt) && (mapping?.tgtMetadata?.sendToSaknay ?? true))
   const [submitted, setSubmitted] = useState(false)
   const [copying, setCopying] = useState(false)
@@ -300,6 +301,12 @@ export default function SummaryStep() {
       ? ''
       : String(state.source.csvDelimiter)
     const rowDelimiter = state.source.rowDelimiter == null ? '' : String(state.source.rowDelimiter)
+    const resolveKafkaBrokers = (environmentValue, fallbackEnvironment = normalizedMetadataEnvironment) => {
+      const rawEnvironment = String(environmentValue || fallbackEnvironment || '').trim()
+      return normalizeEnvironmentValue(rawEnvironment, rawEnvironment)
+    }
+    const sourceKafkaBrokers = resolveKafkaBrokers(state.source.kafkaEnv)
+    const sinkKafkaBrokers = resolveKafkaBrokers(state.sink.sinkKafkaEnv)
     const sourceSectionYaml = (() => {
       const sourceType = String(state.source.sourceType || '').trim().toLowerCase()
 
@@ -310,6 +317,7 @@ export default function SummaryStep() {
       const details = []
 
       if (sourceType === 'kafka') {
+        details.push(`    brokers: ${sourceKafkaBrokers}`)
         details.push(`    topic: ${state.source.kafkaTopic || 'N/A'}`)
         if (state.source.kafkaOffset) details.push(`    offset: ${state.source.kafkaOffset}`)
         if (state.source.kafkaKeys) details.push(`    filter: ${quoteYamlDoubleQuoted(String(state.source.kafkaKeys).trim())}`)
@@ -435,6 +443,7 @@ ${nestedInputMappingYaml}` : ''}
       if (sinkType === 'kafka') {
         return [
           '  kafka:',
+          `    brokers: ${sinkKafkaBrokers}`,
           `    topic: ${String(state.sink.sinkKafkaTopic || '').trim()}`,
           ...(state.sink.shadow ? [`    ${SHADOW_TOPIC_YAML_KEY}: ${String(state.sink.shadowTopic || '').trim()}`] : []),
         ].join('\n')
@@ -457,7 +466,7 @@ ${nestedInputMappingYaml}` : ''}
         ...(hasSaknayTargets || saknayTopic ? [`    ${SAKNAY_TOPIC_YAML_KEY}: ${saknayTopic}`] : []),
       ].join('\n')
     })()
-    const metadataLocation = normalizeMetadataLocation(state.metadata.location, state.metadata.environment)
+    const metadataLocation = normalizeMetadataLocation(state.metadata.location, normalizedMetadataEnvironment)
 
     const generalFormat = state.source.format === 'CSV' ? 'delimited' : state.source.format
 
@@ -466,7 +475,7 @@ ${nestedInputMappingYaml}` : ''}
 ${metadataLocation ? `  location: ${quoteYamlDoubleQuoted(String(metadataLocation).trim())}
 ` : ''}  productSource: ${state.metadata.productSource}
   productType: ${state.metadata.productType}
-  environment: ${state.metadata.environment}
+  environment: ${normalizedMetadataEnvironment}
   owner: ${state.metadata.team}
   dataStreamInfo:
     streamingContinuity: ${state.source.streamingContinuity || 'continuous'}
@@ -531,7 +540,7 @@ ${sinkAdditionalConfigYaml}` : ''}
             productType: state.metadata.productType,
             source: state.metadata.productSource,
             teamName: state.metadata.team,
-            environment: state.metadata.environment,
+            environment: normalizedMetadataEnvironment,
           })
         )
       : ''
@@ -619,7 +628,7 @@ ${sinkAdditionalConfigYaml}` : ''}
       productType: state.metadata.productType,
       source: state.metadata.productSource,
       team: state.metadata.team,
-      environment: state.metadata.environment,
+        environment: normalizedMetadataEnvironment,
       isDeploy: true,
       configurationYaml: yaml,
     })
@@ -632,7 +641,7 @@ ${sinkAdditionalConfigYaml}` : ''}
           teamName: state.metadata.team,
           productSource: state.metadata.productSource,
           productType: state.metadata.productType,
-          environment: state.metadata.environment,
+          environment: normalizedMetadataEnvironment,
           deploymentStatus: 'failed',
         })
       deployment.updateStep(0, { status: 'failed', error: msg })
@@ -660,7 +669,7 @@ ${sinkAdditionalConfigYaml}` : ''}
           teamName: state.metadata.team,
           productSource: state.metadata.productSource,
           productType: state.metadata.productType,
-          environment: state.metadata.environment,
+          environment: normalizedMetadataEnvironment,
           deploymentStatus: 'failed',
         })
       deployment.updateStep(0, { status: 'failed', error: 'Server did not return a deployment ID.' })
@@ -679,7 +688,7 @@ ${sinkAdditionalConfigYaml}` : ''}
           teamName: state.metadata.team,
           productSource: state.metadata.productSource,
           productType: state.metadata.productType,
-          environment: state.metadata.environment,
+          environment: normalizedMetadataEnvironment,
           deploymentStatus: 'failed',
         })
       deployment.updateStep(idx, { status: 'failed', error: msg })
@@ -728,7 +737,7 @@ ${sinkAdditionalConfigYaml}` : ''}
             teamName: state.metadata.team,
             productSource: state.metadata.productSource,
             productType: state.metadata.productType,
-            environment: state.metadata.environment,
+            environment: normalizedMetadataEnvironment,
             deploymentStatus: 'running',
           })
         deployment.updateStep(steps.length - 1, { status: 'done' })
@@ -755,7 +764,7 @@ ${sinkAdditionalConfigYaml}` : ''}
         productType: state.metadata.productType,
         source: state.metadata.productSource,
         team: state.metadata.team,
-        environment: state.metadata.environment,
+        environment: normalizedMetadataEnvironment,
         yaml,
       })
       setDraftModal({

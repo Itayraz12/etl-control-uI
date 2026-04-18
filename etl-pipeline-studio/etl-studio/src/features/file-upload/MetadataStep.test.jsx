@@ -54,19 +54,20 @@ function renderStep(initialState = {}) {
         productCode: '',
         location: '',
         team: 'platform',
-        environment: 'production',
+        environment: 'PROD',
         entityName: '',
         tags: '',
         ...(initialState.metadata || {}),
       },
       source: {
         sourceType: 'kafka',
-        kafkaEnv: 'production',
+        kafkaEnv: 'PROD',
         kafkaTopic: 'source_products_raw',
         format: 'JSON',
         jsonSplit: '',
         streamingContinuity: 'continuous',
         recordsPerDay: 'millions',
+        ...(initialState.source || {}),
       },
       upload: { done: false, schema: [], fileName: '', fileType: '', fileSize: 0 },
       targetSchema: initialState.targetSchema || [],
@@ -75,12 +76,13 @@ function renderStep(initialState = {}) {
       sink: {
         sinkType: 'kafka',
         sinkKafkaTopic: 'etl_products_v3',
-        sinkKafkaEnv: 'production',
+        sinkKafkaEnv: 'PROD',
         shadow: false,
         shadowTopic: '',
         saknay: false,
         saknayTopic: '',
         asg: false,
+        ...(initialState.sink || {}),
       },
       theme: 'dark',
     })
@@ -212,12 +214,12 @@ describe('MetadataStep entity target schema', () => {
     })
   })
 
-  it('allows production to have no default location and select HOME or OFFICE', async () => {
+  it('allows PROD to have no default location and select HOME or OFFICE', async () => {
     const user = userEvent.setup()
 
     renderStep({
       metadata: {
-        environment: 'production',
+        environment: 'PROD',
         location: '',
       },
     })
@@ -236,24 +238,40 @@ describe('MetadataStep entity target schema', () => {
     })
   })
 
-  it('forces non-production environments to HOME only', async () => {
+  it('forces CAP to HOME only', async () => {
     const user = userEvent.setup()
 
     renderStep({
       metadata: {
-        environment: 'production',
+        environment: 'PROD',
         location: 'OFFICE',
       },
     })
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Environment' }), 'staging')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Environment' }), 'CAP')
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
       expect(screen.getByRole('combobox', { name: 'Location' })).toHaveValue('HOME')
       expect(screen.queryByRole('option', { name: 'OFFICE' })).not.toBeInTheDocument()
-      expect(persisted.metadata?.environment).toBe('staging')
+      expect(persisted.metadata?.environment).toBe('CAP')
       expect(persisted.metadata?.location).toBe('HOME')
+    })
+  })
+
+  it('migrates legacy persisted production environments to PROD when the wizard loads', async () => {
+    renderStep({
+      metadata: { environment: 'production' },
+      source: { kafkaEnv: 'staging' },
+      sink: { sinkKafkaEnv: 'production' },
+    })
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(screen.getByRole('combobox', { name: 'Environment' })).toHaveValue('PROD')
+      expect(persisted.metadata?.environment).toBe('PROD')
+      expect(persisted.source?.kafkaEnv).toBe('CAP')
+      expect(persisted.sink?.sinkKafkaEnv).toBe('PROD')
     })
   })
 

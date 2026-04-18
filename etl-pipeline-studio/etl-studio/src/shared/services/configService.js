@@ -1,4 +1,4 @@
-import { MOCK_SCHEMA, normalizeSourceSchema, TARGET_FIELDS } from '../types/index.js'
+import { MOCK_SCHEMA, normalizeEnvironmentValue, normalizeSourceSchema, TARGET_FIELDS } from '../types/index.js'
 import { upsertSavedDraftDeployment } from './deploymentsService.js'
 import {
   API_BASE,
@@ -61,7 +61,10 @@ function buildApiUrl(pathname = '', { apiBase = API_BASE, origin } = {}) {
 export function buildConfigurationYamlUrl(pathname = 'backend/configuration/yaml', query = {}, options = {}) {
   const url = buildApiUrl(pathname, options)
   Object.entries(query).forEach(([key, value]) => {
-    url.searchParams.set(key, value ?? '')
+    const normalizedValue = key === 'environment'
+      ? normalizeEnvironmentValue(value, value ?? '')
+      : (value ?? '')
+    url.searchParams.set(key, normalizedValue)
   })
   return url.toString()
 }
@@ -645,7 +648,7 @@ export async function fetchSavedDraftYaml({ productType, source, team, environme
   genomeEntity: Product
   productSource: ${source || 'Mock Source'}
   productType: ${productType || 'Mock Type'}
-  environment: ${environment || 'production'}
+  environment: ${normalizeEnvironmentValue(environment, 'PROD')}
   owner: ${team || 'default'}
   dataStreamInfo:
     streamingContinuity: continuous
@@ -724,7 +727,7 @@ export async function fetchDraftConfiguration({ productType, source, team, envir
   genomeEntity: Product
   productSource: ${source || 'Mock Source'}
   productType: ${productType || 'Mock Type'}
-  environment: ${environment || 'production'}
+  environment: ${normalizeEnvironmentValue(environment, 'PROD')}
   owner: ${team || 'default'}
   dataStreamInfo:
     streamingContinuity: continuous

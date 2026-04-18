@@ -1,4 +1,4 @@
-import { normalizeFilterGroups, normalizeMetadataLocation } from '../types/index.js'
+import { normalizeEnvironmentValue, normalizeFilterGroups, normalizeMetadataLocation } from '../types/index.js'
 
 export const LEGACY_WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
 
@@ -82,7 +82,7 @@ export function buildStateFromPersisted(baseState, persistedState) {
   const metadata = persistedState.metadata
     ? { ...baseState.metadata, ...persistedState.metadata }
     : baseState.metadata
-  const metadataEnvironment = String(metadata?.environment || '').trim()
+  const metadataEnvironment = normalizeEnvironmentValue(metadata?.environment)
   const source = persistedState.source ? { ...baseState.source, ...persistedState.source } : baseState.source
   const sink = persistedState.sink ? { ...baseState.sink, ...persistedState.sink } : baseState.sink
 
@@ -91,18 +91,19 @@ export function buildStateFromPersisted(baseState, persistedState) {
     ...persistedState,
     metadata: {
       ...metadata,
-      location: normalizeMetadataLocation(metadata?.location, metadata?.environment),
+      environment: metadataEnvironment,
+      location: normalizeMetadataLocation(metadata?.location, metadataEnvironment),
     },
     source: {
       ...source,
-      kafkaEnv: String(source?.kafkaEnv || '').trim() || metadataEnvironment,
+      kafkaEnv: normalizeEnvironmentValue(source?.kafkaEnv, metadataEnvironment),
     },
     upload: persistedState.upload ? { ...baseState.upload, ...persistedState.upload } : baseState.upload,
     targetSchema: persistedState.targetSchema ?? baseState.targetSchema,
     filters: normalizeFilterGroups(persistedState.filters),
     sink: {
       ...sink,
-      sinkKafkaEnv: String(sink?.sinkKafkaEnv || '').trim() || metadataEnvironment,
+      sinkKafkaEnv: normalizeEnvironmentValue(sink?.sinkKafkaEnv, metadataEnvironment),
     },
   }
 }

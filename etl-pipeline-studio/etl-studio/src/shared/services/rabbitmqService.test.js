@@ -40,7 +40,7 @@ describe('rabbitmqService', () => {
       payload: { success: true, message: 'RabbitMQ reachable' },
     }))
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/rabbitmq/test-connection?vhost=%2Fetl&port=5672&queueName=orders.retry&exchange=etl.exchange&environment=production', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/rabbitmq/test-connection?vhost=%2Fetl&port=5672&queueName=orders.retry&exchange=etl.exchange&environment=PROD', {
       method: 'GET',
       headers: {
         Accept: 'application/json, text/plain',

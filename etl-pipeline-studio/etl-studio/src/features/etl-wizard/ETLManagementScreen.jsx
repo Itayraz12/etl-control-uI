@@ -130,9 +130,9 @@ function matchesManagementTab(deployment, tabId) {
 
   switch (tabId) {
     case 'prod':
-      return environment === 'production';
+      return environment === 'PROD';
     case 'stage':
-      return environment === 'staging';
+      return environment === 'CAP';
     case 'deleted':
       return status === 'deleted';
     case 'all':
@@ -1360,7 +1360,7 @@ export default function ETLManagementScreen() {
                       >
                         <td style={{ padding: 8 }}>{getDeploymentSourceValue(dep)}</td>
                         <td style={{ padding: 8 }}>{dep.productType}</td>
-                        <td style={{ padding: 8 }}>{formatEnvironmentLabel(dep.environment || 'production', dep.environment || 'production')}</td>
+                        <td style={{ padding: 8 }}>{formatEnvironmentLabel(dep.environment || 'PROD', dep.environment || 'PROD')}</td>
                         <td style={{ padding: 8 }}>
                           <Chip
                             c={STATUS_COLORS[dep.deploymentStatus] || 'muted'}

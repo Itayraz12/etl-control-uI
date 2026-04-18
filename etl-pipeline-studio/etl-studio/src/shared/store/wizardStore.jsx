@@ -5,7 +5,7 @@ import {
   loadPersistedWizardStateForUser,
   serializeWizardState,
 } from './wizardPersistence.js'
-import { normalizeFilterGroups, normalizeMetadataLocation } from '../types/index.js'
+import { normalizeEnvironmentValue, normalizeFilterGroups, normalizeMetadataLocation } from '../types/index.js'
 
 function getPreviewStateStorageKey(search = window.location.search) {
   const params = new URLSearchParams(search)
@@ -102,30 +102,48 @@ const initialState = {
 
 function normalizeMetadataState(metadata = {}) {
   const nextMetadata = { ...initialState.metadata, ...(metadata || {}) }
+  const environment = normalizeEnvironmentValue(nextMetadata.environment)
 
   return {
     ...nextMetadata,
-    location: normalizeMetadataLocation(nextMetadata.location, nextMetadata.environment),
+    environment,
+    location: normalizeMetadataLocation(nextMetadata.location, environment),
+  }
+}
+
+function normalizeSourceState(source = {}, metadataEnvironment = '') {
+  const nextSource = { ...initialState.source, ...(source || {}) }
+  const kafkaEnv = normalizeEnvironmentValue(nextSource.kafkaEnv, metadataEnvironment)
+
+  return {
+    ...nextSource,
+    kafkaEnv,
+  }
+}
+
+function normalizeSinkState(sink = {}, metadataEnvironment = '') {
+  const nextSink = { ...initialState.sink, ...(sink || {}) }
+  const sinkKafkaEnv = normalizeEnvironmentValue(nextSink.sinkKafkaEnv, metadataEnvironment)
+
+  return {
+    ...nextSink,
+    sinkKafkaEnv,
   }
 }
 
 function defaultKafkaEnvironments(nextState, previousMetadataEnvironment = '') {
-  const metadataEnvironment = String(nextState?.metadata?.environment || '').trim()
-  const previousEnvironment = String(previousMetadataEnvironment || '').trim()
+  const metadata = normalizeMetadataState(nextState?.metadata)
+  const metadataEnvironment = normalizeEnvironmentValue(metadata?.environment)
+  const previousEnvironment = normalizeEnvironmentValue(previousMetadataEnvironment)
 
-  const sourceKafkaEnv = String(nextState?.source?.kafkaEnv || '').trim()
-  const sinkKafkaEnv = String(nextState?.sink?.sinkKafkaEnv || '').trim()
+  const source = normalizeSourceState(nextState?.source, metadataEnvironment || previousEnvironment)
+  const sink = normalizeSinkState(nextState?.sink, metadataEnvironment || previousEnvironment)
 
   return {
     ...nextState,
-    source: {
-      ...(nextState?.source || {}),
-      kafkaEnv: sourceKafkaEnv || metadataEnvironment || previousEnvironment,
-    },
-    sink: {
-      ...(nextState?.sink || {}),
-      sinkKafkaEnv: sinkKafkaEnv || metadataEnvironment || previousEnvironment,
-    },
+    metadata,
+    source,
+    sink,
   }
 }
 
@@ -190,14 +208,14 @@ function wizardReducer(state, action) {
         originalDraftSignature: typeof payload.originalDraftSignature === 'string' ? payload.originalDraftSignature : '',
         completedSteps,
         metadata: normalizeMetadataState(payload.metadata),
-        source: { ...initialState.source, ...(payload.source || {}) },
+        source: normalizeSourceState(payload.source, normalizeEnvironmentValue(payload?.metadata?.environment)),
         upload: { ...initialState.upload, ...(payload.upload || {}) },
         targetSchema: Array.isArray(payload.targetSchema) || (payload.targetSchema && typeof payload.targetSchema === 'object')
           ? payload.targetSchema
           : [],
         mappings: Array.isArray(payload.mappings) ? payload.mappings : [],
         filters: normalizeFilterGroups(payload.filters),
-        sink: { ...initialState.sink, ...(payload.sink || {}) },
+        sink: normalizeSinkState(payload.sink, normalizeEnvironmentValue(payload?.metadata?.environment)),
       })
     }
     case 'UPDATE_METADATA':
@@ -209,7 +227,13 @@ function wizardReducer(state, action) {
         }),
       }, state.metadata?.environment)
     case 'UPDATE_SOURCE':
-      return { ...state, source: { ...state.source, ...action.payload } }
+      return {
+        ...state,
+        source: normalizeSourceState({
+          ...state.source,
+          ...action.payload,
+        }, state.metadata?.environment),
+      }
     case 'UPDATE_UPLOAD':
       return { ...state, upload: { ...state.upload, ...action.payload } }
     case 'SET_TARGET_SCHEMA':
@@ -221,7 +245,13 @@ function wizardReducer(state, action) {
     case 'SET_FILTERS':
       return { ...state, filters: normalizeFilterGroups(action.payload) }
     case 'UPDATE_SINK':
-      return { ...state, sink: { ...state.sink, ...action.payload } }
+      return {
+        ...state,
+        sink: normalizeSinkState({
+          ...state.sink,
+          ...action.payload,
+        }, state.metadata?.environment),
+      }
     case 'SET_THEME':
       return { ...state, theme: action.payload }
     case 'TOGGLE_THEME':

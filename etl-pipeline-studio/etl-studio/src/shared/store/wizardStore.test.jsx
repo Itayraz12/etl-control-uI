@@ -12,6 +12,9 @@ function StateProbe() {
       <div data-testid="current-step">{String(state.currentStep)}</div>
       <div data-testid="read-only">{String(state.readOnly)}</div>
       <div data-testid="product-type">{state.metadata.productType}</div>
+      <div data-testid="environment">{state.metadata.environment}</div>
+      <div data-testid="source-kafka-env">{state.source.kafkaEnv}</div>
+      <div data-testid="sink-kafka-env">{state.sink.sinkKafkaEnv}</div>
       <div data-testid="kafka-topic">{state.source.kafkaTopic}</div>
       <div data-testid="sink-kafka-topic">{state.sink.sinkKafkaTopic}</div>
     </div>
@@ -41,7 +44,9 @@ describe('WizardProvider preview boot', () => {
           currentStep: 4,
           completedSteps: [0, 1, 2, 3, 4],
           readOnly: true,
-          metadata: { productType: 'Catalog' },
+          metadata: { productType: 'Catalog', environment: 'production' },
+          source: { kafkaEnv: 'staging' },
+          sink: { sinkKafkaEnv: 'production' },
         },
       }),
     )
@@ -57,6 +62,9 @@ describe('WizardProvider preview boot', () => {
     expect(screen.getByTestId('current-step')).toHaveTextContent('4')
     expect(screen.getByTestId('read-only')).toHaveTextContent('true')
     expect(screen.getByTestId('product-type')).toHaveTextContent('Catalog')
+    expect(screen.getByTestId('environment')).toHaveTextContent('PROD')
+    expect(screen.getByTestId('source-kafka-env')).toHaveTextContent('CAP')
+    expect(screen.getByTestId('sink-kafka-env')).toHaveTextContent('PROD')
   })
 
   it('keeps plain localhost boots editable even when persisted state previously contained readOnly', async () => {

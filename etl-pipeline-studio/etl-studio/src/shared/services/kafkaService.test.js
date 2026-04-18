@@ -33,7 +33,7 @@ describe('kafkaService', () => {
       })
     )
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/kafka/test-connection?topicName=orders.v1&environment=production', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/kafka/test-connection?topicName=orders.v1&environment=PROD', {
       method: 'GET',
       headers: {
         Accept: 'application/json, text/plain',
