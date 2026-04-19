@@ -19,6 +19,33 @@ const transformers = [
   },
 ]
 
+const filterOperators = [
+  {
+    id: 'severity_filter',
+    name: 'Severity Filter',
+    additionalParams: [
+      {
+        name: 'severity',
+        description: 'Minimum severity threshold to include.',
+        type: 'string',
+        isArray: false,
+      },
+    ],
+    additionalProperties: {
+      properties: [
+        {
+          key: 'severity',
+          label: 'Severity',
+          type: 'text',
+          default: '',
+          description: 'Minimum severity threshold to include.',
+          isArray: false,
+        },
+      ],
+    },
+  },
+]
+
 function buildState(overrides = {}) {
   const baseState = {
     currentStep: 1,
@@ -470,6 +497,86 @@ describe('canNavigateToWizardStep', () => {
     expect(summaryFilterValidation.type).toBe('err')
     expect(summaryFilterValidation.text).toContain('properties')
     expect(canDeployFromSummaryChecklist(state, undefined, transformers)).toBe(false)
+  })
+
+  it('treats the Filters step as invalid when a live filter operator is missing a required param', () => {
+    const state = buildState({
+      currentStep: 3,
+      filters: [
+        {
+          id: 'group-1',
+          logic: 'AND',
+          rules: [{ id: 'rule-1', field: 'id', op: 'severity_filter', value: JSON.stringify({ severity: '' }) }],
+          subgroups: [],
+        },
+      ],
+    })
+
+    expect(getFilterValidation(state.filters, filterOperators)).toEqual({
+      hasFilters: true,
+      ruleCount: 1,
+      invalidGroups: [
+        expect.objectContaining({
+          invalidRules: [
+            expect.objectContaining({
+              missingFields: ['Severity'],
+            }),
+          ],
+        }),
+      ],
+      isValid: false,
+    })
+    expect(isWizardStepValid(3, state, undefined, transformers, filterOperators)).toBe(false)
+    expect(canNavigateToWizardStep(4, state, undefined, transformers, filterOperators)).toBe(false)
+
+    const summaryFilterValidation = getSummaryValidations(state, undefined, transformers, filterOperators).find(item => item.key === 'filtersConfigured')
+    expect(summaryFilterValidation.type).toBe('err')
+    expect(summaryFilterValidation.text).toContain('Severity')
+  })
+
+  it('keeps the Filters step optional when no filters are defined', () => {
+    const state = buildState({
+      currentStep: 3,
+      filters: [],
+    })
+
+    expect(isWizardStepValid(3, state, undefined, transformers, filterOperators)).toBe(true)
+    expect(canNavigateToWizardStep(4, state, undefined, transformers, filterOperators)).toBe(true)
+  })
+
+  it('does not require a value when a filter explicitly declares no additionalParams', () => {
+    const filters = [
+      {
+        id: 'group-1',
+        logic: 'AND',
+        rules: [{ id: 'rule-1', field: 'id', op: 'status_filter', value: '' }],
+        subgroups: [],
+      },
+    ]
+    const filterOperators = [
+      {
+        id: 'status_filter',
+        name: 'Status Filter',
+        additionalParams: [],
+        additionalProperties: {
+          properties: [
+            {
+              key: 'severity',
+              label: 'Severity',
+              type: 'text',
+              default: '',
+            },
+          ],
+        },
+      },
+    ]
+
+    expect(getFilterValidation(filters, filterOperators)).toEqual({
+      hasFilters: true,
+      ruleCount: 1,
+      invalidGroups: [],
+      isValid: true,
+    })
   })
 
   it('includes missing required transformer properties in the summary checklist', () => {

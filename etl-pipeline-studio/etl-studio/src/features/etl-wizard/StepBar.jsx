@@ -1,16 +1,17 @@
 import { STEPS } from '../../shared/types/index.js'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
-import { canNavigateToWizardStep, getFieldMappingValidation, getSummaryFailingStepIndexes } from '../../shared/services/wizardValidation.js'
+import { canNavigateToWizardStep, getFieldMappingValidation, getFilterValidation, getSummaryFailingStepIndexes } from '../../shared/services/wizardValidation.js'
 
 export default function StepBar() {
   const { state, actions } = useWizard()
-  const { transformers } = useConfig()
+  const { transformers, filters: filterOperators } = useConfig()
   const { currentStep, completedSteps } = state
   const fieldMappingValidation = getFieldMappingValidation(state, undefined, transformers)
+  const filterValidation = getFilterValidation(state?.filters, filterOperators)
   const shouldShowSummaryFailures = currentStep === 6 || completedSteps.has(6)
   const summaryFailingStepIndexes = shouldShowSummaryFailures
-    ? getSummaryFailingStepIndexes(state, undefined, transformers)
+    ? getSummaryFailingStepIndexes(state, undefined, transformers, filterOperators)
     : new Set()
 
   function handleStepClick(targetStep, canClick) {
@@ -34,13 +35,17 @@ export default function StepBar() {
           const isOptionalFiltersStep = i === 3
           const isDone = completedSteps.has(i) || (isOptionalFiltersStep && currentStep > i)
           const isActive = i === currentStep
-          const canClick = canNavigateToWizardStep(i, state, undefined, transformers)
+          const canClick = canNavigateToWizardStep(i, state, undefined, transformers, filterOperators)
           const isIncompleteFieldMapping =
             i === 4 &&
             !fieldMappingValidation.isValid &&
             (fieldMappingValidation.hasMappings || completedSteps.has(4))
+          const isIncompleteFilters =
+            i === 3 &&
+            !filterValidation.isValid &&
+            filterValidation.hasFilters
           const isSummaryFailingStep = summaryFailingStepIndexes.has(i)
-          const isFailingStep = isIncompleteFieldMapping || isSummaryFailingStep
+          const isFailingStep = isIncompleteFieldMapping || isIncompleteFilters || isSummaryFailingStep
 
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center' }}>

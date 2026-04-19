@@ -8,14 +8,14 @@ import { useSummaryFooter } from '../summary/summaryFooterContext.jsx'
 
 export default function WizardFooter() {
   const { state, actions } = useWizard()
-  const { transformers } = useConfig()
+  const { transformers, filters: filterOperators } = useConfig()
   const summaryFooter = useSummaryFooter()
   const { currentStep, readOnly } = state
   const [mappingValidationModal, setMappingValidationModal] = useState(false)
   const isFirst = currentStep === 0
   const isLast = currentStep === STEPS.length - 1
   const summaryFooterActions = isLast ? summaryFooter?.summaryFooterActions : null
-  const canContinue = isWizardStepValid(currentStep, state, undefined, transformers)
+  const canContinue = isWizardStepValid(currentStep, state, undefined, transformers, filterOperators)
   const fieldMappingValidation = getFieldMappingValidation(state, undefined, transformers)
   const missingTargetFieldsMessage = fieldMappingValidation.unmappedRequiredTargets.length > 0
     ? `Missing fields: ${fieldMappingValidation.unmappedRequiredTargets.map(field => field.name || field.id).join(', ')}`

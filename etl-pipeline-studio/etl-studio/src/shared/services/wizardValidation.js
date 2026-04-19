@@ -111,6 +111,33 @@ function parseFilterRuleValue(value) {
   }
 }
 
+function getFilterOperatorComplexProperties(operatorDefinition = {}) {
+  const complexProperties = Array.isArray(operatorDefinition?.additionalProperties?.properties)
+    ? operatorDefinition.additionalProperties.properties
+    : []
+  const declaredAdditionalParams = Array.isArray(operatorDefinition?.additionalParams)
+    ? operatorDefinition.additionalParams
+    : Array.isArray(operatorDefinition?.additional_params)
+      ? operatorDefinition.additional_params
+      : null
+
+  if (declaredAdditionalParams) {
+    return declaredAdditionalParams.length > 0 ? complexProperties : []
+  }
+
+  return complexProperties
+}
+
+function hasFilterOperatorExplicitNoAdditionalParams(operatorDefinition = {}) {
+  const declaredAdditionalParams = Array.isArray(operatorDefinition?.additionalParams)
+    ? operatorDefinition.additionalParams
+    : Array.isArray(operatorDefinition?.additional_params)
+      ? operatorDefinition.additional_params
+      : null
+
+  return Array.isArray(declaredAdditionalParams) && declaredAdditionalParams.length === 0
+}
+
 function getMissingFilterRuleFields(rule = {}, filterOperators = MOCK_FILTER_OPERATORS) {
   const missingFields = []
   const operatorId = String(rule?.op || '').trim()
@@ -122,9 +149,10 @@ function getMissingFilterRuleFields(rule = {}, filterOperators = MOCK_FILTER_OPE
   if (operatorId.includes('null')) return missingFields
 
   const operatorDefinition = getFilterOperatorDefinition(filterOperators, operatorId)
-  const complexProperties = Array.isArray(operatorDefinition?.additionalProperties?.properties)
-    ? operatorDefinition.additionalProperties.properties
-    : []
+  if (hasFilterOperatorExplicitNoAdditionalParams(operatorDefinition)) {
+    return missingFields
+  }
+  const complexProperties = getFilterOperatorComplexProperties(operatorDefinition)
 
   if (complexProperties.length > 0) {
     const parsedValue = parseFilterRuleValue(rule?.value)
@@ -295,13 +323,13 @@ export function getFieldMappingValidation(state, targetSchema = getResolvedTarge
   }
 }
 
-export function getSummaryValidations(state, targetSchema = getResolvedTargetSchema(state), transformers = []) {
+export function getSummaryValidations(state, targetSchema = getResolvedTargetSchema(state), transformers = [], filterOperators = MOCK_FILTER_OPERATORS) {
   const source = state?.source || {}
   const metadata = state?.metadata || {}
   const filters = Array.isArray(state?.filters) ? state.filters : []
   const sink = state?.sink || {}
   const fieldMappingValidation = getFieldMappingValidation(state, targetSchema, transformers)
-  const filterValidation = getFilterValidation(filters)
+  const filterValidation = getFilterValidation(filters, filterOperators)
   const srcMeta = SOURCE_TYPES.find(t => t.id === source.sourceType)
   const missingMetadataFields = getMissingMetadataRequiredFields(metadata, source)
   const missingSourceFields = getMissingSourceRequiredFields(source, metadata)
@@ -389,20 +417,20 @@ export function getSummaryValidations(state, targetSchema = getResolvedTargetSch
   ]
 }
 
-export function canDeployFromSummaryChecklist(state, targetSchema = getResolvedTargetSchema(state), transformers = []) {
-  return getSummaryValidations(state, targetSchema, transformers).every(item => item.type === 'ok')
+export function canDeployFromSummaryChecklist(state, targetSchema = getResolvedTargetSchema(state), transformers = [], filterOperators = MOCK_FILTER_OPERATORS) {
+  return getSummaryValidations(state, targetSchema, transformers, filterOperators).every(item => item.type === 'ok')
 }
 
-export function getSummaryFailingStepIndexes(state, targetSchema = getResolvedTargetSchema(state), transformers = []) {
+export function getSummaryFailingStepIndexes(state, targetSchema = getResolvedTargetSchema(state), transformers = [], filterOperators = MOCK_FILTER_OPERATORS) {
   return new Set(
-    getSummaryValidations(state, targetSchema, transformers)
+    getSummaryValidations(state, targetSchema, transformers, filterOperators)
       .filter(item => item.type !== 'ok')
       .map(item => item.stepIndex)
   )
 }
 
-export function isWizardStepValid(stepIndex, state, targetSchema = getResolvedTargetSchema(state), transformers = []) {
-  const { metadata = {}, source = {}, upload = {}, sink = {} } = state || {}
+export function isWizardStepValid(stepIndex, state, targetSchema = getResolvedTargetSchema(state), transformers = [], filterOperators = MOCK_FILTER_OPERATORS) {
+  const { metadata = {}, source = {}, upload = {}, sink = {}, filters = [] } = state || {}
 
   if (stepIndex === 0) {
     return getMissingMetadataRequiredFields(metadata, source).length === 0
@@ -417,7 +445,8 @@ export function isWizardStepValid(stepIndex, state, targetSchema = getResolvedTa
   }
 
   if (stepIndex === 3) {
-    return true
+    const filterValidation = getFilterValidation(filters, filterOperators)
+    return !filterValidation.hasFilters || filterValidation.isValid
   }
 
   if (stepIndex === 4) {
@@ -435,7 +464,7 @@ export function isWizardStepValid(stepIndex, state, targetSchema = getResolvedTa
   return true
 }
 
-export function canNavigateToWizardStep(targetStep, state, targetSchema = getResolvedTargetSchema(state), transformers = []) {
+export function canNavigateToWizardStep(targetStep, state, targetSchema = getResolvedTargetSchema(state), transformers = [], filterOperators = MOCK_FILTER_OPERATORS) {
   const currentStep = state?.currentStep ?? 0
   const completedSteps = state?.completedSteps instanceof Set
     ? state.completedSteps
@@ -451,5 +480,5 @@ export function canNavigateToWizardStep(targetStep, state, targetSchema = getRes
   if (targetStep <= furthestVisitedStep) return true
   if (targetStep !== currentStep + 1) return false
 
-  return isWizardStepValid(currentStep, state, targetSchema, transformers)
+  return isWizardStepValid(currentStep, state, targetSchema, transformers, filterOperators)
 }

@@ -1,10 +1,34 @@
+import { useEffect } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
 import { Card, CardTitle, Btn } from '../../shared/components/index.jsx'
 import { resolveSourceSchema } from '../../shared/types/index.js'
 
 function createDefaultRootGroup() {
-  return { id: 'root-group', logic: 'AND', mode: 'include', isRevertible: true, rules: [], subgroups: [] }
+  return { id: 'root-group', logic: 'AND', mode: 'exclude', isRevertible: true, rules: [], subgroups: [] }
+}
+
+function normalizeRootFilterGroup(group = {}) {
+  if (!group || typeof group !== 'object') return createDefaultRootGroup()
+  return {
+    ...group,
+    mode: 'exclude',
+  }
+}
+
+function getLongestLabelLength(items = [], getLabel = item => item) {
+  return (Array.isArray(items) ? items : [])
+    .map(item => String(getLabel(item) ?? '').trim().length)
+    .reduce((maxLength, currentLength) => Math.max(maxLength, currentLength), 0)
+}
+
+function getSelectWidthFromLongestLabel(items = [], getLabel = item => item, {
+  minChars = 12,
+  extraChars = 4,
+} = {}) {
+  const longestLabelLength = getLongestLabelLength(items, getLabel)
+  const totalChars = Math.max(minChars, longestLabelLength + extraChars)
+  return `${totalChars}ch`
 }
 
 function getOperatorSelectionValue(operatorLike = {}) {
@@ -19,6 +43,77 @@ function parseOperatorSelectionValue(value = '') {
     op: rawOperatorId.trim(),
     isReverted: revertedToken === '1',
   }
+}
+
+function hasRequiredValue(value) {
+  if (value === 0 || value === false) return true
+  if (typeof value === 'string') return value.trim() !== ''
+  return value != null && Boolean(value)
+}
+
+function parseRuleObjectValue(value) {
+  if (!value || typeof value !== 'string') return null
+
+  try {
+    const parsedValue = JSON.parse(value)
+    return parsedValue && typeof parsedValue === 'object' && !Array.isArray(parsedValue)
+      ? parsedValue
+      : null
+  } catch {
+    return null
+  }
+}
+
+function getOperatorAdditionalParams(operator = {}) {
+  if (Array.isArray(operator?.additionalParams)) return operator.additionalParams
+  if (Array.isArray(operator?.additional_params)) return operator.additional_params
+  return null
+}
+
+function hasExplicitNoAdditionalParams(operator = {}) {
+  const additionalParams = getOperatorAdditionalParams(operator)
+  return Array.isArray(additionalParams) && additionalParams.length === 0
+}
+
+function getOperatorComplexProperties(operator = {}) {
+  const properties = Array.isArray(operator?.additionalProperties?.properties)
+    ? operator.additionalProperties.properties
+    : []
+  const additionalParams = getOperatorAdditionalParams(operator)
+
+  if (additionalParams) {
+    return additionalParams.length > 0 ? properties : []
+  }
+
+  return properties
+}
+
+function getRuleValueForOperator(operator = {}, previousValue = '') {
+  const operatorId = String(operator?.id ?? '').trim()
+  if (operatorId.includes('null')) return ''
+
+   if (hasExplicitNoAdditionalParams(operator)) return ''
+
+  const complexProps = getOperatorComplexProperties(operator)
+  if (complexProps.length > 0) {
+    const parsedValue = parseRuleObjectValue(previousValue) || {}
+
+    return JSON.stringify(
+      complexProps.reduce((result, prop) => {
+        result[prop.key] = parsedValue[prop.key] ?? prop.default ?? ''
+        return result
+      }, {})
+    )
+  }
+
+  const valueOptions = Array.isArray(operator?.additionalProperties?.options)
+    ? operator.additionalProperties.options
+    : []
+  if (valueOptions.length > 0) {
+    return valueOptions.includes(previousValue) ? previousValue : ''
+  }
+
+  return parseRuleObjectValue(previousValue) ? '' : String(previousValue ?? '')
 }
 
 function getDefaultRuleOperator(group = {}, operators = []) {
@@ -37,102 +132,257 @@ function getDefaultRuleOperator(group = {}, operators = []) {
   return getOperatorSelectionValue(operators?.[0] || { id: 'eq', isReverted: false }) || 'eq::0'
 }
 
-function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions }) {
+function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions, isRootGroup = false, rootLayout = null }) {
   const currentSelectionValue = getOperatorSelectionValue({ op: rule.op, isReverted: rule.isReverted })
   const currentOperator = operators.find(o => getOperatorSelectionValue(o) === currentSelectionValue)
     || operators.find(o => o.id === rule.op)
   const additionalProps = currentOperator?.additionalProperties || {}
   const valueOptions = additionalProps.options || []
-  const complexProps = additionalProps.properties || []
+  const complexProps = getOperatorComplexProperties(currentOperator)
+  const hidesScalarValueInput = hasExplicitNoAdditionalParams(currentOperator)
   const isSelect = valueOptions.length > 0
   const hasComplexProps = complexProps.length > 0
   const operatorId = String(currentOperator?.id ?? rule.op ?? '').trim()
-
-  let parsedValues = {}
-  if (hasComplexProps) {
-    try {
-      parsedValues = typeof rule.value === 'string' ? JSON.parse(rule.value) : rule.value
-    } catch {
-      parsedValues = {}
-      complexProps.forEach(p => { parsedValues[p.key] = p.default || '' })
+  const isNullOperator = operatorId.includes('null')
+  const parsedRuleObjectValue = hasComplexProps ? parseRuleObjectValue(rule.value) : null
+  const parsedValues = hasComplexProps
+    ? complexProps.reduce((result, prop) => {
+      result[prop.key] = parsedRuleObjectValue?.[prop.key] ?? prop.default ?? ''
+      return result
+    }, {})
+    : {}
+  const isRuleValueInvalid = !isNullOperator && !hasComplexProps && !hidesScalarValueInput && !hasRequiredValue(rule.value)
+  const fieldSelectStyle = isRootGroup
+    ? { width: rootLayout?.fieldSelectWidth || '16ch', minWidth: rootLayout?.fieldSelectWidth || '16ch', flex: '0 0 auto' }
+    : { flex: 1.5 }
+  const logicLabelStyle = isRootGroup
+    ? {
+      width: rootLayout?.logicLabelWidth || '6ch',
+      minWidth: rootLayout?.logicLabelWidth || '6ch',
+      flex: '0 0 auto',
+      textAlign: 'right',
     }
+    : {
+      minWidth: 26,
+      textAlign: 'center',
+    }
+  const operatorSelectStyle = isRootGroup
+    ? { width: rootLayout?.operatorSelectWidth || '18ch', minWidth: rootLayout?.operatorSelectWidth || '18ch', flex: '0 0 auto' }
+    : { flex: 1.2 }
+  const scalarValueStyle = isRootGroup
+    ? { width: 'min(240px, 100%)', minWidth: 0, flex: '0 1 240px' }
+    : { flex: 1 }
+  const rootValueGapStyle = {
+    width: rootLayout?.valueGapWidth || '1cm',
+    minWidth: rootLayout?.valueGapWidth || '1cm',
+    flex: '0 0 auto',
+  }
+  const rootValueAreaStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 8,
+    flexWrap: 'wrap',
+    flex: '1 1 auto',
+    minWidth: 0,
+  }
+  const inlineComplexParamsContainerStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 8,
+    flexWrap: 'wrap',
+    flex: '0 1 auto',
+    minWidth: 0,
+  }
+  const inlineComplexParamItemStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    flex: '0 1 auto',
+    minWidth: 0,
+  }
+  const inlineComplexParamInputStyle = {
+    width: 'min(220px, 100%)',
+    minWidth: '120px',
+    flex: '0 1 180px',
+  }
+
+  const handleOperatorChange = (nextSelectionValue) => {
+    const nextSelection = parseOperatorSelectionValue(nextSelectionValue)
+    const nextOperator = operators.find(o => getOperatorSelectionValue(o) === nextSelectionValue)
+      || operators.find(o => o.id === nextSelection.op)
+
+    onChange({
+      ...rule,
+      ...nextSelection,
+      value: getRuleValueForOperator(nextOperator, rule.value),
+    })
   }
 
   const updateComplexValue = (key, val) => {
     const updated = { ...parsedValues, [key]: val }
     onChange({ ...rule, value: JSON.stringify(updated) })
   }
+
+  const complexParamsContent = complexProps.map(prop => (
+    isRootGroup ? (
+      <div key={prop.key} style={inlineComplexParamItemStyle}>
+        <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 'fit-content', textAlign: 'left', whiteSpace: 'nowrap' }}>{prop.label}:</label>
+        {prop.type === 'boolean' ? (
+          <select
+            aria-label={prop.label}
+            aria-invalid={!hasRequiredValue(parsedValues[prop.key])}
+            value={String(parsedValues[prop.key] ?? prop.default ?? 'true')}
+            onChange={e => updateComplexValue(prop.key, e.target.value)}
+            style={inlineComplexParamInputStyle}
+          >
+            <option value="true">True</option>
+            <option value="false">False</option>
+          </select>
+        ) : (
+          <input
+            aria-label={prop.label}
+            aria-invalid={!hasRequiredValue(parsedValues[prop.key])}
+            type={prop.type === 'number' ? 'number' : 'text'}
+            value={parsedValues[prop.key] ?? prop.default ?? ''}
+            onChange={e => updateComplexValue(prop.key, e.target.value)}
+            placeholder={prop.default || prop.description || (prop.isArray ? 'Comma-separated values' : '')}
+            style={inlineComplexParamInputStyle}
+          />
+        )}
+      </div>
+    ) : (
+      <div key={prop.key} style={{ display: 'grid', gridTemplateColumns: 'minmax(90px, max-content) minmax(180px, 320px)', gap: 8, alignItems: 'center', justifyContent: 'flex-start', width: 'min(100%, 440px)' }}>
+        <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 'fit-content', textAlign: 'left' }}>{prop.label}:</label>
+        {prop.type === 'boolean' ? (
+          <select aria-label={prop.label} aria-invalid={!hasRequiredValue(parsedValues[prop.key])} value={String(parsedValues[prop.key] ?? prop.default ?? 'true')} onChange={e => updateComplexValue(prop.key, e.target.value)} style={{ width: '100%', minWidth: 0 }}>
+            <option value="true">True</option>
+            <option value="false">False</option>
+          </select>
+        ) : (
+          <input
+            aria-label={prop.label}
+            aria-invalid={!hasRequiredValue(parsedValues[prop.key])}
+            type={prop.type === 'number' ? 'number' : 'text'}
+            value={parsedValues[prop.key] ?? prop.default ?? ''}
+            onChange={e => updateComplexValue(prop.key, e.target.value)}
+            placeholder={prop.default || prop.description || (prop.isArray ? 'Comma-separated values' : '')}
+            style={{ width: '100%', minWidth: 0 }}
+          />
+        )}
+      </div>
+    )
+  ))
+  const rootScalarValueControl = !isNullOperator && !hasComplexProps && !hidesScalarValueInput
+    ? (isSelect ? (
+      <select aria-label="Filter value" aria-invalid={isRuleValueInvalid} value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} style={scalarValueStyle}>
+        <option value="">-- Select --</option>
+        {valueOptions.map(opt => <option key={opt}>{opt}</option>)}
+      </select>
+    ) : (
+      <input aria-label="Filter value" aria-invalid={isRuleValueInvalid} value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} placeholder="1" style={scalarValueStyle} />
+    ))
+    : null
+  const shouldShowRootValueArea = isRootGroup && (Boolean(rootScalarValueControl) || (hasComplexProps && !isNullOperator))
   
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6, animation: 'slideIn .2s ease' }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, minWidth: 26, textAlign: 'center' }}>{logic}</span>
-        <select value={rule.field} onChange={e => onChange({ ...rule, field: e.target.value })} style={{ flex: 1.5 }}>
+      <div
+        data-testid={isRootGroup ? `root-filter-row-${rule.id}` : undefined}
+        style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-start', flexWrap: isRootGroup ? 'wrap' : 'nowrap' }}
+      >
+        <span
+          data-testid={isRootGroup ? `root-filter-logic-${rule.id}` : undefined}
+          style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, ...logicLabelStyle }}
+        >
+          {logic}
+        </span>
+        <select
+          data-testid={isRootGroup ? `root-filter-field-${rule.id}` : undefined}
+          value={rule.field}
+          onChange={e => onChange({ ...rule, field: e.target.value })}
+          style={fieldSelectStyle}
+        >
           {fieldOptions.map(f => <option key={f}>{f}</option>)}
         </select>
-        <select value={currentSelectionValue} onChange={e => onChange({ ...rule, ...parseOperatorSelectionValue(e.target.value) })} style={{ flex: 1.2 }}>
+        <select
+          data-testid={isRootGroup ? `root-filter-operator-${rule.id}` : undefined}
+          value={currentSelectionValue}
+          onChange={e => handleOperatorChange(e.target.value)}
+          style={operatorSelectStyle}
+        >
           {operators.map(o => (
             <option key={`${o.id}-${o.isReverted === true ? 'reverted' : 'regular'}`} value={getOperatorSelectionValue(o)}>{o.name}</option>
           ))}
         </select>
-        {!operatorId.includes('null') && !hasComplexProps && (
+        {!isRootGroup && !isNullOperator && !hasComplexProps && !hidesScalarValueInput && (
           isSelect ? (
-            <select value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} style={{ flex: 1 }}>
+            <select aria-label="Filter value" aria-invalid={isRuleValueInvalid} value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} style={scalarValueStyle}>
               <option value="">-- Select --</option>
               {valueOptions.map(opt => <option key={opt}>{opt}</option>)}
             </select>
           ) : (
-            <input value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} placeholder="1" style={{ flex: 1 }} />
+            <input aria-label="Filter value" aria-invalid={isRuleValueInvalid} value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} placeholder="1" style={scalarValueStyle} />
           )
         )}
-        <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 16, lineHeight: 1, padding: '0 4px' }}>×</button>
-      </div>
-      {hasComplexProps && !operatorId.includes('null') && (
-        <div style={{ display: 'flex', gap: 6, marginLeft: 26, flexWrap: 'wrap' }}>
-          {complexProps.map(prop => (
-            <div key={prop.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 'fit-content' }}>{prop.label}:</label>
-              {prop.type === 'boolean' ? (
-                <select value={parsedValues[prop.key] || prop.default || 'true'} onChange={e => updateComplexValue(prop.key, e.target.value)} style={{ flex: 0.6, minWidth: 80 }}>
-                  <option value="true">True</option>
-                  <option value="false">False</option>
-                </select>
-              ) : (
-                <input 
-                  type={prop.type === 'number' ? 'number' : 'text'} 
-                  value={parsedValues[prop.key] || prop.default || ''} 
-                  onChange={e => updateComplexValue(prop.key, e.target.value)} 
-                  placeholder={prop.default || prop.description || (prop.isArray ? 'Comma-separated values' : '')} 
-                  style={{ flex: 0.8, minWidth: 80 }} 
-                />
+        {shouldShowRootValueArea && (
+          <>
+            <div data-testid={`root-filter-value-gap-${rule.id}`} style={rootValueGapStyle} />
+            <div data-testid={`root-filter-value-area-${rule.id}`} style={rootValueAreaStyle}>
+              {rootScalarValueControl}
+              {hasComplexProps && !isNullOperator && (
+                <div data-testid={`root-filter-inline-params-${rule.id}`} style={inlineComplexParamsContainerStyle}>
+                  {complexParamsContent}
+                </div>
               )}
             </div>
-          ))}
+          </>
+        )}
+        <div
+          data-testid={isRootGroup ? `root-filter-remove-${rule.id}` : undefined}
+          style={{ marginLeft: 'auto', flex: '0 0 auto', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}
+        >
+          <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 16, lineHeight: 1, padding: '0 4px' }}>×</button>
+        </div>
+      </div>
+      {hasComplexProps && !isNullOperator && !isRootGroup && (
+        <div data-testid={`filter-params-${rule.id}`} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginLeft: 34, alignItems: 'flex-start' }}>
+          {complexParamsContent}
         </div>
       )}
     </div>
   )
 }
 
-function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions, readOnly = false }) {
+function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions, readOnly = false, rootLayout = null }) {
+  const normalizedGroup = depth === 0 ? normalizeRootFilterGroup(group) : group
+  const emitGroupUpdate = (updatedGroup) => onUpdate(depth === 0 ? normalizeRootFilterGroup(updatedGroup) : updatedGroup)
   const addRule = () => {
-    const defaultOperator = getDefaultRuleOperator(group, operators)
+    const defaultOperator = getDefaultRuleOperator(normalizedGroup, operators)
     const defaultRuleOperator = parseOperatorSelectionValue(defaultOperator)
+    const defaultOperatorDefinition = operators.find(operator => getOperatorSelectionValue(operator) === defaultOperator)
+      || operators.find(operator => operator.id === defaultRuleOperator.op)
 
-    onUpdate({
-      ...group,
-      rules: [...group.rules, { id: `r-${Date.now()}`, field: fieldOptions[0] || 'id', ...defaultRuleOperator, value: '1' }]
+    emitGroupUpdate({
+      ...normalizedGroup,
+      rules: [...normalizedGroup.rules, {
+        id: `r-${Date.now()}`,
+        field: fieldOptions[0] || 'id',
+        ...defaultRuleOperator,
+        value: getRuleValueForOperator(defaultOperatorDefinition, '1'),
+      }]
     })
   }
-  const updateRule = (id, updated) => onUpdate({ ...group, rules: group.rules.map(r => r.id === id ? updated : r) })
-  const removeRule = id => onUpdate({ ...group, rules: group.rules.filter(r => r.id !== id) })
-  const updateSubgroup = (id, updated) => onUpdate({ ...group, subgroups: group.subgroups.map(g => g.id === id ? updated : g) })
-  const removeSubgroup = id => onUpdate({ ...group, subgroups: group.subgroups.filter(g => g.id !== id) })
+  const updateRule = (id, updated) => emitGroupUpdate({ ...normalizedGroup, rules: normalizedGroup.rules.map(r => r.id === id ? updated : r) })
+  const removeRule = id => emitGroupUpdate({ ...normalizedGroup, rules: normalizedGroup.rules.filter(r => r.id !== id) })
+  const updateSubgroup = (id, updated) => emitGroupUpdate({ ...normalizedGroup, subgroups: normalizedGroup.subgroups.map(g => g.id === id ? updated : g) })
+  const removeSubgroup = id => emitGroupUpdate({ ...normalizedGroup, subgroups: normalizedGroup.subgroups.filter(g => g.id !== id) })
 
   const colors = ['rgba(79,110,247,.12)', 'rgba(124,58,237,.12)', 'rgba(236,72,153,.1)']
   const borderColors = ['rgba(79,110,247,.4)', 'rgba(124,58,237,.4)', 'rgba(236,72,153,.4)']
   const disableRootGroupButtons = readOnly && depth === 0
-  const canToggleGroupMode = depth === 0 && group.isRevertible !== false
+  const canToggleGroupMode = false
 
   return (
     <div style={{
@@ -147,17 +397,17 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions,
         </span>
         <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 5, overflow: 'hidden' }}>
           {['AND', 'OR'].map(op => (
-            <button key={op} onClick={() => onUpdate({ ...group, logic: op })} disabled={disableRootGroupButtons} style={{
+            <button key={op} onClick={() => emitGroupUpdate({ ...normalizedGroup, logic: op })} disabled={disableRootGroupButtons} style={{
               padding: '3px 10px', fontSize: 11, fontWeight: 700, border: 'none', cursor: disableRootGroupButtons ? 'not-allowed' : 'pointer',
-              background: group.logic === op ? (depth === 0 ? 'var(--accent)' : 'var(--accent2)') : 'transparent',
-              color: group.logic === op ? '#fff' : 'var(--muted)',
+              background: normalizedGroup.logic === op ? (depth === 0 ? 'var(--accent)' : 'var(--accent2)') : 'transparent',
+              color: normalizedGroup.logic === op ? '#fff' : 'var(--muted)',
               opacity: disableRootGroupButtons ? 0.5 : 1,
               transition: 'all .15s',
             }}>{op}</button>
           ))}
         </div>
         <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>
-          {group.logic === 'AND' ? 'All must match' : 'Any must match'}
+          {normalizedGroup.logic === 'AND' ? 'All must match' : 'Any must match'}
         </span>
         {canToggleGroupMode && (
           <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 5, overflow: 'hidden' }}>
@@ -178,7 +428,7 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions,
       </div>
 
       {/* Rules */}
-      {group.rules.map((r, i) => (
+      {normalizedGroup.rules.map((r, i) => (
         <ConditionRow
           key={r.id}
           rule={r}
@@ -187,11 +437,13 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions,
           onRemove={() => removeRule(r.id)}
           operators={operators}
           fieldOptions={fieldOptions}
+          isRootGroup={depth === 0}
+          rootLayout={rootLayout}
         />
       ))}
 
       {/* Subgroups */}
-      {group.subgroups.map(sg => (
+      {normalizedGroup.subgroups.map(sg => (
         <div key={sg.id} style={{ marginLeft: 20, marginTop: 8 }}>
           <GroupBlock
             group={sg}
@@ -201,6 +453,7 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions,
             operators={operators}
             fieldOptions={fieldOptions}
             readOnly={readOnly}
+            rootLayout={rootLayout}
           />
         </div>
       ))}
@@ -220,8 +473,15 @@ export default function   FiltersStep() {
   const setFilters = actions.setFilters
   const isReadOnly = state.readOnly === true
   const fieldOptions = resolveSourceSchema(state.upload).map(f => f.id)
-  const displayedFilters = filters.length > 0 ? filters : [createDefaultRootGroup()]
-  const previewFilters = filters.length > 0 ? filters : []
+  const normalizedFilters = filters.map(normalizeRootFilterGroup)
+  const displayedFilters = normalizedFilters.length > 0 ? normalizedFilters : [createDefaultRootGroup()]
+  const previewFilters = normalizedFilters.length > 0 ? normalizedFilters : []
+  const rootLayout = {
+    logicLabelWidth: getSelectWidthFromLongestLabel(['WHERE', 'AND', 'OR'], item => item, { minChars: 6, extraChars: 1 }),
+    fieldSelectWidth: getSelectWidthFromLongestLabel(fieldOptions, item => item, { minChars: 12, extraChars: 3 }),
+    operatorSelectWidth: getSelectWidthFromLongestLabel(operators, item => item?.name, { minChars: 14, extraChars: 4 }),
+    valueGapWidth: '1cm',
+  }
 
   const formatRuleValue = (rule) => {
     try {
@@ -235,11 +495,17 @@ export default function   FiltersStep() {
 
   const totalRules = displayedFilters.reduce((sum, g) => sum + g.rules.length + g.subgroups.reduce((s2, sg) => s2 + sg.rules.length, 0), 0)
 
-  const updateGroup = (id, updated) => setFilters(filters.map(g => g.id === id ? updated : g))
+  useEffect(() => {
+    const hasRootModeMismatch = filters.some(group => String(group?.mode || '').trim().toLowerCase() !== 'exclude')
+    if (!hasRootModeMismatch) return
+    setFilters(filters.map(normalizeRootFilterGroup))
+  }, [filters, setFilters])
+
+  const updateGroup = (id, updated) => setFilters(filters.map(g => g.id === id ? normalizeRootFilterGroup(updated) : normalizeRootFilterGroup(g)))
   const removeGroup = id => setFilters(filters.filter(g => g.id !== id))
   const handleRootGroupUpdate = (id, updated) => {
     if (filters.length === 0) {
-      setFilters([updated])
+      setFilters([normalizeRootFilterGroup(updated)])
       return
     }
 
@@ -266,6 +532,7 @@ export default function   FiltersStep() {
           operators={operators}
           fieldOptions={fieldOptions}
           readOnly={isReadOnly}
+          rootLayout={rootLayout}
         />
       ))}
 

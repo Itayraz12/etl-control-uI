@@ -551,8 +551,8 @@ ${sinkAdditionalConfigYaml}` : ''}
     || originalPipelineSignature !== currentPipelineSignature
     || originalDraftYaml !== yaml
 
-  const validations = getSummaryValidations(state, targetSchema, transformers)
-  const canDeployFromChecklist = canDeployFromSummaryChecklist(state, targetSchema, transformers)
+  const validations = getSummaryValidations(state, targetSchema, transformers, filterOperators)
+  const canDeployFromChecklist = canDeployFromSummaryChecklist(state, targetSchema, transformers, filterOperators)
 
   const handleCreatePipeline = async () => {
     // Validate required fields

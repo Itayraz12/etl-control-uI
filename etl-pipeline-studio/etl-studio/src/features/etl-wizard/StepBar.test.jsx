@@ -28,6 +28,45 @@ vi.mock('../../shared/store/wizardStore.jsx', () => ({
 
 vi.mock('../../shared/store/configContext.jsx', () => ({
   useConfig: () => ({
+    filters: [
+      {
+        id: 'severity_filter',
+        name: 'Severity Filter',
+        additionalParams: [
+          {
+            name: 'severity',
+            description: 'Minimum severity threshold to include.',
+            type: 'string',
+            isArray: false,
+          },
+        ],
+        additionalProperties: {
+          properties: [
+            {
+              key: 'severity',
+              label: 'Severity',
+              type: 'text',
+              default: '',
+            },
+          ],
+        },
+      },
+      {
+        id: 'status_filter',
+        name: 'Status Filter',
+        additionalParams: [],
+        additionalProperties: {
+          properties: [
+            {
+              key: 'severity',
+              label: 'Severity',
+              type: 'text',
+              default: '',
+            },
+          ],
+        },
+      },
+    ],
     transformers: [
       {
         _id: 'tf-required',
@@ -192,6 +231,51 @@ describe('StepBar', () => {
     expect(filtersLabel).toHaveStyle({ color: '#ef6c4d' })
     expect(filtersCircle).toHaveTextContent('4')
     expect(filtersCircle).toHaveStyle({ background: '#ef6c4d' })
+  })
+
+  it('marks the Filters tab red immediately when a live filter operator is missing required params', () => {
+    wizardState.currentStep = 3
+    wizardState.furthestStepVisited = 3
+    wizardState.completedSteps = new Set([0, 1, 2])
+    wizardState.filters = [
+      {
+        id: 'group-1',
+        logic: 'AND',
+        rules: [{ id: 'rule-1', field: 'sourceName', op: 'severity_filter', value: JSON.stringify({ severity: '' }) }],
+        subgroups: [],
+      },
+    ]
+
+    render(<StepBar />)
+
+    const filtersLabel = screen.getByText('Filter out')
+    const filtersCircle = filtersLabel.parentElement?.querySelector('div')
+
+    expect(filtersLabel).toHaveStyle({ color: '#ef6c4d' })
+    expect(filtersCircle).toHaveTextContent('4')
+    expect(filtersCircle).toHaveStyle({ background: '#ef6c4d' })
+  })
+
+  it('keeps the Filters tab clear when an operator explicitly declares no additionalParams', () => {
+    wizardState.currentStep = 3
+    wizardState.furthestStepVisited = 3
+    wizardState.completedSteps = new Set([0, 1, 2])
+    wizardState.filters = [
+      {
+        id: 'group-1',
+        logic: 'AND',
+        rules: [{ id: 'rule-1', field: 'sourceName', op: 'status_filter', value: '' }],
+        subgroups: [],
+      },
+    ]
+
+    render(<StepBar />)
+
+    const filtersLabel = screen.getByText('Filter out')
+    const filtersCircle = filtersLabel.parentElement?.querySelector('div')
+
+    expect(filtersLabel).not.toHaveStyle({ color: '#ef6c4d' })
+    expect(filtersCircle).not.toHaveStyle({ background: '#ef6c4d' })
   })
 
   it('clears the red tab state once the summary validation passes', () => {
