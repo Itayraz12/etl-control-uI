@@ -171,7 +171,7 @@ describe('configService', () => {
       {
         _id: 'filter-001',
         id: 'eq',
-        name: 'Equals',
+        name: 'equals',
         createDate: '2026-04-10T09:30:00',
         description: 'Matches records where severity is warning or higher.',
         owner: 'team-a',
@@ -206,7 +206,7 @@ describe('configService', () => {
       {
         _id: 'filter-001',
         id: 'eq',
-        name: 'not Equals',
+        name: 'not equals',
         createDate: '2026-04-10T09:30:00',
         description: 'Matches records where severity is warning or higher.',
         owner: 'team-a',

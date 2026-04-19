@@ -37,8 +37,28 @@ function normalizeFilterDependencyType(value = '') {
   return asFilterText(value).trim().toLowerCase().replace(/\s+/g, '_')
 }
 
+const DISPLAY_FILTER_TYPE_PREFIX = '__display__:'
+
+function toDisplayFilterTypeToken(value = '') {
+  return `${DISPLAY_FILTER_TYPE_PREFIX}${asFilterText(value).trim()}`
+}
+
 function formatFilterDependencyType(value = '') {
-  return normalizeFilterDependencyType(value).toUpperCase()
+  const rawValue = asFilterText(value).trim()
+  if (!rawValue) return ''
+  if (rawValue.startsWith(DISPLAY_FILTER_TYPE_PREFIX)) {
+    return rawValue.slice(DISPLAY_FILTER_TYPE_PREFIX.length)
+  }
+  return normalizeFilterDependencyType(rawValue).toUpperCase()
+}
+
+function resolveFilterOperatorDisplayName(operatorIndex = new Map(), operatorValue = '') {
+  const rawValue = asFilterText(operatorValue).trim()
+  if (!rawValue) return ''
+
+  const normalizedKey = rawValue.toLowerCase()
+  const matchingOperator = operatorIndex.get(normalizedKey)
+  return asFilterText(matchingOperator?.name).trim()
 }
 
 function formatYamlTextValue(value = '') {
@@ -168,6 +188,7 @@ function buildStructuredFilterConfigEntries(groups = [], dependencyTypes = [], i
 
         const values = Array.from(new Set(parseFilterTextValues(rule?.value)))
         const dependencyType = normalizeFilterDependencyType(rule?.op)
+        const dependencyDisplayType = resolveFilterOperatorDisplayName(operatorIndex, rule?.op)
         const isReverted = resolveConditionIsReverted(rule)
         const conditionKey = `${field}::${groupMode}::${dependencyType}::${isReverted ? 'reverted' : 'regular'}`
         const existingCondition = groupedConditions.get(conditionKey) || {
@@ -175,11 +196,12 @@ function buildStructuredFilterConfigEntries(groups = [], dependencyTypes = [], i
           isRevertible: resolveConditionIsRevertible(rule, group, operatorIndex),
           isReverted,
           op: dependencyType,
+          displayType: dependencyDisplayType ? toDisplayFilterTypeToken(dependencyDisplayType) : '',
           ...(groupMode !== 'include' ? { mode: groupMode } : {}),
           values: [],
         }
 
-        dependencyTypes.push(dependencyType)
+        dependencyTypes.push(dependencyDisplayType ? toDisplayFilterTypeToken(dependencyDisplayType) : dependencyType)
         existingCondition.values.push(...values)
         groupedConditions.set(conditionKey, existingCondition)
       })
@@ -219,7 +241,7 @@ function formatFilterConditionYaml(condition, indent = '') {
     `${indent}- field: ${formatYamlTextValue(condition.field)}`,
     `${indent}  isReverted: ${condition.isReverted === true ? 'true' : 'false'}`,
     ...(condition.mode ? [`${indent}  mode: ${formatYamlTextValue(condition.mode)}`] : []),
-    `${indent}  type: ${formatYamlTextValue(formatFilterDependencyType(condition.op))}`,
+    `${indent}  type: ${formatYamlTextValue(formatFilterDependencyType(condition.displayType || condition.op))}`,
     valuesYaml,
   ].join('\n')
 }

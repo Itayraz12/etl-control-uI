@@ -81,6 +81,7 @@ const mockFetchDeploymentSteps = vi.fn(() => Promise.resolve([{ id: 'validate', 
 const mockDeployFromYaml = vi.fn(() => Promise.resolve({ success: true, deploymentId: 'dep-1' }))
 const mockSubscribeToDeploymentProgress = vi.fn(() => vi.fn())
 let mockTransformers = []
+let mockFilterOperators = []
 const originalClipboard = navigator.clipboard
 const originalExecCommand = document.execCommand
 
@@ -121,6 +122,7 @@ vi.mock('../../shared/store/wizardStore.jsx', () => ({
 
 vi.mock('../../shared/store/configContext.jsx', () => ({
   useConfig: () => ({
+    filters: mockFilterOperators,
     transformers: mockTransformers,
   }),
 }))
@@ -178,6 +180,7 @@ describe('SummaryStep save draft behavior', () => {
     mockWizardState.sink.shadow = false
     mockWizardState.sink.shadowTopic = ''
     mockWizardState.sink.saknay = false
+    mockFilterOperators = []
     mockWizardState.sink.saknayTopic = ''
     mockWizardState.sink.asg = false
     mockWizardState.sink.sinkType = 'kafka'
@@ -349,6 +352,24 @@ describe('SummaryStep save draft behavior', () => {
     expect(yamlPreview).toHaveTextContent('case_sensitive=')
     expect(yamlPreview).toHaveTextContent('-> (number, unitPrice)')
     expect(yamlPreview).not.toHaveTextContent('logic: a?a1|b?b1')
+  })
+
+  it('uses the REST API filter name in the YAML preview', () => {
+    setPassingValidationChecklist()
+    mockFilterOperators = [
+      {
+        id: 'eq',
+        name: 'equals',
+        isReverted: false,
+      },
+    ]
+
+    render(<SummaryStep />)
+
+    const yamlPreview = screen.getByTestId('yaml-preview')
+    expect(yamlPreview).toHaveTextContent('filters:')
+    expect(yamlPreview).toHaveTextContent('type: equals')
+    expect(yamlPreview).not.toHaveTextContent('type: EQ')
   })
 
   it('shows a no-change popup and skips deployment when the edited YAML is unchanged', async () => {

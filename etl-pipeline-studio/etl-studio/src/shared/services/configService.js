@@ -379,10 +379,10 @@ function buildRevertedFilterName(name = '') {
 }
 
 function normalizeFilterOperator(operator = {}) {
-  const resolvedName = formatFilterLabel(
+  const resolvedName = asString(
     operator.name ?? operator.label ?? operator.id ?? operator.rule,
     operator.name ?? operator.id ?? operator.rule
-  )
+  ).trim()
   const aliasedId = FILTER_OPERATOR_ID_ALIASES.get(normalizeFilterToken(operator.name))
   const fallbackId = normalizeFilterToken(operator.name ?? operator.label ?? operator.id ?? operator.rule, asString(operator._id).trim())
 

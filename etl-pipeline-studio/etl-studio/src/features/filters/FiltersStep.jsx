@@ -37,6 +37,21 @@ function getOperatorSelectionValue(operatorLike = {}) {
   return `${operatorId}::${isReverted ? '1' : '0'}`
 }
 
+function resolveOperatorDisplayName(operators = [], operatorId = '', isReverted = false) {
+  const normalizedOperatorId = String(operatorId ?? '').trim()
+  if (!normalizedOperatorId) return ''
+
+  const matchingOperator = (Array.isArray(operators) ? operators : []).find(operator => {
+    const operatorTokens = [operator?.id, operator?.name]
+      .map(value => String(value ?? '').trim())
+      .filter(Boolean)
+
+    return operatorTokens.includes(normalizedOperatorId) && Boolean(operator?.isReverted) === Boolean(isReverted)
+  })
+
+  return String(matchingOperator?.name ?? normalizedOperatorId).trim()
+}
+
 function parseOperatorSelectionValue(value = '') {
   const [rawOperatorId = '', revertedToken = '0'] = String(value ?? '').split('::')
   return {
@@ -482,6 +497,7 @@ export default function   FiltersStep() {
     operatorSelectWidth: getSelectWidthFromLongestLabel(operators, item => item?.name, { minChars: 14, extraChars: 4 }),
     valueGapWidth: '1cm',
   }
+  const getRuleOperatorLabel = (rule) => resolveOperatorDisplayName(operators, rule?.op, rule?.isReverted)
 
   const formatRuleValue = (rule) => {
     try {
@@ -551,7 +567,7 @@ export default function   FiltersStep() {
                 <span key={r.id}>
                   {ri > 0 && <span style={{ color: 'var(--muted)' }}> {g.logic} </span>}
                   <span style={{ color: 'var(--accent2)' }}>{r.field}</span>
-                  <span style={{ color: 'var(--warning)' }}> {r.isReverted ? 'not ' : ''}{r.op} </span>
+                  <span style={{ color: 'var(--warning)' }}> {getRuleOperatorLabel(r) || r.op} </span>
                   {!String(r.op || '').includes('null') && <span style={{ color: 'var(--success)' }}>[{formatRuleValue(r)}]</span>}
                 </span>
               ))}
@@ -563,7 +579,7 @@ export default function   FiltersStep() {
                     <span key={r.id}>
                       {ri > 0 && <span style={{ color: 'var(--muted)' }}> {sg.logic} </span>}
                       <span style={{ color: 'var(--accent2)' }}>{r.field}</span>
-                      <span style={{ color: 'var(--warning)' }}> {r.isReverted ? 'not ' : ''}{r.op} </span>
+                      <span style={{ color: 'var(--warning)' }}> {getRuleOperatorLabel(r) || r.op} </span>
                       {!String(r.op || '').includes('null') && <span style={{ color: 'var(--success)' }}>[{formatRuleValue(r)}]</span>}
                     </span>
                   ))}

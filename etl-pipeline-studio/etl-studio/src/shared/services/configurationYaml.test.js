@@ -1242,6 +1242,37 @@ sink:
               - "200"`)
   })
 
+  it('serializes filter names from the REST API response when filter operator metadata is available', () => {
+    expect(formatFiltersYamlSection([
+      {
+        id: 'group-1',
+        logic: 'AND',
+        mode: 'exclude',
+        rules: [
+          { id: 'rule-1', field: 'productName', op: 'eq', value: 'john' },
+        ],
+        subgroups: [],
+      },
+    ], [
+      {
+        id: 'eq',
+        name: 'equals',
+        isReverted: false,
+      },
+    ])).toBe(`filters:
+  dependencies:
+    - type: equals
+  config:
+    - rule:
+        and:
+          - field: productName
+            isReverted: false
+            mode: exclude
+            type: equals
+            values:
+              - john`)
+  })
+
   it('does not serialize group-level isRevertible in the structured filters YAML', () => {
     expect(formatFiltersYamlSection([
       {
@@ -1282,13 +1313,13 @@ sink:
       { id: 'smaller', name: 'Smaller', isRevertible: false },
     ])).toBe(`filters:
   dependencies:
-    - type: SMALLER
+    - type: Smaller
   config:
     - rule:
         and:
           - field: price
             isReverted: false
-            type: SMALLER
+            type: Smaller
             values:
               - "10"`)
   })
