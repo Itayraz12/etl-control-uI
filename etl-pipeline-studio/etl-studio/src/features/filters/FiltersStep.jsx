@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { useConfig } from '../../shared/store/configContext.jsx'
-import { Card, CardTitle, Btn } from '../../shared/components/index.jsx'
+import { Card, CardTitle, Btn, Tooltip } from '../../shared/components/index.jsx'
 import { resolveSourceSchema } from '../../shared/types/index.js'
 
 function createDefaultRootGroup() {
@@ -174,6 +174,7 @@ function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions
   const isSelect = valueOptions.length > 0
   const hasComplexProps = complexProps.length > 0
   const operatorId = String(currentOperator?.id ?? rule.op ?? '').trim()
+  const operatorDescription = String(currentOperator?.description ?? '').trim()
   const isNullOperator = operatorId.includes('null')
   const parsedRuleObjectValue = hasComplexProps ? parseRuleObjectValue(rule.value) : null
   const parsedValues = hasComplexProps
@@ -336,16 +337,18 @@ function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions
         >
           {fieldOptions.map(f => <option key={f}>{f}</option>)}
         </select>
-        <select
-          data-testid={isRootGroup ? `root-filter-operator-${rule.id}` : undefined}
-          value={currentSelectionValue}
-          onChange={e => handleOperatorChange(e.target.value)}
-          style={operatorSelectStyle}
-        >
-          {operators.map(o => (
-            <option key={`${o.id}-${o.isReverted === true ? 'reverted' : 'regular'}`} value={getOperatorSelectionValue(o)}>{o.name}</option>
-          ))}
-        </select>
+        <Tooltip content={operatorDescription} placement="right">
+          <select
+            data-testid={isRootGroup ? `root-filter-operator-${rule.id}` : undefined}
+            value={currentSelectionValue}
+            onChange={e => handleOperatorChange(e.target.value)}
+            style={operatorSelectStyle}
+          >
+            {operators.map(o => (
+              <option key={`${o.id}-${o.isReverted === true ? 'reverted' : 'regular'}`} value={getOperatorSelectionValue(o)}>{o.name}</option>
+            ))}
+          </select>
+        </Tooltip>
         {!isRootGroup && !isNullOperator && !hasComplexProps && !hidesScalarValueInput && (
           isSelect ? (
             <select aria-label="Filter value" aria-invalid={isRuleValueInvalid} value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} style={scalarValueStyle}>
