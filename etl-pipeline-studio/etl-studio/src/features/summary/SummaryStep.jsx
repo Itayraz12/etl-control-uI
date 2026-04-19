@@ -500,9 +500,17 @@ ${inputSectionYaml}${state.upload.schemaName ? `schema:
 output:
   mapping:
 ${state.mappings.map(m => {
-  let mapping = m.src
-    ? `    - inName: ${m.src}\n      outName: ${m.tgt}`
-    : `    - outName: ${m.tgt}`
+  const transformerDefinition = transformers.find(transformer => (
+    transformer?._id === m.transformer || transformer?.name === m.transformer
+  ))
+  const isNoInputTransformerMapping = m.fromType === 'none'
+    || (!String(m.src || '').trim() && String(transformerDefinition?.inputType || '').trim().toUpperCase() === 'NONE')
+
+  let mapping = isNoInputTransformerMapping
+    ? `    - inName: ${quoteYamlDoubleQuoted('')}\n      outName: ${m.tgt}`
+    : m.src
+      ? `    - inName: ${m.src}\n      outName: ${m.tgt}`
+      : `    - outName: ${m.tgt}`
   mapping += `\n      sendToGP: true`
   mapping += `\n      ${TARGET_SAKNAY_YAML_KEY}: ${m.tgtMetadata?.sendToSaknay ?? true}`
   const additionalInputs = Array.isArray(m.extraInputs) ? m.extraInputs.map(input => input?.field).filter(Boolean) : []

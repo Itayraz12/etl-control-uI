@@ -786,22 +786,24 @@ function buildMappings(mappings, transformations) {
       const targetField = asString(mapping?.outName || mapping?.tgt)
       const transformation = transformationByTarget.get(targetField)
       const inputFieldsFromTransformation = transformation?.inputs?.map(input => input.field).filter(Boolean) || []
+      const hasExplicitInName = hasOwnKey(mapping, 'inName') || hasOwnKey(mapping, 'src')
       const mappedAdditionalInputs = Array.isArray(mapping?.additionalInputs)
         ? mapping.additionalInputs.map(asString).filter(Boolean)
         : (Array.isArray(mapping?.additional_inputs)
           ? mapping.additional_inputs.map(asString).filter(Boolean)
           : [])
       const primarySource = asString(mapping?.inName || mapping?.src || inputFieldsFromTransformation[0])
+      const isHeadlessMapping = !primarySource && hasExplicitInName && inputFieldsFromTransformation.length === 0 && Boolean(transformation?.transformer)
       const extraInputFields = mappedAdditionalInputs.length > 0
         ? mappedAdditionalInputs
         : inputFieldsFromTransformation.slice(primarySource ? 1 : 0)
 
-      if (!primarySource || !targetField) return null
+      if ((!primarySource && !isHeadlessMapping) || !targetField) return null
 
       return {
         src: primarySource,
         tgt: targetField,
-        srcNodeId: `loaded-src-${index}-${primarySource}`,
+        ...(isHeadlessMapping ? { fromType: 'none', srcNodeId: null } : { srcNodeId: `loaded-src-${index}-${primarySource}` }),
         tgtNodeId: `loaded-tgt-${index}-${targetField}`,
         srcPos: { x: 40, y: 30 + index * 70 },
         tgtPos: { x: 650, y: 30 + index * 70 },
@@ -814,7 +816,9 @@ function buildMappings(mappings, transformations) {
           expression: asString(mapping?.expression ?? mapping?.tgt_expression),
         },
         transformer: transformation?.transformer || 'none',
-        transformerInputType: transformation?.inputs?.[0]?.type === 'unknown' ? 'any' : (transformation?.inputs?.[0]?.type || 'any'),
+        transformerInputType: isHeadlessMapping
+          ? 'NONE'
+          : (transformation?.inputs?.[0]?.type === 'unknown' ? 'any' : (transformation?.inputs?.[0]?.type || 'any')),
         transformerOutputType: transformation?.outputType === 'unknown' ? 'any' : (transformation?.outputType || 'any'),
         transformerProps: transformation?.transformerProps || {},
         extraInputs: extraInputFields.map((field, extraIndex) => ({
