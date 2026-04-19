@@ -102,7 +102,7 @@ function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions
                   type={prop.type === 'number' ? 'number' : 'text'} 
                   value={parsedValues[prop.key] || prop.default || ''} 
                   onChange={e => updateComplexValue(prop.key, e.target.value)} 
-                  placeholder={prop.default || ''} 
+                  placeholder={prop.default || prop.description || (prop.isArray ? 'Comma-separated values' : '')} 
                   style={{ flex: 0.8, minWidth: 80 }} 
                 />
               )}

@@ -140,15 +140,27 @@ describe('configService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('preserves filter operator metadata from /api/config/filters', async () => {
+  it('normalizes the new filter API response shape from /api/config/filters', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify([
       {
-        id: 'smaller',
-        name: 'Smaller',
-        rule: '<',
-        isInclude: true,
-        isRevertible: false,
-        additionalProperties: { precision: 'strict' },
+        _id: 'filter-001',
+        name: 'equals',
+        createDate: '2026-04-10T09:30:00',
+        description: 'Matches records where severity is warning or higher.',
+        owner: 'team-a',
+        s3Path: 's3://etl-control/filters/equals/v1/filter.py',
+        approved: true,
+        isActive: true,
+        isRevertible: true,
+        version: '1.0.0',
+        additionalParams: [
+          {
+            name: 'severity',
+            description: 'Minimum severity threshold to include.',
+            type: 'string',
+            isArray: false,
+          },
+        ],
       },
     ]), {
       status: 200,
@@ -157,14 +169,74 @@ describe('configService', () => {
 
     await expect(fetchFilters(false)).resolves.toEqual([
       {
-        id: 'smaller',
-        name: 'Smaller',
-        rule: '<',
-        symbol: '<',
-        isInclude: true,
-        isRevertible: false,
+        _id: 'filter-001',
+        id: 'eq',
+        name: 'Equals',
+        createDate: '2026-04-10T09:30:00',
+        description: 'Matches records where severity is warning or higher.',
+        owner: 'team-a',
+        s3Path: 's3://etl-control/filters/equals/v1/filter.py',
+        approved: true,
+        isActive: true,
+        isRevertible: true,
         isReverted: false,
-        additionalProperties: { precision: 'strict' },
+        version: '1.0.0',
+        additionalParams: [
+          {
+            name: 'severity',
+            description: 'Minimum severity threshold to include.',
+            type: 'string',
+            isArray: false,
+          },
+        ],
+        additionalProperties: {
+          properties: [
+            {
+              key: 'severity',
+              label: 'Severity',
+              type: 'text',
+              default: '',
+              description: 'Minimum severity threshold to include.',
+              isArray: false,
+            },
+          ],
+        },
+        symbol: 'equals',
+      },
+      {
+        _id: 'filter-001',
+        id: 'eq',
+        name: 'not Equals',
+        createDate: '2026-04-10T09:30:00',
+        description: 'Matches records where severity is warning or higher.',
+        owner: 'team-a',
+        s3Path: 's3://etl-control/filters/equals/v1/filter.py',
+        approved: true,
+        isActive: true,
+        isRevertible: true,
+        isReverted: true,
+        version: '1.0.0',
+        additionalParams: [
+          {
+            name: 'severity',
+            description: 'Minimum severity threshold to include.',
+            type: 'string',
+            isArray: false,
+          },
+        ],
+        additionalProperties: {
+          properties: [
+            {
+              key: 'severity',
+              label: 'Severity',
+              type: 'text',
+              default: '',
+              description: 'Minimum severity threshold to include.',
+              isArray: false,
+            },
+          ],
+        },
+        symbol: 'equals',
       },
     ])
 
@@ -174,7 +246,7 @@ describe('configService', () => {
     )
   })
 
-  it('adds a synthetic "not ..." option for revertible filters and marks isReverted on each variant', async () => {
+  it('keeps supporting the previous filter payload shape and synthetic revertible options', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify([
       {
         id: 'startswith',
@@ -190,7 +262,8 @@ describe('configService', () => {
     }))
 
     await expect(fetchFilters(false)).resolves.toEqual([
-      {
+      expect.objectContaining({
+        _id: 'startswith',
         id: 'startswith',
         name: 'Starts With',
         rule: '^=',
@@ -198,9 +271,11 @@ describe('configService', () => {
         isInclude: true,
         isRevertible: true,
         isReverted: false,
+        additionalParams: [],
         additionalProperties: { options: ['sku', 'catalog'] },
-      },
-      {
+      }),
+      expect.objectContaining({
+        _id: 'startswith',
         id: 'startswith',
         name: 'not Starts With',
         rule: '^=',
@@ -208,8 +283,9 @@ describe('configService', () => {
         isInclude: true,
         isRevertible: true,
         isReverted: true,
+        additionalParams: [],
         additionalProperties: { options: ['sku', 'catalog'] },
-      },
+      }),
     ])
   })
 

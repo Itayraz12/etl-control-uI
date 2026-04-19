@@ -256,6 +256,81 @@ export const MOCK_FILTER_OPERATORS = [
   } },
 ]
 
+function normalizeFilterToken(value, fallback = '') {
+  const normalizedValue = asString(value, fallback)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+  return normalizedValue || asString(fallback).trim()
+}
+
+function formatFilterLabel(value, fallback = '') {
+  const text = asString(value, fallback).trim()
+  if (!text) return asString(fallback).trim()
+
+  return text
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, char => char.toUpperCase())
+}
+
+function normalizeFilterParamType(type = 'text') {
+  const normalizedType = asString(type, 'text').trim().toLowerCase()
+
+  if (['number', 'integer', 'float', 'double', 'long'].includes(normalizedType)) return 'number'
+  if (['boolean', 'bool'].includes(normalizedType)) return 'boolean'
+  return 'text'
+}
+
+function normalizeFilterAdditionalProperties(operator = {}) {
+  const directAdditionalProperties = operator.additionalProperties ?? operator.additional_properties
+  if (directAdditionalProperties && typeof directAdditionalProperties === 'object' && !Array.isArray(directAdditionalProperties)) {
+    return directAdditionalProperties
+  }
+
+  const additionalParams = Array.isArray(operator.additionalParams)
+    ? operator.additionalParams
+    : Array.isArray(operator.additional_params)
+      ? operator.additional_params
+      : []
+
+  if (additionalParams.length === 0) return {}
+
+  return {
+    properties: additionalParams
+      .map((param, index) => {
+        if (!param || typeof param !== 'object') return null
+
+        const key = asString(param.name ?? param.key, '').trim()
+        if (!key) return null
+
+        return {
+          key,
+          label: formatFilterLabel(param.label ?? param.name ?? `param_${index + 1}`),
+          type: normalizeFilterParamType(param.type),
+          default: asString(param.default ?? ''),
+          description: asString(param.description ?? ''),
+          isArray: normalizeBooleanFlag(param.isArray ?? param.is_array, false),
+        }
+      })
+      .filter(Boolean),
+  }
+}
+
+const FILTER_OPERATOR_ID_ALIASES = new Map(
+  MOCK_FILTER_OPERATORS.flatMap(operator => {
+    const normalizedId = asString(operator.id).trim()
+    if (!normalizedId) return []
+
+    return [operator.id, operator.name, operator.rule, operator.symbol]
+      .map(value => normalizeFilterToken(value))
+      .filter(Boolean)
+      .map(token => [token, normalizedId])
+  })
+)
+
 /**
  * Mock entities — shape mirrors entity.json
  */
@@ -304,15 +379,35 @@ function buildRevertedFilterName(name = '') {
 }
 
 function normalizeFilterOperator(operator = {}) {
+  const resolvedName = formatFilterLabel(
+    operator.name ?? operator.label ?? operator.id ?? operator.rule,
+    operator.name ?? operator.id ?? operator.rule
+  )
+  const aliasedId = FILTER_OPERATOR_ID_ALIASES.get(normalizeFilterToken(operator.name))
+  const fallbackId = normalizeFilterToken(operator.name ?? operator.label ?? operator.id ?? operator.rule, asString(operator._id).trim())
+
   return {
     ...operator,
-    id: asString(operator.id ?? operator.rule ?? operator.name).trim(),
-    name: asString(operator.name ?? operator.id ?? operator.rule).trim(),
-    symbol: asString(operator.symbol ?? operator.rule ?? operator.id).trim(),
+    _id: asString(operator._id ?? operator.id).trim(),
+    id: asString(operator.id ?? operator.rule).trim() || aliasedId || fallbackId,
+    name: resolvedName,
+    symbol: asString(operator.symbol ?? operator.rule ?? operator.id ?? operator.name).trim(),
+    description: asString(operator.description ?? ''),
+    createDate: asString(operator.createDate ?? operator.create_date ?? ''),
+    owner: asString(operator.owner ?? ''),
+    s3Path: asString(operator.s3Path ?? operator.s3_path ?? ''),
+    approved: normalizeBooleanFlag(operator.approved, false),
+    isActive: normalizeBooleanFlag(operator.isActive ?? operator.is_active, true),
     isInclude: operator.isInclude,
     isRevertible: normalizeBooleanFlag(operator.isRevertible ?? operator.is_revertible, true),
     isReverted: normalizeBooleanFlag(operator.isReverted ?? operator.is_reverted, false),
-    additionalProperties: operator.additionalProperties ?? operator.additional_properties ?? {},
+    version: asString(operator.version ?? ''),
+    additionalParams: Array.isArray(operator.additionalParams)
+      ? operator.additionalParams
+      : Array.isArray(operator.additional_params)
+        ? operator.additional_params
+        : [],
+    additionalProperties: normalizeFilterAdditionalProperties(operator),
   }
 }
 
@@ -583,7 +678,14 @@ export async function fetchFilters(useMock = true) {
     return expandRevertibleFilterOperators(MOCK_FILTER_OPERATORS)
   }
   const raw = await fetchJson(`${API_BASE}/config/filters`)
-  return expandRevertibleFilterOperators(raw)
+  const items = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw?.items)
+      ? raw.items
+      : Array.isArray(raw?.data)
+        ? raw.data
+        : []
+  return expandRevertibleFilterOperators(items)
 }
 
 /**
