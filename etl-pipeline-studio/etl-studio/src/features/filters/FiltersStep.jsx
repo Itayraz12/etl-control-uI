@@ -240,6 +240,17 @@ function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions
     flex: '0 1 180px',
   }
 
+  const wrapParamControlWithHint = (control, description = '', triggerStyle = {}) => {
+    const hintText = String(description ?? '').trim()
+    if (!hintText) return control
+
+    return (
+      <Tooltip content={hintText} placement="right" triggerStyle={triggerStyle}>
+        {control}
+      </Tooltip>
+    )
+  }
+
   const handleOperatorChange = (nextSelectionValue) => {
     const nextSelection = parseOperatorSelectionValue(nextSelectionValue)
     const nextOperator = resolveOperatorDefinition(operators, nextSelection)
@@ -260,47 +271,54 @@ function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions
     isRootGroup ? (
       <div key={prop.key} style={inlineComplexParamItemStyle}>
         <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 'fit-content', textAlign: 'left', whiteSpace: 'nowrap' }}>{prop.label}:</label>
-        {prop.type === 'boolean' ? (
-          <select
-            aria-label={prop.label}
-            aria-invalid={!hasRequiredValue(parsedValues[prop.key])}
-            value={String(parsedValues[prop.key] ?? prop.default ?? 'true')}
-            onChange={e => updateComplexValue(prop.key, e.target.value)}
-            style={inlineComplexParamInputStyle}
-          >
-            <option value="true">True</option>
-            <option value="false">False</option>
-          </select>
-        ) : (
-          <input
-            aria-label={prop.label}
-            aria-invalid={!hasRequiredValue(parsedValues[prop.key])}
-            type={prop.type === 'number' ? 'number' : 'text'}
-            value={parsedValues[prop.key] ?? prop.default ?? ''}
-            onChange={e => updateComplexValue(prop.key, e.target.value)}
-            placeholder={prop.default || prop.description || (prop.isArray ? 'Comma-separated values' : '')}
-            style={inlineComplexParamInputStyle}
-          />
+        {wrapParamControlWithHint(
+          prop.type === 'boolean' ? (
+            <select
+              aria-label={prop.label}
+              aria-invalid={!hasRequiredValue(parsedValues[prop.key])}
+              value={String(parsedValues[prop.key] ?? prop.default ?? 'true')}
+              onChange={e => updateComplexValue(prop.key, e.target.value)}
+              style={inlineComplexParamInputStyle}
+            >
+              <option value="true">True</option>
+              <option value="false">False</option>
+            </select>
+          ) : (
+            <input
+              aria-label={prop.label}
+              aria-invalid={!hasRequiredValue(parsedValues[prop.key])}
+              type={prop.type === 'number' ? 'number' : 'text'}
+              value={parsedValues[prop.key] ?? prop.default ?? ''}
+              onChange={e => updateComplexValue(prop.key, e.target.value)}
+              placeholder={prop.default || prop.description || (prop.isArray ? 'Comma-separated values' : '')}
+              style={inlineComplexParamInputStyle}
+            />
+          ),
+          prop.description
         )}
       </div>
     ) : (
       <div key={prop.key} style={{ display: 'grid', gridTemplateColumns: 'minmax(90px, max-content) minmax(180px, 320px)', gap: 8, alignItems: 'center', justifyContent: 'flex-start', width: 'min(100%, 440px)' }}>
         <label style={{ fontSize: 11, color: 'var(--muted)', minWidth: 'fit-content', textAlign: 'left' }}>{prop.label}:</label>
-        {prop.type === 'boolean' ? (
-          <select aria-label={prop.label} aria-invalid={!hasRequiredValue(parsedValues[prop.key])} value={String(parsedValues[prop.key] ?? prop.default ?? 'true')} onChange={e => updateComplexValue(prop.key, e.target.value)} style={{ width: '100%', minWidth: 0 }}>
-            <option value="true">True</option>
-            <option value="false">False</option>
-          </select>
-        ) : (
-          <input
-            aria-label={prop.label}
-            aria-invalid={!hasRequiredValue(parsedValues[prop.key])}
-            type={prop.type === 'number' ? 'number' : 'text'}
-            value={parsedValues[prop.key] ?? prop.default ?? ''}
-            onChange={e => updateComplexValue(prop.key, e.target.value)}
-            placeholder={prop.default || prop.description || (prop.isArray ? 'Comma-separated values' : '')}
-            style={{ width: '100%', minWidth: 0 }}
-          />
+        {wrapParamControlWithHint(
+          prop.type === 'boolean' ? (
+            <select aria-label={prop.label} aria-invalid={!hasRequiredValue(parsedValues[prop.key])} value={String(parsedValues[prop.key] ?? prop.default ?? 'true')} onChange={e => updateComplexValue(prop.key, e.target.value)} style={{ width: '100%', minWidth: 0 }}>
+              <option value="true">True</option>
+              <option value="false">False</option>
+            </select>
+          ) : (
+            <input
+              aria-label={prop.label}
+              aria-invalid={!hasRequiredValue(parsedValues[prop.key])}
+              type={prop.type === 'number' ? 'number' : 'text'}
+              value={parsedValues[prop.key] ?? prop.default ?? ''}
+              onChange={e => updateComplexValue(prop.key, e.target.value)}
+              placeholder={prop.default || prop.description || (prop.isArray ? 'Comma-separated values' : '')}
+              style={{ width: '100%', minWidth: 0 }}
+            />
+          ),
+          prop.description,
+          { width: '100%', minWidth: 0 }
         )}
       </div>
     )
