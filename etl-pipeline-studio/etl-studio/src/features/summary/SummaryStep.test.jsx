@@ -318,6 +318,39 @@ describe('SummaryStep save draft behavior', () => {
     expect(screen.getByRole('button', { name: /save & deploy/i })).toBeDisabled()
   })
 
+  it('renders transformer props with = separators in the YAML preview', () => {
+    setPassingValidationChecklist()
+    mockWizardState.upload.schema = [
+      { id: 'stockQty', name: 'stockQty', path: 'stockQty', type: 'number', nullable: false },
+    ]
+    mockWizardState.targetSchema = [
+      { id: 'unitPrice', name: 'unitPrice', path: 'unitPrice', type: 'number', required: true },
+    ]
+    mockWizardState.mappings = [
+      {
+        src: 'stockQty',
+        tgt: 'unitPrice',
+        transformer: 'ConvertMulti',
+        transformerProps: {
+          logic: 'a?a1|b?b1',
+          defaultValue: 'a',
+          case_sensitive: 'a',
+        },
+      },
+    ]
+
+    render(<SummaryStep />)
+
+    const yamlPreview = screen.getByTestId('yaml-preview')
+    expect(yamlPreview).toHaveTextContent('transformations:')
+    expect(yamlPreview).toHaveTextContent('ConvertMulti([stockQty],[')
+    expect(yamlPreview).toHaveTextContent('logic=')
+    expect(yamlPreview).toHaveTextContent('defaultValue=')
+    expect(yamlPreview).toHaveTextContent('case_sensitive=')
+    expect(yamlPreview).toHaveTextContent('-> (number, unitPrice)')
+    expect(yamlPreview).not.toHaveTextContent('logic: a?a1|b?b1')
+  })
+
   it('shows a no-change popup and skips deployment when the edited YAML is unchanged', async () => {
     setPassingValidationChecklist()
     mockWizardState.originalDraftYaml = `metadata:

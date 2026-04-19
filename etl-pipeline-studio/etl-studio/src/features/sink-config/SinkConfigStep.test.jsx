@@ -36,14 +36,14 @@ function renderStep(initialSink = {}, initialMappings = [], initialMetadata = {}
         productSource: 'ERP',
         productType: 'Inventory',
         team: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
         entityName: 'Product',
         tags: '',
         ...initialMetadata,
       },
       source: {
         sourceType: 'kafka',
-        kafkaEnv: 'production',
+        kafkaEnv: 'PROD',
         kafkaTopic: 'source_products_raw',
         format: 'JSON',
         jsonSplit: '',
@@ -57,7 +57,7 @@ function renderStep(initialSink = {}, initialMappings = [], initialMetadata = {}
       sink: {
         sinkType: 'kafka',
         sinkKafkaTopic: '',
-        sinkKafkaEnv: 'production',
+        sinkKafkaEnv: 'PROD',
         sinkKafkaAdditionalPropertiesEnabled: false,
         sinkKafkaAdditionalProperties: [],
         shadow: false,
@@ -92,13 +92,13 @@ function renderReadOnlyStep(initialSink = {}, initialMappings = []) {
           productSource: 'ERP',
           productType: 'Inventory',
           team: 'data-platform',
-          environment: 'production',
+          environment: 'PROD',
           entityName: 'Product',
           tags: '',
         },
         source: {
           sourceType: 'kafka',
-          kafkaEnv: 'production',
+          kafkaEnv: 'PROD',
           kafkaTopic: 'source_products_raw',
           format: 'JSON',
           jsonSplit: '',
@@ -112,7 +112,7 @@ function renderReadOnlyStep(initialSink = {}, initialMappings = []) {
         sink: {
           sinkType: 'kafka',
           sinkKafkaTopic: '',
-          sinkKafkaEnv: 'production',
+          sinkKafkaEnv: 'PROD',
           sinkKafkaAdditionalPropertiesEnabled: false,
           sinkKafkaAdditionalProperties: [],
           shadow: false,
@@ -193,36 +193,42 @@ describe('SinkConfigStep Kafka additional properties', () => {
   it('defaults the Kafka bootstrap environment from metadata and still allows independent selection', async () => {
     const user = userEvent.setup()
 
-    renderStep({ sinkKafkaEnv: '' }, [], { environment: 'staging' })
+    renderStep({ sinkKafkaEnv: '' }, [], { environment: 'CAP' })
 
     const environmentSelect = screen.getByRole('combobox', { name: 'Bootstrap Environment' })
 
     expect(environmentSelect).not.toBeDisabled()
-    expect(environmentSelect).toHaveValue('staging')
+    expect(environmentSelect).toHaveValue('CAP')
     expect(screen.getByRole('option', { name: 'CAP' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'PROD' })).toBeInTheDocument()
     expect(within(environmentSelect).queryByRole('option', { name: /dev/i })).not.toBeInTheDocument()
 
-    await user.selectOptions(environmentSelect, 'production')
+    await user.selectOptions(environmentSelect, 'PROD')
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
-      expect(persisted.metadata?.environment).toBe('staging')
-      expect(persisted.sink?.sinkKafkaEnv).toBe('production')
+      expect(persisted.metadata?.environment).toBe('CAP')
+      expect(persisted.sink?.sinkKafkaEnv).toBe('PROD')
     })
   })
 
   it('keeps the selected sink Kafka environment when metadata changes', async () => {
-    renderStep({ sinkKafkaEnv: 'production' }, [], { environment: 'staging' })
+    renderStep({ sinkKafkaEnv: 'PROD' }, [], { environment: 'CAP' })
 
     await waitFor(() => {
       const environmentSelect = screen.getByRole('combobox', { name: 'Bootstrap Environment' })
-      expect(environmentSelect).toHaveValue('production')
+      expect(environmentSelect).toHaveValue('PROD')
 
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
-      expect(persisted.metadata?.environment).toBe('staging')
-      expect(persisted.sink?.sinkKafkaEnv).toBe('production')
+      expect(persisted.metadata?.environment).toBe('CAP')
+      expect(persisted.sink?.sinkKafkaEnv).toBe('PROD')
     })
+  })
+
+  it('marks missing Kafka sink required fields as invalid', () => {
+    renderStep({ sinkKafkaEnv: '' }, [], { environment: '' })
+
+    expect(screen.getByRole('combobox', { name: 'Bootstrap Environment' })).toHaveAttribute('aria-invalid', 'true')
   })
 
   it('renders persisted Kafka additional properties when reopening the step', () => {
@@ -331,7 +337,7 @@ describe('SinkConfigStep Kafka additional properties', () => {
         port: '5672',
         queue: 'products.sink',
         exchange: 'etl.exchange',
-        environment: 'production',
+        environment: 'PROD',
       })
     })
 
@@ -377,6 +383,19 @@ describe('SinkConfigStep Kafka additional properties', () => {
     expect(testRabbitMqConnection).not.toHaveBeenCalled()
     expect(await screen.findByLabelText('RabbitMQ connection test failed')).toBeInTheDocument()
     expect(screen.getByText('VHOST, port, and queue name are required to test the RabbitMQ connection.')).toBeInTheDocument()
+  })
+
+  it('marks missing RabbitMQ sink required fields as invalid', () => {
+    renderStep({
+      sinkType: 'rabbitmq',
+      sinkRmqVhost: '',
+      sinkRmqPort: '',
+      sinkRmqQueue: '',
+    })
+
+    expect(screen.getByRole('textbox', { name: 'VHOST' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('textbox', { name: 'PORT' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('textbox', { name: 'Queue Name' })).toHaveAttribute('aria-invalid', 'true')
   })
 
   it('disables RabbitMQ sink test connection in read-only mode', async () => {

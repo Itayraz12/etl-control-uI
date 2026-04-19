@@ -38,14 +38,14 @@ function renderStep(initialSource = {}, initialMetadata = {}, options = {}) {
         productSource: 'ERP',
         productType: 'Inventory',
         team: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
         entityName: 'Product',
         tags: '',
         ...initialMetadata,
       },
       source: {
         sourceType: 'kafka',
-        kafkaEnv: 'production',
+        kafkaEnv: 'PROD',
         kafkaTopic: '',
         kafkaOffset: '',
         kafkaKeys: '',
@@ -63,7 +63,7 @@ function renderStep(initialSource = {}, initialMetadata = {}, options = {}) {
       sink: {
         sinkType: 'kafka',
         sinkKafkaTopic: 'etl_products_v3',
-        sinkKafkaEnv: 'production',
+        sinkKafkaEnv: 'PROD',
       },
       theme: 'dark',
     })
@@ -110,36 +110,44 @@ describe('SourceConfigStep Kafka test connection', () => {
   it('defaults the Kafka environment from metadata and still allows independent selection', async () => {
     const user = userEvent.setup()
 
-    renderStep({ kafkaEnv: '' }, { environment: 'staging' })
+    renderStep({ kafkaEnv: '' }, { environment: 'CAP' })
 
     const environmentSelect = screen.getByRole('combobox', { name: 'Environment' })
 
     expect(environmentSelect).not.toBeDisabled()
-    expect(environmentSelect).toHaveValue('staging')
+    expect(environmentSelect).toHaveValue('CAP')
     expect(screen.getByRole('option', { name: 'CAP' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'PROD' })).toBeInTheDocument()
     expect(within(environmentSelect).queryByRole('option', { name: /dev/i })).not.toBeInTheDocument()
 
-    await user.selectOptions(environmentSelect, 'production')
+    await user.selectOptions(environmentSelect, 'PROD')
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
-      expect(persisted.metadata?.environment).toBe('staging')
-      expect(persisted.source?.kafkaEnv).toBe('production')
+      expect(persisted.metadata?.environment).toBe('CAP')
+      expect(persisted.source?.kafkaEnv).toBe('PROD')
     })
   })
 
   it('keeps the selected source Kafka environment when metadata changes', async () => {
-    renderStep({ kafkaEnv: 'production' }, { environment: 'staging' })
+    renderStep({ kafkaEnv: 'PROD' }, { environment: 'CAP' })
 
     await waitFor(() => {
       const environmentSelect = screen.getByRole('combobox', { name: 'Environment' })
-      expect(environmentSelect).toHaveValue('production')
+      expect(environmentSelect).toHaveValue('PROD')
 
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
-      expect(persisted.metadata?.environment).toBe('staging')
-      expect(persisted.source?.kafkaEnv).toBe('production')
+      expect(persisted.metadata?.environment).toBe('CAP')
+      expect(persisted.source?.kafkaEnv).toBe('PROD')
     })
+  })
+
+  it('marks missing Kafka required fields as invalid', () => {
+    renderStep({ kafkaEnv: '', kafkaTopic: '', kafkaOffset: '' }, { environment: '' })
+
+    expect(screen.getByRole('combobox', { name: 'Environment' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('textbox', { name: 'Topic' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('combobox', { name: 'Offset' })).toHaveAttribute('aria-invalid', 'true')
   })
 
   it('persists the selected Kafka offset', async () => {
@@ -199,14 +207,14 @@ describe('SourceConfigStep Kafka test connection', () => {
     const user = userEvent.setup()
     testKafkaConnection.mockResolvedValue({ success: true, message: 'Kafka source reachable' })
 
-    renderStep({ kafkaEnv: 'staging', kafkaTopic: 'source_products_raw' }, { environment: 'production' })
+    renderStep({ kafkaEnv: 'CAP', kafkaTopic: 'source_products_raw' }, { environment: 'PROD' })
 
     await user.click(screen.getByRole('button', { name: /test connection/i }))
 
     await waitFor(() => {
       expect(testKafkaConnection).toHaveBeenCalledWith({
         topic: 'source_products_raw',
-        environment: 'staging',
+        environment: 'CAP',
       })
     })
 
@@ -225,13 +233,13 @@ describe('SourceConfigStep Kafka test connection', () => {
         productSource: 'ERP',
         productType: 'Inventory',
         team: 'platform',
-        environment: 'production',
+          environment: 'PROD',
         entityName: 'Product',
         tags: '',
       },
       source: {
         sourceType: 'kafka',
-        kafkaEnv: 'production',
+          kafkaEnv: 'PROD',
         kafkaTopic: 'source_products_raw',
         kafkaOffset: '',
         kafkaKeys: '',
@@ -319,7 +327,7 @@ describe('SourceConfigStep Kafka test connection', () => {
         password: 'secret',
         queue: 'products.ingest',
         vhost: '/etl',
-        environment: 'production',
+        environment: 'PROD',
       })
     })
 
@@ -345,6 +353,23 @@ describe('SourceConfigStep Kafka test connection', () => {
     expect(testRabbitMqConnection).not.toHaveBeenCalled()
     expect(await screen.findByLabelText('RabbitMQ connection test failed')).toBeInTheDocument()
     expect(screen.getByText('IP, port, username, password, and queue are required to test the RabbitMQ connection.')).toBeInTheDocument()
+  })
+
+  it('marks missing RabbitMQ required fields as invalid', () => {
+    renderStep({
+      sourceType: 'rabbitmq',
+      rmqIp: '',
+      rmqPort: '',
+      rmqUsername: '',
+      rmqPassword: '',
+      rmqQueue: '',
+    })
+
+    expect(screen.getByRole('textbox', { name: 'IP' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('textbox', { name: 'PORT' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Password')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('textbox', { name: 'Queue' })).toHaveAttribute('aria-invalid', 'true')
   })
 })
 

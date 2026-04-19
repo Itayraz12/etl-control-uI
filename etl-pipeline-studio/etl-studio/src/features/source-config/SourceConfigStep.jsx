@@ -4,6 +4,7 @@ import { Card, CardTitle, FormRow, FormGroup, CfgPanel, Btn, Tooltip } from '../
 import { ENVIRONMENT_OPTIONS, SOURCE_TYPES } from '../../shared/types/index.js'
 import { testKafkaConnection } from '../../shared/services/kafkaService.js'
 import { testRabbitMqConnection } from '../../shared/services/rabbitmqService.js'
+import { getMissingSourceRequiredFields } from '../../shared/services/wizardValidation.js'
 
 function KafkaConnectionStatus({ status, message }) {
   if (status === 'loading') {
@@ -46,6 +47,8 @@ function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
       🔌 Test Connection
     </Btn>
   )
+  const missingRequiredFields = new Set(getMissingSourceRequiredFields(state))
+  const isInvalid = (field) => missingRequiredFields.has(field) ? 'true' : undefined
 
   useEffect(() => {
     if (type !== 'kafka') {
@@ -136,7 +139,7 @@ function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
     <CfgPanel title="☕ Kafka Source">
       <FormRow>
         <FormGroup label="Environment" required>
-          <select aria-label="Environment" value={state.kafkaEnv || ''} onChange={e => u('kafkaEnv', e.target.value)}>
+          <select aria-label="Environment" aria-invalid={isInvalid('environment')} value={state.kafkaEnv || ''} onChange={e => u('kafkaEnv', e.target.value)}>
             <option value="">select an environment...</option>
             {ENVIRONMENT_OPTIONS.map(option => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -144,12 +147,12 @@ function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
           </select>
         </FormGroup>
         <FormGroup label="Topic" required>
-          <input aria-label="Topic" required value={state.kafkaTopic || ''} onChange={e => u('kafkaTopic', e.target.value)} />
+          <input aria-label="Topic" aria-invalid={isInvalid('topic')} required value={state.kafkaTopic || ''} onChange={e => u('kafkaTopic', e.target.value)} />
         </FormGroup>
       </FormRow>
       <FormRow>
         <FormGroup label="Offset" required>
-          <select aria-label="Offset" value={state.kafkaOffset || ''} onChange={e => u('kafkaOffset', e.target.value)}>
+          <select aria-label="Offset" aria-invalid={isInvalid('offset')} value={state.kafkaOffset || ''} onChange={e => u('kafkaOffset', e.target.value)}>
             <option value="">select an offset...</option>
             <option value="earliest">earliest</option>
             <option value="latest">latest</option>
@@ -209,22 +212,22 @@ function SourceConfigPanel({ type, state, u, metadata, readOnly = false }) {
     <CfgPanel title="🐇 RabbitMQ Source">
       <FormRow>
         <FormGroup label="IP" required>
-          <input value={state.rmqIp || ''} onChange={e => u('rmqIp', e.target.value)} placeholder="192.168.1.10" />
+          <input aria-label="IP" aria-invalid={isInvalid('ip')} value={state.rmqIp || ''} onChange={e => u('rmqIp', e.target.value)} placeholder="192.168.1.10" />
         </FormGroup>
         <FormGroup label="PORT" required>
-          <input value={state.rmqPort || ''} onChange={e => u('rmqPort', e.target.value)} placeholder="5672" />
+          <input aria-label="PORT" aria-invalid={isInvalid('port')} value={state.rmqPort || ''} onChange={e => u('rmqPort', e.target.value)} placeholder="5672" />
         </FormGroup>
       </FormRow>
       <FormRow>
         <FormGroup label="Username" required>
-          <input value={state.rmqUsername || ''} onChange={e => u('rmqUsername', e.target.value)} placeholder="guest" />
+          <input aria-label="Username" aria-invalid={isInvalid('username')} value={state.rmqUsername || ''} onChange={e => u('rmqUsername', e.target.value)} placeholder="guest" />
         </FormGroup>
         <FormGroup label="Password" required>
-          <input type="password" value={state.rmqPassword || ''} onChange={e => u('rmqPassword', e.target.value)} placeholder="••••••••" />
+          <input aria-label="Password" aria-invalid={isInvalid('password')} type="password" value={state.rmqPassword || ''} onChange={e => u('rmqPassword', e.target.value)} placeholder="••••••••" />
         </FormGroup>
       </FormRow>
       <FormGroup label="Queue" required>
-        <input value={state.rmqQueue || ''} onChange={e => u('rmqQueue', e.target.value)} placeholder="products.ingest" />
+        <input aria-label="Queue" aria-invalid={isInvalid('queue')} value={state.rmqQueue || ''} onChange={e => u('rmqQueue', e.target.value)} placeholder="products.ingest" />
       </FormGroup>
       <FormGroup label="VHOST">
         <input value={state.rmqVhost || ''} onChange={e => u('rmqVhost', e.target.value)} placeholder="/" />
@@ -310,13 +313,15 @@ export default function SourceConfigStep() {
   const { state, actions } = useWizard()
   const src = state.source
   const u = (k, v) => actions.updateSource({ [k]: v })
+  const missingRequiredFields = new Set(getMissingSourceRequiredFields(src))
+  const sourceTypeInvalid = missingRequiredFields.has('source type')
 
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 30px' }}>
         <Card>
           <CardTitle>🔌 Source Config</CardTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18, border: sourceTypeInvalid ? '1px solid var(--danger)' : '1px solid transparent', borderRadius: 12, padding: sourceTypeInvalid ? 10 : 0 }}>
             {SOURCE_TYPES.map(t => {
               const isEnabled = ['kafka', 'rabbitmq'].includes(t.id);
               const sourceTypeCard = (
@@ -364,7 +369,7 @@ export default function SourceConfigStep() {
         <Card>
           <CardTitle>⚙️ Source Format</CardTitle>
           <FormGroup label="Message / File Format" required>
-            <select value={src.format} onChange={e => u('format', e.target.value)}>
+            <select aria-label="Message / File Format" aria-invalid={missingRequiredFields.has('message / file format') ? 'true' : undefined} value={src.format} onChange={e => u('format', e.target.value)}>
               {['JSON', 'CSV'].map(o => <option key={o}>{o}</option>)}
             </select>
           </FormGroup>
@@ -378,6 +383,7 @@ export default function SourceConfigStep() {
               <FormGroup label="Column Delimiter" required>
                 <input
                   aria-label="Column Delimiter"
+                  aria-invalid={missingRequiredFields.has('column delimiter') ? 'true' : undefined}
                   required
                   value={src.csvDelimiter || ''}
                   onChange={e => u('csvDelimiter', e.target.value)}

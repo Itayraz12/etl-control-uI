@@ -24,7 +24,7 @@ function formatMissingRequiredFieldsText(missingFields = []) {
     : ''
 }
 
-function getMissingMetadataRequiredFields(metadata = {}, source = {}) {
+export function getMissingMetadataRequiredFields(metadata = {}, source = {}) {
   const missingFields = []
   const normalizedLocation = normalizeMetadataLocation(metadata.location, metadata.environment)
 
@@ -40,7 +40,7 @@ function getMissingMetadataRequiredFields(metadata = {}, source = {}) {
   return missingFields
 }
 
-function getMissingSourceRequiredFields(source = {}) {
+export function getMissingSourceRequiredFields(source = {}) {
   const missingFields = []
   const sourceType = String(source.sourceType || '').trim().toLowerCase()
 
@@ -71,7 +71,7 @@ function getMissingSourceRequiredFields(source = {}) {
   return missingFields
 }
 
-function getMissingSinkRequiredFields(sink = {}) {
+export function getMissingSinkRequiredFields(sink = {}) {
   const missingFields = []
   const sinkType = String(sink.sinkType || '').trim().toLowerCase()
 

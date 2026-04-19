@@ -285,6 +285,26 @@ describe('MetadataStep entity target schema', () => {
     expect(within(environmentSelect).queryByRole('option', { name: /dev/i })).not.toBeInTheDocument()
   })
 
+  it('marks missing required metadata fields as invalid', () => {
+    renderStep({
+      metadata: {
+        productSource: '',
+        productType: '',
+        team: '',
+        environment: 'PROD',
+        location: '',
+        entityName: '',
+      },
+    })
+
+    expect(screen.getByRole('textbox', { name: 'Product Source' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('textbox', { name: 'Product Type' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('combobox', { name: 'Team' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('combobox', { name: 'Location' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('combobox', { name: 'Entity Name' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('combobox', { name: 'Streaming Continuity' })).not.toHaveAttribute('aria-invalid', 'true')
+  })
+
   it('fetches entity schema on selection and persists parsed target fields', async () => {
     const user = userEvent.setup()
     const view = renderStep()

@@ -24,15 +24,15 @@ source:
 
   it('wraps transformation expressions in double quotes and escapes embedded quotes', () => {
     // New format: TransformerName([fields],[props]) -> (type, output)
-    const expression = 'ConvertMulti([id,productName,price],[logic: a:b:c?120|c:d:e?130, defaultValue: "0", case_sensitive: true]) -> (string, name)'
+    const expression = 'ConvertMulti([id,productName,price],[logic= a:b:c?120|c:d:e?130, defaultValue= "0", case_sensitive= true]) -> (string, name)'
 
     expect(formatTransformationYamlItem(expression)).toBe(
-      '  - "ConvertMulti([id,productName,price],[logic: a:b:c?120|c:d:e?130, defaultValue: \\"0\\", case_sensitive: true]) -> (string, name)"'
+      '  - "ConvertMulti([id,productName,price],[logic= a:b:c?120|c:d:e?130, defaultValue= \\"0\\", case_sensitive= true]) -> (string, name)"'
     )
     expect(quoteYamlDoubleQuoted('A \\ B')).toBe('"A \\\\ B"')
   })
 
-  it('hydrates mapping from quoted transformation entries', () => {
+  it('hydrates mapping from quoted transformation entries that use = separators', () => {
     const yaml = `metadata:
   entity: Product
   productSource: ERP
@@ -67,7 +67,7 @@ output:
         - productName
         - price
   transformations:
-    - "ConvertMulti(logic: a:b:c?120|c:d:e?130, defaultValue: 0, case_sensitive: true)(string, id), (string, productName), (number, price) -> (string, name)"
+    - "ConvertMulti(logic= a:b:c?120|c:d:e?130, defaultValue= 0, case_sensitive= true)(string, id), (string, productName), (number, price) -> (string, name)"
   filters:
     - "(id f-2 2)"
   kafka:
@@ -146,7 +146,7 @@ output:
       sendToSaknay: false
       expression: trim(name)
   transformations:
-    - "ConvertMulti([id,productName,price],[logic: a:b:c?120|c:d:e?130, defaultValue: 0, case_sensitive: true]) -> (string, name)"
+    - "ConvertMulti([id,productName,price],[logic= a:b:c?120|c:d:e?130, defaultValue= 0, case_sensitive= true]) -> (string, name)"
   filters:
     - "(id f-2 2)"
   kafka:
@@ -178,6 +178,56 @@ output:
     expect(state.mappings[0].extraInputs.map(input => input.field)).toEqual(['productName', 'price'])
     expect(state.filters).toHaveLength(1)
   })
+
+  it('does not parse colon-separated transformer props in the new format', () => {
+    const yaml = `metadata:
+  entity: Product
+  productSource: ERP
+  productType: Inventory
+  environment: production
+  owner: data-platform
+source:
+  kafka:
+    topic: source_products_raw
+schema:
+  inputSchema: CustomerSchema
+general:
+  format: CSV
+input:
+  delimited:
+    columnDelimiter: ";"
+    mapping:
+      - name: id
+        type: string
+      - name: productName
+        type: string
+      - name: price
+        type: number
+output:
+  mapping:
+    - inName: id
+      outName: name
+      sendToGP: true
+      sendToSaknay: false
+  transformations:
+    - "ConvertMulti([id,productName,price],[logic: a:b:c?120|c:d:e?130, defaultValue: 0, case_sensitive: true]) -> (string, name)"
+  kafka:
+    topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.mappings[0]).toMatchObject({
+      transformer: 'ConvertMulti',
+      transformerProps: {},
+    })
+  })
+
 
   it('hydrates source format from general.outputFormat when inputFormat is absent', () => {
     const yaml = `metadata:
@@ -933,7 +983,7 @@ sink:
     })
 
     expect(state.metadata).toMatchObject({
-      environment: 'production',
+      environment: 'PROD',
       location: '',
     })
   })
@@ -971,7 +1021,7 @@ sink:
     })
 
     expect(state.metadata).toMatchObject({
-      environment: 'production',
+      environment: 'PROD',
       location: 'OFFICE',
     })
   })
@@ -1009,7 +1059,7 @@ sink:
     })
 
     expect(state.metadata).toMatchObject({
-      environment: 'staging',
+      environment: 'CAP',
       location: 'HOME',
     })
   })

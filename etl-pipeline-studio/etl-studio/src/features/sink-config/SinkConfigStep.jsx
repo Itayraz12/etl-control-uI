@@ -4,6 +4,7 @@ import { Card, CardTitle, FormRow, FormGroup, CfgPanel, Btn, InfoHint, Tooltip }
 import { ASG_LABEL, SAKNAY_LABEL, SHADOW_LABEL } from '../../shared/services/appConfig.js'
 import { ENVIRONMENT_OPTIONS } from '../../shared/types/index.js'
 import { testRabbitMqConnection } from '../../shared/services/rabbitmqService.js'
+import { getMissingSinkRequiredFields } from '../../shared/services/wizardValidation.js'
 
 const SINK_TYPES = [
   { id: 'kafka', icon: '☕', name: 'Kafka',     sub: 'Streaming sink' },
@@ -66,6 +67,8 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets, readOnly =
   const kafkaAdditionalProperties = normalizeKafkaAdditionalProperties(sink?.sinkKafkaAdditionalProperties)
   const isApssPropertiesEnabled = sink?.sinkKafkaAdditionalPropertiesEnabled ?? kafkaAdditionalProperties.length > 0
   const [rabbitMqTestState, setRabbitMqTestState] = useState({ status: 'idle', message: '' })
+  const missingRequiredFields = new Set(getMissingSinkRequiredFields(sink))
+  const isInvalid = (field) => missingRequiredFields.has(field) ? 'true' : undefined
 
   useEffect(() => {
     if (type !== 'rabbitmq') {
@@ -140,10 +143,10 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets, readOnly =
           <InfoHint text="Overrides the auto-generated topic name" />
         </span>
       } hint={hasCatalogOption ? 'Optional - system will auto-generate if empty' : 'Optional'}>
-        <input value={sink.sinkKafkaTopic || ''} onChange={e => u('sinkKafkaTopic', e.target.value)} placeholder={hasCatalogOption ? 'Leave empty for auto-generation' : 'products.output'} />
+        <input aria-label="Output Topic" value={sink.sinkKafkaTopic || ''} onChange={e => u('sinkKafkaTopic', e.target.value)} placeholder={hasCatalogOption ? 'Leave empty for auto-generation' : 'products.output'} />
       </FormGroup>
       <FormGroup label="Bootstrap Environment" required>
-        <select aria-label="Bootstrap Environment" value={sink.sinkKafkaEnv || ''} onChange={e => u('sinkKafkaEnv', e.target.value)}>
+        <select aria-label="Bootstrap Environment" aria-invalid={isInvalid('bootstrap environment')} value={sink.sinkKafkaEnv || ''} onChange={e => u('sinkKafkaEnv', e.target.value)}>
           <option value="">select an environment...</option>
           {ENVIRONMENT_OPTIONS.map(option => (
             <option key={option.value} value={option.value}>{option.label}</option>
@@ -309,14 +312,14 @@ function SinkConfigPanel({ type, sink, u, metadata, hasSaknayTargets, readOnly =
     <CfgPanel title="🐇 RabbitMQ Sink">
       <FormRow>
         <FormGroup label="VHOST" required>
-          <input aria-label="VHOST" value={sink.sinkRmqVhost || ''} onChange={e => u('sinkRmqVhost', e.target.value)} placeholder="/" />
+          <input aria-label="VHOST" aria-invalid={isInvalid('vhost')} value={sink.sinkRmqVhost || ''} onChange={e => u('sinkRmqVhost', e.target.value)} placeholder="/" />
         </FormGroup>
         <FormGroup label="PORT" required>
-          <input aria-label="PORT" value={sink.sinkRmqPort || ''} onChange={e => u('sinkRmqPort', e.target.value)} placeholder="5672" />
+          <input aria-label="PORT" aria-invalid={isInvalid('port')} value={sink.sinkRmqPort || ''} onChange={e => u('sinkRmqPort', e.target.value)} placeholder="5672" />
         </FormGroup>
       </FormRow>
       <FormGroup label="Queue Name" required>
-        <input aria-label="Queue Name" value={sink.sinkRmqQueue || ''} onChange={e => u('sinkRmqQueue', e.target.value)} placeholder="products.sink" />
+        <input aria-label="Queue Name" aria-invalid={isInvalid('queue name')} value={sink.sinkRmqQueue || ''} onChange={e => u('sinkRmqQueue', e.target.value)} placeholder="products.sink" />
       </FormGroup>
       <FormGroup label="Exchange">
         <input aria-label="Exchange" value={sink.sinkRmqExchange || ''} onChange={e => u('sinkRmqExchange', e.target.value)} placeholder="etl.exchange" />
@@ -348,6 +351,8 @@ export default function SinkConfigStep() {
   const metadata = state.metadata
   const hasSaknayTargets = hasSaknayTargetMappings(state.mappings)
   const u = (k, v) => actions.updateSink({ [k]: v })
+  const missingRequiredFields = new Set(getMissingSinkRequiredFields(sink))
+  const sinkTypeInvalid = missingRequiredFields.has('sink type')
 
 
   return (
@@ -355,7 +360,7 @@ export default function SinkConfigStep() {
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 30px' }}>
         <Card>
           <CardTitle>🔀 Sink Configuration</CardTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 18, border: sinkTypeInvalid ? '1px solid var(--danger)' : '1px solid transparent', borderRadius: 12, padding: sinkTypeInvalid ? 10 : 0 }}>
             {SINK_TYPES.map(t => {
               const isEnabled = ['kafka', 'rabbitmq'].includes(t.id);
               const sinkTypeCard = (

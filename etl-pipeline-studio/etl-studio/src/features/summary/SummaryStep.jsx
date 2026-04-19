@@ -262,7 +262,7 @@ export default function SummaryStep() {
         return [key, value]
       })
       .filter(([key, value]) => requiredKeys.has(key) || (value !== '' && value !== undefined && value !== null))
-      .map(([k, v]) => `${k}: ${v}`)
+      .map(([k, v]) => `${k}=${v}`)
       .join(', ')
     
     return propsStr ? `${transformerName}[${propsStr}]` : transformerName
@@ -382,7 +382,7 @@ ${nestedInputMappingYaml}` : ''}
             // Split desc into transformer name and props bracket (e.g. "Name[props]" or "Name")
             const bracketStart = desc.indexOf('[')
             const transformerName = bracketStart !== -1 ? desc.slice(0, bracketStart) : desc
-            const propsStr = bracketStart !== -1 ? desc.slice(bracketStart) : '' // e.g. "[logic: a:b?1]"
+            const propsStr = bracketStart !== -1 ? desc.slice(bracketStart) : '' // e.g. "[logic= a:b?1]"
             const argParts = []
             if (fieldsList) {
               argParts.push(fieldsList)

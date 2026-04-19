@@ -16,6 +16,7 @@ import {
 } from '../../shared/types/index.js'
 import { PRODUCT_CODE_LABEL } from '../../shared/services/appConfig.js'
 import { Card, CardTitle, FormRow, FormGroup } from '../../shared/components/index.jsx'
+import { getMissingMetadataRequiredFields } from '../../shared/services/wizardValidation.js'
 
 export default function MetadataStep() {
   const { state, actions } = useWizard()
@@ -42,9 +43,11 @@ export default function MetadataStep() {
   const isProduction = isProductionEnvironment(metadata.environment)
   const allowedLocations = getAllowedMetadataLocations(metadata.environment)
   const normalizedLocation = normalizeMetadataLocation(metadata.location, metadata.environment)
+  const missingRequiredFields = new Set(getMissingMetadataRequiredFields(metadata, src))
   const previousEntityRef = useRef(metadata.entityName)
   const u = (k, v) => actions.updateMetadata({ [k]: v })
   const updateSourceField = (k, v) => actions.updateSource({ [k]: v })
+  const isInvalid = (field) => missingRequiredFields.has(field) ? 'true' : undefined
   const handleProductCodeChange = (value) => {
     u('productCode', String(value ?? '').replace(/\D+/g, ''))
   }
@@ -114,15 +117,16 @@ export default function MetadataStep() {
           <CardTitle>🏷️ Pipeline Metadata</CardTitle>
           <FormRow>
             <FormGroup label="Product Source" required>
-              <input value={metadata.productSource} onChange={e => u('productSource', e.target.value)} />
+              <input aria-label="Product Source" aria-invalid={isInvalid('product source')} value={metadata.productSource} onChange={e => u('productSource', e.target.value)} />
             </FormGroup>
             <FormGroup label="Product Type" required>
-              <input value={metadata.productType} onChange={e => u('productType', e.target.value)} />
+              <input aria-label="Product Type" aria-invalid={isInvalid('product type')} value={metadata.productType} onChange={e => u('productType', e.target.value)} />
             </FormGroup>
           </FormRow>
           <FormRow>
             <FormGroup label={PRODUCT_CODE_LABEL}>
               <input
+                aria-label={PRODUCT_CODE_LABEL}
                 value={metadata.productCode || ''}
                 onChange={e => handleProductCodeChange(e.target.value)}
                 inputMode="numeric"
@@ -133,6 +137,7 @@ export default function MetadataStep() {
             <FormGroup label="Team" required>
               <select
                 aria-label="Team"
+                aria-invalid={isInvalid('team')}
                 value={metadata.team || user?.teamName || ''}
                 onChange={e => u('team', e.target.value)}
                 disabled={!isAdminUser}
@@ -149,6 +154,7 @@ export default function MetadataStep() {
             <FormGroup label="Environment" required>
               <select
                 aria-label="Environment"
+                aria-invalid={isInvalid('environment')}
                 value={metadata.environment}
                 onChange={e => actions.updateMetadata({
                   environment: e.target.value,
@@ -164,6 +170,7 @@ export default function MetadataStep() {
             <FormGroup label="Location" required={hasEnvironment}>
               <select
                 aria-label="Location"
+                aria-invalid={isInvalid('location')}
                 value={normalizedLocation}
                 disabled={!hasEnvironment}
                 onChange={e => u('location', normalizeMetadataLocation(e.target.value, metadata.environment))}
@@ -177,7 +184,7 @@ export default function MetadataStep() {
           </FormRow>
           <FormRow>
             <FormGroup label="Entity Name" required>
-              <select aria-label="Entity Name" value={metadata.entityName} onChange={e => u('entityName', e.target.value)}>
+              <select aria-label="Entity Name" aria-invalid={isInvalid('entity name')} value={metadata.entityName} onChange={e => u('entityName', e.target.value)}>
                 <option value="">Select an entity...</option>
                 {entities.map(ent => (
                   <option key={ent.id} value={ent.type}>{ent.name}</option>
@@ -193,14 +200,14 @@ export default function MetadataStep() {
           <CardTitle>📊 Data Stream Info</CardTitle>
           <FormRow>
             <FormGroup label="Streaming Continuity" required>
-              <select value={src.streamingContinuity || 'continuous'} onChange={e => updateSourceField('streamingContinuity', e.target.value)}>
+              <select aria-label="Streaming Continuity" aria-invalid={isInvalid('streaming continuity')} value={src.streamingContinuity || 'continuous'} onChange={e => updateSourceField('streamingContinuity', e.target.value)}>
                 {streamingContinuities.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </FormGroup>
             <FormGroup label="Avg Records Per Day" required>
-              <select value={src.recordsPerDay || 'millions'} onChange={e => updateSourceField('recordsPerDay', e.target.value)}>
+              <select aria-label="Avg Records Per Day" aria-invalid={isInvalid('avg records per day')} value={src.recordsPerDay || 'millions'} onChange={e => updateSourceField('recordsPerDay', e.target.value)}>
                 {recordsPerDay.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}

@@ -165,10 +165,10 @@ function parseTransformerProps(content = '') {
     .map(part => part.trim())
     .filter(Boolean)
     .forEach(entry => {
-      const colonIndex = entry.indexOf(':')
-      if (colonIndex === -1) return
-      const key = entry.slice(0, colonIndex).trim()
-      const value = entry.slice(colonIndex + 1).trim()
+      const separatorIndex = entry.indexOf('=')
+      if (separatorIndex === -1) return
+      const key = entry.slice(0, separatorIndex).trim()
+      const value = entry.slice(separatorIndex + 1).trim()
       if (key) props[key] = value
     })
 
@@ -243,7 +243,7 @@ function buildKeyValueEntries(value, idPrefix = 'entry') {
 
 /**
  * Tries to parse the new-format transformer expression from the left side of "->".
- * New format: TransformerName([field1,field2],[prop: val]) or chains with -->
+ * New format: TransformerName([field1,field2],[prop= val]) or chains with -->
  * Returns null if the text does not match the new format.
  */
 function tryParseNewFormatTransformer(left = '') {
@@ -298,7 +298,7 @@ function parseTransformationLine(line) {
   const output = parseTypeFieldTuple(outputTuple || '')
   if (!output) return null
 
-  // ── New format: TransformerName([field1,field2],[prop: val]) -> (type, output) ──
+  // ── New format: TransformerName([field1,field2],[prop= val]) -> (type, output) ──
   const newFormat = tryParseNewFormatTransformer(left)
   if (newFormat) {
     return {
