@@ -32,22 +32,38 @@ function getSelectWidthFromLongestLabel(items = [], getLabel = item => item, {
 }
 
 function getOperatorSelectionValue(operatorLike = {}) {
-  const operatorId = String(operatorLike?.id ?? operatorLike?.op ?? '').trim()
+  const operatorId = String(operatorLike?.op ?? operatorLike?.id ?? '').trim()
   const isReverted = operatorLike?.isReverted === true
   return `${operatorId}::${isReverted ? '1' : '0'}`
+}
+
+function resolveOperatorDefinition(operators = [], operatorLike = {}) {
+  const normalizedOperators = Array.isArray(operators) ? operators : []
+  const rawOperatorId = String(operatorLike?.op ?? operatorLike?.id ?? '').trim()
+  const normalizedOperatorId = rawOperatorId.toLowerCase()
+  const isReverted = operatorLike?.isReverted === true
+
+  if (!rawOperatorId) return null
+
+  return normalizedOperators.find(operator => getOperatorSelectionValue(operator) === getOperatorSelectionValue({ id: rawOperatorId, isReverted }))
+    || normalizedOperators.find(operator => String(operator?.id ?? '').trim() === rawOperatorId && Boolean(operator?.isReverted) === isReverted)
+    || normalizedOperators.find(operator => String(operator?.name ?? '').trim() === rawOperatorId && Boolean(operator?.isReverted) === isReverted)
+    || normalizedOperators.find((operator) => {
+      if (Boolean(operator?.isReverted) !== isReverted) return false
+
+      return [operator?.id, operator?.name, operator?.symbol, operator?.rule]
+        .map(value => String(value ?? '').trim().toLowerCase())
+        .filter(Boolean)
+        .includes(normalizedOperatorId)
+    })
+    || null
 }
 
 function resolveOperatorDisplayName(operators = [], operatorId = '', isReverted = false) {
   const normalizedOperatorId = String(operatorId ?? '').trim()
   if (!normalizedOperatorId) return ''
 
-  const matchingOperator = (Array.isArray(operators) ? operators : []).find(operator => {
-    const operatorTokens = [operator?.id, operator?.name]
-      .map(value => String(value ?? '').trim())
-      .filter(Boolean)
-
-    return operatorTokens.includes(normalizedOperatorId) && Boolean(operator?.isReverted) === Boolean(isReverted)
-  })
+  const matchingOperator = resolveOperatorDefinition(operators, { op: normalizedOperatorId, isReverted })
 
   return String(matchingOperator?.name ?? normalizedOperatorId).trim()
 }
@@ -140,7 +156,8 @@ function getDefaultRuleOperator(group = {}, operators = []) {
 
   const lastRuleOperator = [...(Array.isArray(group?.rules) ? group.rules : [])]
     .reverse()
-    .map(rule => getOperatorSelectionValue({ op: rule?.op, isReverted: rule?.isReverted }))
+    .map(rule => resolveOperatorDefinition(operators, rule) || { op: rule?.op, isReverted: rule?.isReverted })
+    .map(getOperatorSelectionValue)
     .find(selectionValue => availableSelectionValues.has(selectionValue))
 
   if (lastRuleOperator) return lastRuleOperator
@@ -148,9 +165,8 @@ function getDefaultRuleOperator(group = {}, operators = []) {
 }
 
 function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions, isRootGroup = false, rootLayout = null }) {
-  const currentSelectionValue = getOperatorSelectionValue({ op: rule.op, isReverted: rule.isReverted })
-  const currentOperator = operators.find(o => getOperatorSelectionValue(o) === currentSelectionValue)
-    || operators.find(o => o.id === rule.op)
+  const currentOperator = resolveOperatorDefinition(operators, rule)
+  const currentSelectionValue = getOperatorSelectionValue(currentOperator || { op: rule.op, isReverted: rule.isReverted })
   const additionalProps = currentOperator?.additionalProperties || {}
   const valueOptions = additionalProps.options || []
   const complexProps = getOperatorComplexProperties(currentOperator)
@@ -225,8 +241,7 @@ function ConditionRow({ rule, onChange, onRemove, logic, operators, fieldOptions
 
   const handleOperatorChange = (nextSelectionValue) => {
     const nextSelection = parseOperatorSelectionValue(nextSelectionValue)
-    const nextOperator = operators.find(o => getOperatorSelectionValue(o) === nextSelectionValue)
-      || operators.find(o => o.id === nextSelection.op)
+    const nextOperator = resolveOperatorDefinition(operators, nextSelection)
 
     onChange({
       ...rule,
@@ -376,8 +391,7 @@ function GroupBlock({ group, depth, onUpdate, onRemove, operators, fieldOptions,
   const addRule = () => {
     const defaultOperator = getDefaultRuleOperator(normalizedGroup, operators)
     const defaultRuleOperator = parseOperatorSelectionValue(defaultOperator)
-    const defaultOperatorDefinition = operators.find(operator => getOperatorSelectionValue(operator) === defaultOperator)
-      || operators.find(operator => operator.id === defaultRuleOperator.op)
+    const defaultOperatorDefinition = resolveOperatorDefinition(operators, defaultRuleOperator)
 
     emitGroupUpdate({
       ...normalizedGroup,
