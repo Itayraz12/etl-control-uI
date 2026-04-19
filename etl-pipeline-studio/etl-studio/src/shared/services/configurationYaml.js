@@ -37,6 +37,24 @@ function normalizeFilterDependencyType(value = '') {
   return asFilterText(value).trim().toLowerCase().replace(/\s+/g, '_')
 }
 
+function parseFilterObjectValue(rawValue) {
+  if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+    return rawValue
+  }
+
+  const text = asFilterText(rawValue).trim()
+  if (!text) return null
+
+  try {
+    const parsed = JSON.parse(text)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed
+      : null
+  } catch {
+    return null
+  }
+}
+
 const DISPLAY_FILTER_TYPE_PREFIX = '__display__:'
 
 function toDisplayFilterTypeToken(value = '') {
@@ -49,6 +67,9 @@ function formatFilterDependencyType(value = '') {
   if (rawValue.startsWith(DISPLAY_FILTER_TYPE_PREFIX)) {
     return rawValue.slice(DISPLAY_FILTER_TYPE_PREFIX.length)
   }
+  if (/[A-Z]/.test(rawValue)) {
+    return rawValue
+  }
   return normalizeFilterDependencyType(rawValue).toUpperCase()
 }
 
@@ -59,6 +80,39 @@ function resolveFilterOperatorDisplayName(operatorIndex = new Map(), operatorVal
   const normalizedKey = rawValue.toLowerCase()
   const matchingOperator = operatorIndex.get(normalizedKey)
   return asFilterText(matchingOperator?.name).trim()
+}
+
+function resolveFilterOperatorDefinition(operatorIndex = new Map(), operatorValue = '') {
+  const rawValue = asFilterText(operatorValue).trim()
+  if (!rawValue) return null
+
+  return operatorIndex.get(rawValue.toLowerCase()) || null
+}
+
+function getFilterOperatorAdditionalParams(operator = {}) {
+  if (Array.isArray(operator?.additionalParams)) return operator.additionalParams
+  if (Array.isArray(operator?.additional_params)) return operator.additional_params
+  return null
+}
+
+function hasExplicitNoAdditionalParams(operator = {}) {
+  const additionalParams = getFilterOperatorAdditionalParams(operator)
+  return Array.isArray(additionalParams) && additionalParams.length === 0
+}
+
+function getFilterOperatorComplexProperties(operator = {}) {
+  const properties = Array.isArray(operator?.additionalProperties?.properties)
+    ? operator.additionalProperties.properties
+    : []
+  const additionalParams = getFilterOperatorAdditionalParams(operator)
+
+  if (additionalParams) {
+    return additionalParams.length > 0
+      ? properties
+      : []
+  }
+
+  return properties
 }
 
 function formatYamlTextValue(value = '') {
@@ -100,6 +154,53 @@ function parseFilterTextValues(rawValue) {
     .split(/[\r\n,]+/)
     .map(value => value.trim())
     .filter(Boolean)
+}
+
+function buildFilterParamEntries(rawValue, operatorDefinition = null) {
+  const explicitNoAdditionalParams = hasExplicitNoAdditionalParams(operatorDefinition)
+  if (explicitNoAdditionalParams) return []
+
+  const complexProperties = getFilterOperatorComplexProperties(operatorDefinition)
+  const parsedObjectValue = parseFilterObjectValue(rawValue)
+
+  if (complexProperties.length > 0) {
+    if (parsedObjectValue) {
+      return complexProperties
+        .map((property) => {
+          const key = asFilterText(property?.key).trim()
+          if (!key || !Object.prototype.hasOwnProperty.call(parsedObjectValue, key)) return null
+
+          return {
+            key,
+            value: parsedObjectValue[key],
+          }
+        })
+        .filter(Boolean)
+    }
+
+    if (complexProperties.length === 1) {
+      const scalarValue = asFilterText(rawValue).trim()
+      if (!scalarValue) return []
+
+      return [{
+        key: asFilterText(complexProperties[0]?.key).trim(),
+        value: scalarValue,
+      }].filter(entry => entry.key)
+    }
+
+    return []
+  }
+
+  if (parsedObjectValue) {
+    return Object.entries(parsedObjectValue)
+      .map(([key, value]) => ({
+        key: asFilterText(key).trim(),
+        value,
+      }))
+      .filter(entry => entry.key)
+  }
+
+  return null
 }
 
 function normalizeFilterMode(value = '') {
@@ -170,6 +271,42 @@ function resolveConditionIsReverted(rule = {}) {
   return normalizeBooleanFlag(rule?.isReverted ?? rule?.is_reverted, false)
 }
 
+function buildStructuredFilterCondition(rule = {}, group = {}, inheritedMode = 'include', operatorIndex = new Map()) {
+  const field = asFilterText(rule?.field).trim()
+  if (!field) return null
+
+  const rawOperator = asFilterText(rule?.op).trim()
+  const dependencyType = normalizeFilterDependencyType(rawOperator)
+  const dependencyDisplayType = resolveFilterOperatorDisplayName(operatorIndex, rawOperator)
+  const operatorDefinition = resolveFilterOperatorDefinition(operatorIndex, rawOperator)
+  const isReverted = resolveConditionIsReverted(rule)
+  const groupMode = normalizeFilterMode(group?.mode || inheritedMode)
+  const params = buildFilterParamEntries(rule?.value, operatorDefinition)
+
+  return {
+    field,
+    isRevertible: resolveConditionIsRevertible(rule, group, operatorIndex),
+    isReverted,
+    op: rawOperator || dependencyType,
+    normalizedOp: dependencyType,
+    displayType: dependencyDisplayType ? toDisplayFilterTypeToken(dependencyDisplayType) : '',
+    ...(groupMode !== inheritedMode ? { mode: groupMode } : {}),
+    ...(Array.isArray(params)
+      ? { params }
+      : { values: Array.from(new Set(parseFilterTextValues(rule?.value))) }),
+  }
+}
+
+function resolveSharedFilterMode(groups = []) {
+  const normalizedModes = Array.from(new Set(
+    (Array.isArray(groups) ? groups : [])
+      .map(group => normalizeFilterMode(group?.mode))
+      .filter(Boolean)
+  ))
+
+  return normalizedModes.length === 1 ? normalizedModes[0] : ''
+}
+
 function buildStructuredFilterConfigEntries(groups = [], dependencyTypes = [], inheritedMode = 'include', operatorIndex = new Map()) {
   if (!Array.isArray(groups)) return []
 
@@ -183,26 +320,23 @@ function buildStructuredFilterConfigEntries(groups = [], dependencyTypes = [], i
       const groupedConditions = new Map()
 
       ;(Array.isArray(group.rules) ? group.rules : []).forEach((rule) => {
-        const field = asFilterText(rule?.field).trim()
-        if (!field) return
+        const condition = buildStructuredFilterCondition(rule, group, inheritedMode, operatorIndex)
+        if (!condition) return
 
-        const values = Array.from(new Set(parseFilterTextValues(rule?.value)))
-        const dependencyType = normalizeFilterDependencyType(rule?.op)
-        const dependencyDisplayType = resolveFilterOperatorDisplayName(operatorIndex, rule?.op)
-        const isReverted = resolveConditionIsReverted(rule)
-        const conditionKey = `${field}::${groupMode}::${dependencyType}::${isReverted ? 'reverted' : 'regular'}`
+        dependencyTypes.push(condition.displayType || condition.op || condition.normalizedOp)
+
+        if (Array.isArray(condition.params)) {
+          ruleItems.push(condition)
+          return
+        }
+
+        const conditionKey = `${condition.field}::${groupMode}::${condition.normalizedOp}::${condition.isReverted ? 'reverted' : 'regular'}`
         const existingCondition = groupedConditions.get(conditionKey) || {
-          field,
-          isRevertible: resolveConditionIsRevertible(rule, group, operatorIndex),
-          isReverted,
-          op: dependencyType,
-          displayType: dependencyDisplayType ? toDisplayFilterTypeToken(dependencyDisplayType) : '',
-          ...(groupMode !== 'include' ? { mode: groupMode } : {}),
+          ...condition,
           values: [],
         }
 
-        dependencyTypes.push(dependencyDisplayType ? toDisplayFilterTypeToken(dependencyDisplayType) : dependencyType)
-        existingCondition.values.push(...values)
+        existingCondition.values.push(...condition.values)
         groupedConditions.set(conditionKey, existingCondition)
       })
 
@@ -233,16 +367,24 @@ function buildStructuredFilterConfigEntries(groups = [], dependencyTypes = [], i
 }
 
 function formatFilterConditionYaml(condition, indent = '') {
-  const valuesYaml = condition.values.length > 0
+  const paramsYaml = Array.isArray(condition.params)
+    ? (condition.params.length > 0
+      ? `${indent}  params:\n${condition.params.map(param => `${indent}    - ${formatYamlTextValue(param.key)}: ${formatYamlTextValue(param.value)}`).join('\n')}`
+      : `${indent}  params: []`)
+    : null
+
+  const valuesYaml = !paramsYaml && condition.values.length > 0
     ? `${indent}  values:\n${condition.values.map(value => `${indent}    - ${formatYamlTextValue(value)}`).join('\n')}`
-    : `${indent}  values: []`
+    : !paramsYaml
+      ? `${indent}  values: []`
+      : null
 
   return [
     `${indent}- field: ${formatYamlTextValue(condition.field)}`,
     `${indent}  isReverted: ${condition.isReverted === true ? 'true' : 'false'}`,
     ...(condition.mode ? [`${indent}  mode: ${formatYamlTextValue(condition.mode)}`] : []),
     `${indent}  type: ${formatYamlTextValue(formatFilterDependencyType(condition.displayType || condition.op))}`,
-    valuesYaml,
+    paramsYaml || valuesYaml,
   ].join('\n')
 }
 
@@ -272,7 +414,8 @@ function formatFilterRuleYaml(entry, indent = '') {
 export function formatFiltersYamlSection(filters = [], filterOperators = [], indent = '') {
   const dependencyTypes = []
   const operatorIndex = buildFilterOperatorIndex(filterOperators)
-  const configEntries = buildStructuredFilterConfigEntries(filters, dependencyTypes, 'include', operatorIndex)
+  const sectionMode = resolveSharedFilterMode(filters)
+  const configEntries = buildStructuredFilterConfigEntries(filters, dependencyTypes, sectionMode || 'include', operatorIndex)
   if (configEntries.length === 0) return ''
 
   const normalizedDependencyTypes = dependencyTypes.filter(Boolean)
@@ -288,7 +431,11 @@ export function formatFiltersYamlSection(filters = [], filterOperators = [], ind
 
   const configYaml = `${childIndent}config:\n${configEntries.map(entry => formatFilterRuleYaml(entry, grandChildIndent)).join('\n')}`
 
-  return `${sectionIndent}filters:\n${dependenciesYaml}\n${configYaml}`
+  const modeYaml = sectionMode && sectionMode !== 'include'
+    ? `\n${childIndent}mode: ${formatYamlTextValue(sectionMode)}`
+    : ''
+
+  return `${sectionIndent}filters:\n${dependenciesYaml}\n${configYaml}${modeYaml}`
 }
 
 export function normalizeKeyValueEntries(entries = []) {

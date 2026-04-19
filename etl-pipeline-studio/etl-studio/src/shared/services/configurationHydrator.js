@@ -16,7 +16,12 @@ const VALID_SOURCE_TYPES = new Set(['kafka', 'rabbitmq', 'file', 'db', 'http', '
 const VALID_SINK_TYPES = new Set(['kafka', 'file', 'db', 'rabbitmq'])
 const TUPLE_TYPES = new Set([...FIELD_TYPES, 'any', 'unknown'])
 const NORMALIZED_OPERATOR_TO_ID = new Map(
-  MOCK_FILTER_OPERATORS.map(op => [op.name.toLowerCase().replace(/\s+/g, '_'), op.id])
+  MOCK_FILTER_OPERATORS.flatMap((op) => (
+    [op.id, op.name, op.rule, op.symbol]
+      .map(value => asString(value).trim().toLowerCase().replace(/\s+/g, '_'))
+      .filter(Boolean)
+      .map(token => [token, op.id])
+  ))
 )
 
 function asString(value, fallback = '') {
@@ -381,9 +386,46 @@ function stripSingleOuterPair(text = '') {
 }
 
 function normalizeStructuredFilterDependencyType(value = '') {
-  const normalized = asString(value).trim().toLowerCase().replace(/\s+/g, '_')
+  const rawValue = asString(value).trim()
+  const normalized = rawValue.toLowerCase().replace(/\s+/g, '_')
   if (!normalized) return ''
-  return NORMALIZED_OPERATOR_TO_ID.get(normalized) || normalized
+  return NORMALIZED_OPERATOR_TO_ID.get(normalized) || rawValue
+}
+
+function getStructuredFilterOperatorDefinition(operatorValue = '') {
+  const normalizedOperatorValue = normalizeStructuredFilterDependencyType(operatorValue)
+  if (!normalizedOperatorValue) return null
+
+  return MOCK_FILTER_OPERATORS.find((operator) => (
+    [operator?.id, operator?.name, operator?.symbol, operator?.rule]
+      .map(candidate => normalizeStructuredFilterDependencyType(candidate))
+      .filter(Boolean)
+      .includes(normalizedOperatorValue)
+  )) || null
+}
+
+function getStructuredFilterOperatorAdditionalParams(operator = {}) {
+  if (Array.isArray(operator?.additionalParams)) return operator.additionalParams
+  if (Array.isArray(operator?.additional_params)) return operator.additional_params
+  return null
+}
+
+function hasStructuredFilterExplicitNoAdditionalParams(operator = {}) {
+  const additionalParams = getStructuredFilterOperatorAdditionalParams(operator)
+  return Array.isArray(additionalParams) && additionalParams.length === 0
+}
+
+function getStructuredFilterComplexProperties(operator = {}) {
+  const properties = Array.isArray(operator?.additionalProperties?.properties)
+    ? operator.additionalProperties.properties
+    : []
+  const additionalParams = getStructuredFilterOperatorAdditionalParams(operator)
+
+  if (additionalParams) {
+    return additionalParams.length > 0 ? properties : []
+  }
+
+  return properties
 }
 
 function extractStructuredFilterDependencies(dependencies) {
@@ -411,6 +453,32 @@ function normalizeStructuredFilterValues(values) {
     .split(/[\r\n,]+/)
     .map(value => value.trim())
     .filter(Boolean)
+}
+
+function normalizeStructuredFilterParams(params) {
+  if (Array.isArray(params)) {
+    return params.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
+
+      return Object.entries(entry)
+        .map(([key, value]) => ({
+          key: asString(key).trim(),
+          value: asString(value),
+        }))
+        .filter(entryValue => entryValue.key)
+    })
+  }
+
+  if (params && typeof params === 'object') {
+    return Object.entries(params)
+      .map(([key, value]) => ({
+        key: asString(key).trim(),
+        value: asString(value),
+      }))
+      .filter(entry => entry.key)
+  }
+
+  return []
 }
 
 function normalizeStructuredFilterMode(value = '') {
@@ -488,6 +556,30 @@ function createStructuredDependencyResolver(dependencyTypes = []) {
   }
 }
 
+function buildStructuredFilterValueFromParams(params = [], operator = '') {
+  const operatorDefinition = getStructuredFilterOperatorDefinition(operator)
+  const complexProperties = getStructuredFilterComplexProperties(operatorDefinition)
+
+  if (params.length === 0) {
+    return hasStructuredFilterExplicitNoAdditionalParams(operatorDefinition) ? '' : null
+  }
+
+  const normalizedParamsObject = params.reduce((result, entry) => {
+    result[entry.key] = entry.value
+    return result
+  }, {})
+
+  if (complexProperties.length === 0) {
+    if (params.length === 1 && ['value', 'values'].includes(params[0].key.toLowerCase())) {
+      return params[0].value
+    }
+
+    return JSON.stringify(normalizedParamsObject)
+  }
+
+  return JSON.stringify(normalizedParamsObject)
+}
+
 function buildStructuredFilterRuleGroup(rule, resolveDependencyType, idPrefix = 'group', inheritedMode = 'include') {
   if (!rule || typeof rule !== 'object') return null
 
@@ -525,9 +617,16 @@ function buildStructuredFilterRuleGroup(rule, resolveDependencyType, idPrefix = 
     const mode = extractStructuredFilterMode(entry.mode, entry.type, inheritedMode)
     const entryIsRevertible = readStructuredFilterIsRevertible(entry?.isRevertible, entry?.is_revertible)
     const entryIsReverted = extractStructuredFilterIsReverted(entry?.isReverted, entry?.is_reverted)
-    const values = normalizeStructuredFilterValues(entry.values)
     const operator = extractStructuredFilterOperator(entry, resolveDependencyType)
-    const ruleValues = values.length > 0 ? values : ['']
+    const hasParams = hasOwnKey(entry, 'params')
+    const params = hasParams ? normalizeStructuredFilterParams(entry.params) : []
+    const paramValue = hasParams ? buildStructuredFilterValueFromParams(params, operator) : null
+    const values = hasParams ? [] : normalizeStructuredFilterValues(entry.values)
+    const ruleValues = paramValue !== null
+      ? [paramValue]
+      : values.length > 0
+        ? values
+        : ['']
 
     if (group.rules.length === 0 && group.subgroups.length === 0) {
       group.mode = mode
@@ -634,22 +733,30 @@ function buildStructuredFilterGroups(filters = {}) {
   const dependencyTypes = extractStructuredFilterDependencies(filters.dependencies)
   const configEntries = Array.isArray(filters.config) ? filters.config : []
   const resolveDependencyType = createStructuredDependencyResolver(dependencyTypes)
+  const inheritedMode = extractStructuredFilterMode(filters.mode, 'include')
 
   return configEntries
     .map((entry, index) => {
       if (!entry || typeof entry !== 'object') return null
 
       if (entry.rule && typeof entry.rule === 'object') {
-        return buildStructuredFilterRuleGroup(entry.rule, resolveDependencyType, `group-${index}`)
+        return buildStructuredFilterRuleGroup(entry.rule, resolveDependencyType, `group-${index}`, inheritedMode)
       }
 
       const field = asString(entry.field).trim()
       if (!field) return null
 
-      const mode = extractStructuredFilterMode(entry.mode, entry.type, 'include')
+      const mode = extractStructuredFilterMode(entry.mode, entry.type, inheritedMode)
       const operator = extractStructuredFilterOperator(entry, () => dependencyTypes[index] || dependencyTypes[0] || 'eq')
-      const values = normalizeStructuredFilterValues(entry.values)
-      const ruleValues = values.length > 0 ? values : ['']
+      const hasParams = hasOwnKey(entry, 'params')
+      const params = hasParams ? normalizeStructuredFilterParams(entry.params) : []
+      const paramValue = hasParams ? buildStructuredFilterValueFromParams(params, operator) : null
+      const values = hasParams ? [] : normalizeStructuredFilterValues(entry.values)
+      const ruleValues = paramValue !== null
+        ? [paramValue]
+        : values.length > 0
+          ? values
+          : ['']
 
       return {
         id: `group-${index}`,

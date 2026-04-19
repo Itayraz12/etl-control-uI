@@ -1267,10 +1267,81 @@ sink:
         and:
           - field: productName
             isReverted: false
-            mode: exclude
             type: equals
             values:
-              - john`)
+              - john
+  mode: exclude`)
+  })
+
+  it('serializes param-based filters using params arrays and a shared top-level exclude mode', () => {
+    expect(formatFiltersYamlSection([
+      {
+        id: 'group-1',
+        logic: 'AND',
+        mode: 'exclude',
+        rules: [
+          { id: 'rule-1', field: 'productName', op: 'eq', value: JSON.stringify({ severity: 'tv' }) },
+          { id: 'rule-2', field: 'price', op: 'isUpperCase', value: '' },
+          { id: 'rule-3', field: 'id', op: 'inRangeText', value: JSON.stringify({ minValue: 'a', maxValue: 'b' }) },
+        ],
+        subgroups: [],
+      },
+    ], [
+      {
+        id: 'eq',
+        name: 'equals',
+        additionalParams: [
+          { name: 'severity', type: 'string' },
+        ],
+        additionalProperties: {
+          properties: [
+            { key: 'severity', type: 'text' },
+          ],
+        },
+      },
+      {
+        id: 'isUpperCase',
+        name: 'isUpperCase',
+        additionalParams: [],
+      },
+      {
+        id: 'inRangeText',
+        name: 'inRangeText',
+        additionalParams: [
+          { name: 'minValue', type: 'string' },
+          { name: 'maxValue', type: 'string' },
+        ],
+        additionalProperties: {
+          properties: [
+            { key: 'minValue', type: 'text' },
+            { key: 'maxValue', type: 'text' },
+          ],
+        },
+      },
+    ])).toBe(`filters:
+  dependencies:
+    - type: equals
+    - type: isUpperCase
+    - type: inRangeText
+  config:
+    - rule:
+        and:
+          - field: productName
+            isReverted: false
+            type: equals
+            params:
+              - severity: tv
+          - field: price
+            isReverted: false
+            type: isUpperCase
+            params: []
+          - field: id
+            isReverted: false
+            type: inRangeText
+            params:
+              - minValue: a
+              - maxValue: b
+  mode: exclude`)
   })
 
   it('does not serialize group-level isRevertible in the structured filters YAML', () => {
@@ -1471,6 +1542,72 @@ output:
         rules: [
           { id: 'group-1-rule-0-0', field: 'price', op: 'eq', isReverted: false, value: '100' },
           { id: 'group-1-rule-0-1', field: 'price', op: 'eq', isReverted: false, value: '200' },
+        ],
+        subgroups: [],
+      },
+    ])
+  })
+
+  it('hydrates param-based structured filters with a shared top-level mode', () => {
+    const yaml = `metadata:
+  entity: Product
+  product_source: ERP
+  product_type: Inventory
+  environment: production
+  team: data-platform
+source:
+  type: kafka
+  format: JSON
+  topic: source_products_raw
+mapping:
+  - inName: id
+    outName: name
+filters:
+  dependencies:
+    - type: equals
+    - type: isUpperCase
+    - type: inRangeText
+  config:
+    - rule:
+        and:
+          - field: productName
+            isReverted: false
+            type: equals
+            params:
+              - severity: tv
+          - field: price
+            isReverted: false
+            type: isUpperCase
+            params: []
+          - field: id
+            isReverted: false
+            type: inRangeText
+            params:
+              - minValue: a
+              - maxValue: b
+  mode: exclude
+output:
+  kafka:
+    topic: etl_products_v3
+`
+
+    const state = hydrateWizardStateFromYaml(yaml, {
+      productType: 'Inventory',
+      source: 'ERP',
+      teamName: 'data-platform',
+      environment: 'production',
+    })
+
+    expect(state.filters).toEqual([
+      {
+        id: 'group-0',
+        logic: 'AND',
+        mode: 'exclude',
+        isRevertible: true,
+        rules: [
+          { id: 'group-0-rule-0-0', field: 'productName', op: 'eq', isReverted: false, value: JSON.stringify({ severity: 'tv' }) },
+          { id: 'group-0-rule-1-0', field: 'price', op: 'isUpperCase', isReverted: false, value: '' },
+          { id: 'group-0-rule-2-0', field: 'id', op: 'inRangeText', isReverted: false, value: JSON.stringify({ minValue: 'a', maxValue: 'b' }) },
         ],
         subgroups: [],
       },
