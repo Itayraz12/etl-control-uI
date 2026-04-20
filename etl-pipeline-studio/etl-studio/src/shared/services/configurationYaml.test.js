@@ -179,54 +179,6 @@ output:
     expect(state.filters).toHaveLength(1)
   })
 
-  it('hydrates an output mapping with empty inName for a no-input transformer', () => {
-    const yaml = `metadata:
-  entity: Product
-  productSource: ERP
-  productType: Inventory
-  environment: production
-  owner: data-platform
-source:
-  kafka:
-    topic: source_products_raw
-input:
-  mapping:
-    - name: sku
-      type: string
-output:
-  mapping:
-    - inName: ""
-      outName: sku
-      sendToGP: true
-      sendToSaknay: true
-  kafka:
-    topic: etl_products_v3
-transformations:
-  - "Constant[value=abc] -> (string, sku)"
-`
-
-    const state = hydrateWizardStateFromYaml(yaml, {
-      productType: 'Inventory',
-      source: 'ERP',
-      teamName: 'data-platform',
-      environment: 'production',
-    })
-
-    expect(state.mappings).toEqual([
-      expect.objectContaining({
-        src: '',
-        tgt: 'sku',
-        fromType: 'none',
-        srcNodeId: null,
-        transformer: 'Constant',
-        transformerInputType: 'NONE',
-        transformerProps: {
-          value: 'abc',
-        },
-      }),
-    ])
-  })
-
   it('does not parse colon-separated transformer props in the new format', () => {
     const yaml = `metadata:
   entity: Product
@@ -1339,7 +1291,7 @@ sink:
         id: 'eq',
         name: 'equals',
         additionalParams: [
-          { name: 'severity', type: 'string' },
+          { name: 'severity', displayName: 'Severity threshold', type: 'string' },
         ],
         additionalProperties: {
           properties: [

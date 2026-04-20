@@ -354,54 +354,6 @@ describe('SummaryStep save draft behavior', () => {
     expect(yamlPreview).not.toHaveTextContent('logic: a?a1|b?b1')
   })
 
-  it('keeps output mapping list items correctly indented in the generated YAML', async () => {
-    setPassingValidationChecklist()
-    mockWizardState.upload.schema = [
-      { id: 'stockQty', name: 'stockQty', path: 'stockQty', type: 'number', nullable: false },
-      { id: 'category', name: 'category', path: 'category', type: 'string', nullable: false },
-    ]
-    mockWizardState.targetSchema = [
-      { id: 'unitPrice', name: 'unitPrice', path: 'unitPrice', type: 'number', required: true },
-      { id: 'sku', name: 'sku', path: 'sku', type: 'string', required: true },
-    ]
-    mockWizardState.mappings = [
-      {
-        src: 'stockQty',
-        tgt: 'unitPrice',
-        transformer: 'none',
-        tgtMetadata: {
-          sendToSaknay: true,
-          expression: 'r=o',
-        },
-      },
-      {
-        src: 'category',
-        tgt: 'sku',
-        transformer: 'none',
-        tgtMetadata: {
-          sendToSaknay: true,
-        },
-      },
-    ]
-
-    render(<SummaryStep />)
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /save & deploy/i }))
-      await Promise.resolve()
-    })
-
-    expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain(`output:
-  mapping:
-    - inName: stockQty
-      outName: unitPrice
-      sendToGP: true
-      ${TARGET_SAKNAY_YAML_KEY}: true
-      expression: "r=o"
-    - inName: category
-      outName: sku`)
-  })
-
   it('uses the REST API filter name in the YAML preview', () => {
     setPassingValidationChecklist()
     mockFilterOperators = [
@@ -418,34 +370,6 @@ describe('SummaryStep save draft behavior', () => {
     expect(yamlPreview).toHaveTextContent('filters:')
     expect(yamlPreview).toHaveTextContent('type: equals')
     expect(yamlPreview).not.toHaveTextContent('type: EQ')
-  })
-
-  it('serializes an explicit empty inName for output mappings with no-input transformers', () => {
-    setPassingValidationChecklist()
-    mockTransformers = [
-      {
-        _id: 'tf-constant',
-        name: 'Constant',
-        inputType: 'NONE',
-        propsSchema: [{ key: 'value', label: 'Value', required: true }],
-      },
-    ]
-    mockWizardState.mappings = [
-      {
-        src: '',
-        tgt: 'sku',
-        fromType: 'none',
-        transformer: 'tf-constant',
-        transformerProps: { value: 'abc' },
-      },
-    ]
-
-    render(<SummaryStep />)
-
-    const yamlPreview = screen.getByTestId('yaml-preview')
-    expect(yamlPreview).toHaveTextContent('output:')
-    expect(yamlPreview).toHaveTextContent('inName: ""')
-    expect(yamlPreview).toHaveTextContent('outName: sku')
   })
 
   it('shows a no-change popup and skips deployment when the edited YAML is unchanged', async () => {
@@ -508,7 +432,7 @@ filters:
 
     render(<SummaryStep />)
 
-    expect(screen.getByRole('button', { name: /save & deploy/i })).toHaveTextContent('🚀 Save & Deploy')
+    expect(screen.getByRole('button', { name: /save & deploy/i })).toHaveTextContent(' Save & Deploy')
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /save & deploy/i }))

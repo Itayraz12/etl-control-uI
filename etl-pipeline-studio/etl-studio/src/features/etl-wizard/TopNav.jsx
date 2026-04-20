@@ -48,7 +48,7 @@ export default function TopNav() {
       </span>
       {readOnly && (
         <Chip c="amber" style={{ fontWeight: 700, letterSpacing: '0.04em' }}>
-          👁 VIEW ONLY
+           VIEW ONLY
         </Chip>
       )}
       <div style={{ flex: 1 }} />
@@ -56,7 +56,7 @@ export default function TopNav() {
         v="ghost" sm
         onClick={() => actions.toggleTheme()}
       >
-        {state.theme === 'dark' ? '🌞 Light' : '🌙 Dark'}
+        {state.theme === 'dark' ? ' Light' : ' Dark'}
       </Btn>
       {!readOnly && (
         <Btn v="danger" sm onClick={handleLogout}>Logout</Btn>

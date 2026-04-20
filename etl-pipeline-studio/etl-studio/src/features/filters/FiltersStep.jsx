@@ -95,6 +95,21 @@ function parseRuleObjectValue(value) {
   }
 }
 
+function asTrimmedText(value = '') {
+  if (value === undefined || value === null) return ''
+  return String(value).trim()
+}
+
+function resolveAdditionalParamLabelOverride(param = {}) {
+  const displayName = asTrimmedText(param.displayName ?? param.display_name)
+  if (displayName) return displayName
+
+  const explicitLabel = asTrimmedText(param.label)
+  if (explicitLabel) return explicitLabel
+
+  return ''
+}
+
 function getOperatorAdditionalParams(operator = {}) {
   if (Array.isArray(operator?.additionalParams)) return operator.additionalParams
   if (Array.isArray(operator?.additional_params)) return operator.additional_params
@@ -111,12 +126,33 @@ function getOperatorComplexProperties(operator = {}) {
     ? operator.additionalProperties.properties
     : []
   const additionalParams = getOperatorAdditionalParams(operator)
+  const displayLabelByKey = new Map(
+    (Array.isArray(additionalParams) ? additionalParams : [])
+      .map((param, index) => {
+        const key = asTrimmedText(param?.name ?? param?.key)
+        if (!key) return null
+
+        return [key, resolveAdditionalParamLabelOverride(param)]
+      })
+      .filter(Boolean)
+  )
+  const normalizedProperties = properties.map((property, index) => {
+    const key = asTrimmedText(property?.key)
+
+    return {
+      ...property,
+      label: displayLabelByKey.get(key)
+        || asTrimmedText(property?.label)
+        || key
+        || `param_${index + 1}`,
+    }
+  })
 
   if (additionalParams) {
-    return additionalParams.length > 0 ? properties : []
+    return additionalParams.length > 0 ? normalizedProperties : []
   }
 
-  return properties
+  return normalizedProperties
 }
 
 function getRuleValueForOperator(operator = {}, previousValue = '') {

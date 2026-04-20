@@ -500,17 +500,9 @@ ${inputSectionYaml}${state.upload.schemaName ? `schema:
 output:
   mapping:
 ${state.mappings.map(m => {
-  const transformerDefinition = transformers.find(transformer => (
-    transformer?._id === m.transformer || transformer?.name === m.transformer
-  ))
-  const isNoInputTransformerMapping = m.fromType === 'none'
-    || (!String(m.src || '').trim() && String(transformerDefinition?.inputType || '').trim().toUpperCase() === 'NONE')
-
-  let mapping = isNoInputTransformerMapping
-    ? `    - inName: ${quoteYamlDoubleQuoted('')}\n      outName: ${m.tgt}`
-    : m.src
-      ? `    - inName: ${m.src}\n      outName: ${m.tgt}`
-      : `    - outName: ${m.tgt}`
+  let mapping = m.src
+    ? `    - inName: ${m.src}\n      outName: ${m.tgt}`
+    : `    - outName: ${m.tgt}`
   mapping += `\n      sendToGP: true`
   mapping += `\n      ${TARGET_SAKNAY_YAML_KEY}: ${m.tgtMetadata?.sendToSaknay ?? true}`
   const additionalInputs = Array.isArray(m.extraInputs) ? m.extraInputs.map(input => input?.field).filter(Boolean) : []
@@ -777,7 +769,7 @@ ${sinkAdditionalConfigYaml}` : ''}
       })
       setDraftModal({
         title: 'Draft Saved',
-        icon: '💾',
+        icon: '',
         accent: 'var(--success)',
         message: 'The YAML draft was saved successfully.',
         navigateToManagement: true,
@@ -806,8 +798,8 @@ ${sinkAdditionalConfigYaml}` : ''}
     }
 
     summaryFooter.setSummaryFooterActions({
-      saveDraftLabel: savingDraft ? 'Saving…' : '💾 Save Draft',
-      deployLabel: deployDisabled ? '🚀 Saving & Deploying...' : '🚀 Save & Deploy',
+      saveDraftLabel: savingDraft ? 'Saving…' : ' Save Draft',
+      deployLabel: deployDisabled ? ' Saving & Deploying...' : ' Save & Deploy',
       saveDraftDisabled: savingDraft || deployDisabled,
       deployDisabled: deployDisabled || !canDeployFromChecklist,
       onSaveDraft: handleSaveDraft,
@@ -834,7 +826,7 @@ ${sinkAdditionalConfigYaml}` : ''}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
         {/* Header - Logo and Title */}
         <div style={{ padding: '30px 20px 10px', textAlign: 'center', flexShrink: 0 }}>
-          <div style={{ fontSize: 64, marginBottom: 10 }}>🎉</div>
+          <div style={{ fontSize: 64, marginBottom: 10 }}></div>
           <h2 style={{ fontSize: 26, fontWeight: 800, marginBottom: 8, background: 'linear-gradient(135deg,#4f6ef7,#7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             Pipeline Created!
           </h2>
@@ -866,7 +858,7 @@ ${sinkAdditionalConfigYaml}` : ''}
 
           {/* Dashboard Card */}
           <Card style={{ width: '100%', maxWidth: 460, textAlign: 'left', marginBottom: 20 }} p="18px 22px">
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--accent)' }}>📊 Grafana Dashboard</div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--accent)' }}> Grafana Dashboard</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Dashboard Link</div>
@@ -891,7 +883,7 @@ ${sinkAdditionalConfigYaml}` : ''}
                 onMouseEnter={(e) => !copiedDash && (e.target.style.opacity = '0.9')}
                 onMouseLeave={(e) => !copiedDash && (e.target.style.opacity = '1')}
               >
-                {copiedDash ? '✓ Copied' : '📋 Copy'}
+                {copiedDash ? '✓ Copied' : ' Copy'}
               </button>
             </div>
             <a href={grafanaLink} target="_blank" rel="noopener noreferrer" style={{
@@ -910,7 +902,7 @@ ${sinkAdditionalConfigYaml}` : ''}
               onMouseEnter={(e) => { e.target.style.background = 'var(--accent)'; e.target.style.color = 'white' }}
               onMouseLeave={(e) => { e.target.style.background = 'transparent'; e.target.style.color = 'var(--accent)' }}
             >
-              🔗 Open in Grafana
+               Open in Grafana
             </a>
           </Card>
 
@@ -928,11 +920,11 @@ ${sinkAdditionalConfigYaml}` : ''}
         {/* Stats row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 20 }}>
           {[
-            { icon: '🏷️', label: 'Entity',   value: `${state.metadata.entityName} ${state.metadata.schemaVersion}` },
-            { icon: '🔌', label: 'Source',   value: srcMeta?.name || '—' },
+            { icon: '️', label: 'Entity',   value: `${state.metadata.entityName} ${state.metadata.schemaVersion}` },
+            { icon: '', label: 'Source',   value: srcMeta?.name || '—' },
             { icon: '↔',  label: 'Mappings', value: state.mappings.length },
             { icon: '⚙',  label: 'Filters',  value: state.filters.reduce((a, g) => a + g.rules.length, 0) },
-            { icon: '🔀', label: 'Sink',     value: (state.sink.sinkType || '—').toUpperCase() },
+            { icon: '', label: 'Sink',     value: (state.sink.sinkType || '—').toUpperCase() },
           ].map(s => (
             <div key={s.label} style={{
               background: 'var(--surf)', border: '1px solid var(--border)',
@@ -964,10 +956,10 @@ ${sinkAdditionalConfigYaml}` : ''}
         {/* YAML Preview */}
         <Card>
           <CardTitle>
-            📄 YAML Preview
+             YAML Preview
             <Btn sm v="ghost" onClick={handleCopyYaml}
               style={{ marginLeft: 'auto' }}>
-              {copying ? '✓ Copied' : '📋 Copy YAML'}
+              {copying ? '✓ Copied' : ' Copy YAML'}
             </Btn>
           </CardTitle>
           <YamlPreview yaml={yaml} theme={state.theme || 'dark'} />
@@ -985,8 +977,8 @@ ${sinkAdditionalConfigYaml}` : ''}
           gap: 12,
           flexShrink: 0,
         }}>
-          <Btn v="secondary" onClick={handleSaveDraft} disabled={savingDraft || deployDisabled}>{savingDraft ? 'Saving…' : '💾 Save Draft'}</Btn>
-          <Btn v="success" onClick={handleCreatePipeline} disabled={deployDisabled || !canDeployFromChecklist}>{deployDisabled ? '🚀 Saving & Deploying...' : '🚀 Save & Deploy'}</Btn>
+          <Btn v="secondary" onClick={handleSaveDraft} disabled={savingDraft || deployDisabled}>{savingDraft ? 'Saving…' : ' Save Draft'}</Btn>
+          <Btn v="success" onClick={handleCreatePipeline} disabled={deployDisabled || !canDeployFromChecklist}>{deployDisabled ? ' Saving & Deploying...' : ' Save & Deploy'}</Btn>
         </div>
       )}
 

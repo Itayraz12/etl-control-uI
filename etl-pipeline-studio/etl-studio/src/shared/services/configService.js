@@ -276,6 +276,16 @@ function formatFilterLabel(value, fallback = '') {
     .replace(/\b\w/g, char => char.toUpperCase())
 }
 
+function resolveFilterParamDisplayLabel(param = {}, fallback = '') {
+  const displayName = asString(param.displayName ?? param.display_name, '').trim()
+  if (displayName) return displayName
+
+  const explicitLabel = asString(param.label, '').trim()
+  if (explicitLabel) return explicitLabel
+
+  return formatFilterLabel(param.name ?? param.key, fallback)
+}
+
 function normalizeFilterParamType(type = 'text') {
   const normalizedType = asString(type, 'text').trim().toLowerCase()
 
@@ -308,7 +318,7 @@ function normalizeFilterAdditionalProperties(operator = {}) {
 
         return {
           key,
-          label: formatFilterLabel(param.label ?? param.name ?? `param_${index + 1}`),
+          label: resolveFilterParamDisplayLabel(param, `param_${index + 1}`),
           type: normalizeFilterParamType(param.type),
           default: asString(param.default ?? ''),
           description: asString(param.description ?? ''),

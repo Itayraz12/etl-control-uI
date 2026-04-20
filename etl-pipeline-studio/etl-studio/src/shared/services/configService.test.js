@@ -156,6 +156,7 @@ describe('configService', () => {
         additionalParams: [
           {
             name: 'severity',
+            displayName: 'Severity threshold',
             description: 'Minimum severity threshold to include.',
             type: 'string',
             isArray: false,
@@ -184,6 +185,7 @@ describe('configService', () => {
         additionalParams: [
           {
             name: 'severity',
+            displayName: 'Severity threshold',
             description: 'Minimum severity threshold to include.',
             type: 'string',
             isArray: false,
@@ -193,7 +195,7 @@ describe('configService', () => {
           properties: [
             {
               key: 'severity',
-              label: 'Severity',
+              label: 'Severity threshold',
               type: 'text',
               default: '',
               description: 'Minimum severity threshold to include.',
@@ -219,6 +221,7 @@ describe('configService', () => {
         additionalParams: [
           {
             name: 'severity',
+            displayName: 'Severity threshold',
             description: 'Minimum severity threshold to include.',
             type: 'string',
             isArray: false,
@@ -228,7 +231,7 @@ describe('configService', () => {
           properties: [
             {
               key: 'severity',
-              label: 'Severity',
+              label: 'Severity threshold',
               type: 'text',
               default: '',
               description: 'Minimum severity threshold to include.',
