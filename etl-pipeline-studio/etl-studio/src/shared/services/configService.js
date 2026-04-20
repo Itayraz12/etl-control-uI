@@ -69,6 +69,17 @@ export function buildConfigurationYamlUrl(pathname = 'backend/configuration/yaml
   return url.toString()
 }
 
+export function buildFiltersUrl(query = {}, options = {}) {
+  const url = buildApiUrl('config/filters', options)
+  const environment = normalizeEnvironmentValue(query.environment, query.environment ?? '')
+
+  if (environment) {
+    url.searchParams.set('environment', environment)
+  }
+
+  return url.toString()
+}
+
 function extractSchemaVersionFromYaml(yaml = '') {
   const match = String(yaml ?? '').match(/^\s*schemaVersion\s*:\s*(.+)$/m)
   return match?.[1]?.trim() || '1.0'
@@ -680,14 +691,14 @@ export async function fetchTransformers(useMock = true) {
  * Returns the filter operator list.
  *
  * Mock → MOCK_FILTER_OPERATORS
- * Live → GET http://localhost:8080/api/config/filters
+ * Live → GET http://localhost:8080/api/config/filters?environment=<CAP|PROD>
  */
-export async function fetchFilters(useMock = true) {
+export async function fetchFilters(useMock = true, { environment = '' } = {}) {
   if (useMock) {
     await new Promise(r => setTimeout(r, 150))
     return expandRevertibleFilterOperators(MOCK_FILTER_OPERATORS)
   }
-  const raw = await fetchJson(`${API_BASE}/config/filters`)
+  const raw = await fetchJson(buildFiltersUrl({ environment }))
   const items = Array.isArray(raw)
     ? raw
     : Array.isArray(raw?.items)

@@ -18,6 +18,7 @@ const mockPermanentlyDeleteDeployment = vi.fn()
 const mockRestoreDeployment = vi.fn()
 const mockStopDeployment = vi.fn()
 const mockHydrateWizardStateFromYaml = vi.fn(() => ({ metadata: { productType: 'Inventory' } }))
+const mockEnsureDefinitionsForWizardState = vi.fn(() => Promise.resolve())
 const mockDeploymentProgress = {
   isOpen: false,
   steps: [],
@@ -114,6 +115,12 @@ vi.mock('../../shared/store/mockModeContext.jsx', () => ({
   }),
 }))
 
+vi.mock('../../shared/store/configContext.jsx', () => ({
+  useConfig: () => ({
+    ensureDefinitionsForWizardState: (...args) => mockEnsureDefinitionsForWizardState(...args),
+  }),
+}))
+
 vi.mock('../../shared/store/userContext.jsx', () => ({
   useUser: () => ({
     user: mockUser,
@@ -204,6 +211,8 @@ describe('ETLManagementScreen table layout stability', () => {
       return { success: true }
     })
     mockHydrateWizardStateFromYaml.mockClear()
+    mockEnsureDefinitionsForWizardState.mockReset()
+    mockEnsureDefinitionsForWizardState.mockResolvedValue(undefined)
     mockCopyTextToClipboard.mockReset()
     mockCopyTextToClipboard.mockResolvedValue(true)
     localStorage.clear()
@@ -1166,6 +1175,20 @@ describe('ETLManagementScreen table layout stability', () => {
 
   it('loads the original deployed YAML into wizard state when editing a running deployment', async () => {
     const user = userEvent.setup()
+    const loadedState = {
+      metadata: { productType: 'Inventory' },
+      filters: [
+        {
+          id: 'group-0',
+          rules: [{ op: 'eq', isReverted: false, value: 'active' }],
+          subgroups: [],
+        },
+      ],
+      mappings: [
+        { src: 'productName', tgt: 'name', transformer: 'Uppercase' },
+      ],
+    }
+    mockHydrateWizardStateFromYaml.mockReturnValueOnce(loadedState)
 
     render(<ETLManagementScreen />)
 
@@ -1183,6 +1206,7 @@ describe('ETLManagementScreen table layout stability', () => {
 
     await waitFor(() => {
       expect(mockFetchDraftConfiguration).toHaveBeenCalledTimes(1)
+      expect(mockEnsureDefinitionsForWizardState).toHaveBeenCalledWith(loadedState, true, { environment: 'CAP' })
       expect(mockActions.loadState).toHaveBeenCalledWith(expect.objectContaining({
         navigationMode: 'etl-config',
         currentStep: 0,

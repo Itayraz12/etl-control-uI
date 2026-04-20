@@ -25,7 +25,7 @@ vi.mock('../services/configService.js', () => ({
   ],
 }))
 
-function PrefetchProbe({ step, entityName = '', useMock = false }) {
+function PrefetchProbe({ step, entityName = '', environment = '', useMock = false, filters = [], mappings = [] }) {
   const {
     prefetchForStep,
     loadingMetadata,
@@ -35,8 +35,13 @@ function PrefetchProbe({ step, entityName = '', useMock = false }) {
   } = useConfig()
 
   useEffect(() => {
-    prefetchForStep(step, useMock, { entityName })
-  }, [entityName, prefetchForStep, step, useMock])
+    prefetchForStep(step, useMock, {
+      entityName,
+      environment,
+      requiredFilters: filters,
+      requiredMappings: mappings,
+    })
+  }, [entityName, environment, filters, mappings, prefetchForStep, step, useMock])
 
   return (
     <div data-testid="status">
@@ -153,13 +158,139 @@ describe('ConfigProvider metadata prefetching', () => {
   it('prefetches filter metadata when the user enters the summary step', async () => {
     render(
       <ConfigProvider>
-        <PrefetchProbe step={STEP_SUMMARY} entityName="Product" />
+        <PrefetchProbe step={STEP_SUMMARY} entityName="Product" environment="CAP" />
       </ConfigProvider>
     )
 
     await waitFor(() => {
       expect(fetchFilters).toHaveBeenCalledTimes(1)
       expect(fetchTransformers).toHaveBeenCalledTimes(1)
+    })
+
+    expect(fetchFilters).toHaveBeenCalledWith(false, { environment: 'CAP' })
+  })
+
+  it('reuses cached filter and transformer definitions when the loaded YAML dependencies are already present', async () => {
+    fetchFilters.mockResolvedValue([
+      { id: 'eq', name: 'Equals', isReverted: false },
+      { id: 'eq', name: 'not Equals', isReverted: true },
+    ])
+    fetchTransformers.mockResolvedValue([
+      { _id: 'tf-upper', name: 'Uppercase' },
+    ])
+
+    const view = render(
+      <ConfigProvider>
+        <PrefetchProbe
+          step={STEP_SUMMARY}
+          environment="CAP"
+          filters={[
+            {
+              rules: [{ op: 'eq', isReverted: false }],
+              subgroups: [],
+            },
+          ]}
+          mappings={[
+            { transformer: 'Uppercase' },
+          ]}
+        />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchFilters).toHaveBeenCalledTimes(1)
+      expect(fetchTransformers).toHaveBeenCalledTimes(1)
+    })
+
+    view.rerender(
+      <ConfigProvider>
+        <PrefetchProbe
+          step={STEP_SUMMARY}
+          environment="CAP"
+          filters={[
+            {
+              rules: [{ op: 'eq', isReverted: false }],
+              subgroups: [],
+            },
+          ]}
+          mappings={[
+            { transformer: 'Uppercase' },
+          ]}
+        />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchFilters).toHaveBeenCalledTimes(1)
+      expect(fetchTransformers).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('loads missing filter and transformer definitions when a later YAML requires entries that are not cached yet', async () => {
+    fetchFilters
+      .mockResolvedValueOnce([
+        { id: 'eq', name: 'Equals', isReverted: false },
+        { id: 'eq', name: 'not Equals', isReverted: true },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'eq', name: 'Equals', isReverted: false },
+        { id: 'eq', name: 'not Equals', isReverted: true },
+        { id: 'in', name: 'In List', isReverted: false },
+        { id: 'in', name: 'not In List', isReverted: true },
+      ])
+    fetchTransformers
+      .mockResolvedValueOnce([
+        { _id: 'tf-upper', name: 'Uppercase' },
+      ])
+      .mockResolvedValueOnce([
+        { _id: 'tf-upper', name: 'Uppercase' },
+        { _id: 'tf-concat', name: 'Concatenate' },
+      ])
+
+    const view = render(
+      <ConfigProvider>
+        <PrefetchProbe
+          step={STEP_SUMMARY}
+          environment="CAP"
+          filters={[
+            {
+              rules: [{ op: 'eq', isReverted: false }],
+              subgroups: [],
+            },
+          ]}
+          mappings={[
+            { transformer: 'Uppercase' },
+          ]}
+        />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchFilters).toHaveBeenCalledTimes(1)
+      expect(fetchTransformers).toHaveBeenCalledTimes(1)
+    })
+
+    view.rerender(
+      <ConfigProvider>
+        <PrefetchProbe
+          step={STEP_SUMMARY}
+          environment="CAP"
+          filters={[
+            {
+              rules: [{ op: 'in', isReverted: false }],
+              subgroups: [],
+            },
+          ]}
+          mappings={[
+            { transformer: 'Concatenate' },
+          ]}
+        />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchFilters).toHaveBeenCalledTimes(2)
+      expect(fetchTransformers).toHaveBeenCalledTimes(2)
     })
   })
 })

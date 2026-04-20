@@ -10,6 +10,7 @@ import { hydrateWizardStateFromYaml } from '../../shared/services/configurationH
 import { buildPipelineChangeSignature } from '../../shared/services/pipelineChangeDetection.js';
 import { useDeploymentProgress } from '../../shared/hooks/useDeploymentProgress.js';
 import { formatEnvironmentLabel, normalizeEnvironmentValue } from '../../shared/types/index.js'
+import { useConfig } from '../../shared/store/configContext.jsx'
 import { useWizard } from '../../shared/store/wizardStore.jsx';
 import { useMockMode } from '../../shared/store/mockModeContext.jsx';
 import { useUser } from '../../shared/store/userContext.jsx';
@@ -303,6 +304,7 @@ export default function ETLManagementScreen() {
   const [successCopied, setSuccessCopied] = useState(false);
   const [activeDeployId, setActiveDeployId] = useState(null);
   const [activeDeploymentAction, setActiveDeploymentAction] = useState('deploy');
+  const { ensureDefinitionsForWizardState } = useConfig()
   const { actions, state } = useWizard();
   const { useMock } = useMockMode();
   const { user } = useUser();
@@ -818,6 +820,8 @@ export default function ETLManagementScreen() {
         environment,
       });
 
+      await ensureDefinitionsForWizardState(loadedState, useMock, { environment })
+
       actions.loadState({
         ...loadedState,
         navigationMode: 'etl-config',
@@ -868,6 +872,8 @@ export default function ETLManagementScreen() {
         teamName: deploymentTeamName,
         environment,
       });
+
+      await ensureDefinitionsForWizardState(loadedState, useMock, { environment })
 
       const draftKey = buildPreviewStorageKey(dep.id, 'saved');
       localStorage.setItem(
@@ -928,6 +934,8 @@ export default function ETLManagementScreen() {
         teamName: deploymentTeamName,
         environment,
       });
+
+      await ensureDefinitionsForWizardState(loadedState, useMock, { environment })
 
       const draftKey = buildPreviewStorageKey(dep.id, 'deployed');
       localStorage.setItem(

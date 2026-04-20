@@ -44,6 +44,8 @@ Fetches filter operator definitions.
 
 - Method: `GET`
 - Full default URL: `http://localhost:8080/api/config/filters`
+- Query params:
+  - `environment` (optional, canonical values such as `CAP` / `PROD`)
 - Service: `src/shared/services/configService.js`
 - Consumed by: `src/shared/store/configContext.jsx`
 

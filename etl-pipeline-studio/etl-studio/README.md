@@ -206,7 +206,7 @@ All live calls use the configured `VITE_API_BASE` value. By default, this is `ht
 | Area | Method | Endpoint | Notes |
 |---|---|---|---|
 | Transformers | GET | `/config/transformers` | |
-| Filter operators | GET | `/config/filters` | |
+| Filter operators | GET | `/config/filters?environment=<CAP\|PROD>` | Environment is forwarded from wizard metadata when selected |
 | Entities | GET | `/backbone/entities` | |
 | Deployments list | GET | `/backend/deployments?teamName=<team>` | |
 | Deployment steps | GET | `/backend/deployments/steps` | Returns `[{ id, label }]`; falls back to built-in list on error |

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  buildFiltersUrl,
   buildConfigurationYamlUrl,
   buildSchemaByExampleUrl,
   fetchEntitySchema,
@@ -42,7 +43,7 @@ describe('configService', () => {
       productType: 'Inventory',
       source: 'ERP',
       team: 'Team A',
-      environment: 'production',
+      environment: 'PROD',
     })).toBe(
       'http://localhost:8080/api/backend/configuration/yaml?productType=Inventory&source=ERP&team=Team+A&environment=PROD'
     )
@@ -53,12 +54,22 @@ describe('configService', () => {
       productType: 'Inventory',
       source: 'ERP',
       team: 'Team A',
-      environment: 'production',
+      environment: 'cap',
     }, {
       apiBase: '/api',
       origin: 'http://localhost:5173',
     })).toBe(
-      'http://localhost:5173/api/backend/configuration/yaml?productType=Inventory&source=ERP&team=Team+A&environment=PROD'
+      'http://localhost:5173/api/backend/configuration/yaml?productType=Inventory&source=ERP&team=Team+A&environment=CAP'
+    )
+  })
+
+  it('builds filter URLs with a normalized environment query parameter when provided', () => {
+    expect(buildFiltersUrl({ environment: 'cap' })).toBe(
+      'http://localhost:8080/api/config/filters?environment=CAP'
+    )
+
+    expect(buildFiltersUrl({ environment: '' })).toBe(
+      'http://localhost:8080/api/config/filters'
     )
   })
 
@@ -168,7 +179,7 @@ describe('configService', () => {
       headers: { 'Content-Type': 'application/json' },
     }))
 
-    await expect(fetchFilters(false)).resolves.toEqual([
+    await expect(fetchFilters(false, { environment: 'cap' })).resolves.toEqual([
       {
         _id: 'filter-001',
         id: 'eq',
@@ -244,7 +255,7 @@ describe('configService', () => {
     ])
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8080/api/config/filters',
+      'http://localhost:8080/api/config/filters?environment=CAP',
       { headers: { 'X-user-ID': 'user-123' } },
     )
   })

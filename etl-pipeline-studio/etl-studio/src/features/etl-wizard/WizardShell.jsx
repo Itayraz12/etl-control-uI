@@ -54,8 +54,19 @@ export default function WizardShell() {
   useEffect(() => {
     prefetchForStep(state.currentStep, useMock, {
       entityName: state.metadata?.entityName,
+      environment: state.metadata?.environment,
+      requiredFilters: state.filters,
+      requiredMappings: state.mappings,
     })
-  }, [state.currentStep, state.metadata?.entityName, useMock, prefetchForStep])
+  }, [
+    state.currentStep,
+    state.metadata?.entityName,
+    state.metadata?.environment,
+    state.filters,
+    state.mappings,
+    useMock,
+    prefetchForStep,
+  ])
 
   const Step = STEP_COMPONENTS[state.currentStep] || MetadataStep
   const isReadOnly = state.readOnly || state.interactionMode === 'view'
