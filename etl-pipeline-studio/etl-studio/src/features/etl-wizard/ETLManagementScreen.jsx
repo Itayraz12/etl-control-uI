@@ -49,7 +49,8 @@ const PULSE_ANIMATION = `
 `;
 
 function formatDateShort(ts) {
-  const d = new Date(ts);
+  const d = parseManagementTimestamp(ts)
+  if (!d) return String(ts ?? '')
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const day = String(d.getDate()).padStart(2, '0');
   const month = months[d.getMonth()];
@@ -57,6 +58,39 @@ function formatDateShort(ts) {
   const hours = String(d.getHours()).padStart(2, '0');
   const mins = String(d.getMinutes()).padStart(2, '0');
   return `${day} ${month} ${year}, ${hours}:${mins}`;
+}
+
+function parseManagementTimestamp(value) {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value
+  }
+
+  if (typeof value === 'number') {
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
+  const rawValue = String(value ?? '').trim()
+  if (!rawValue) return null
+
+  const bareIsoMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/)
+  if (bareIsoMatch) {
+    const [, year, month, day, hours, minutes, seconds = '0', milliseconds = '0'] = bareIsoMatch
+    const date = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hours),
+      Number(minutes),
+      Number(seconds),
+      Number(milliseconds.padEnd(3, '0')),
+    )
+
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
+  const date = new Date(rawValue)
+  return Number.isNaN(date.getTime()) ? null : date
 }
 
 const BASE_COLUMNS = [
@@ -155,8 +189,8 @@ function getManagementSearchValue(deployment, columnKey) {
   if (value == null) return ''
 
   if (columnKey === 'lastStatusChange') {
-    const date = new Date(value)
-    const formattedValue = Number.isNaN(date.getTime()) ? '' : formatDateShort(value)
+    const date = parseManagementTimestamp(value)
+    const formattedValue = date ? formatDateShort(value) : ''
 
     return [String(value), formattedValue]
       .filter(Boolean)
@@ -415,6 +449,11 @@ export default function ETLManagementScreen() {
   const sortedDeployments = useMemo(() => [...visibleDeployments].sort((a, b) => {
     let aVal = a[sortKey];
     let bVal = b[sortKey];
+
+    if (sortKey === 'lastStatusChange') {
+      aVal = parseManagementTimestamp(aVal)?.getTime() ?? null
+      bVal = parseManagementTimestamp(bVal)?.getTime() ?? null
+    }
 
     // Special sorting for status: 'running' always comes first
     if (sortKey === 'deploymentStatus') {
