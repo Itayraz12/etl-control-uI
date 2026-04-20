@@ -64,8 +64,8 @@ const initialState = {
     csvDelimiter:         '',
     rowDelimiter:         '',
     jsonSplit:            '',
-    streamingContinuity:  'continuous',
-    recordsPerDay:        'millions',
+    streamingContinuity:  '',
+    recordsPerDay:        '',
   },
 
   // Step 3 — Source Upload

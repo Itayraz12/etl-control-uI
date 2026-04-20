@@ -65,8 +65,8 @@ function renderStep(initialState = {}) {
         kafkaTopic: 'source_products_raw',
         format: 'JSON',
         jsonSplit: '',
-        streamingContinuity: 'continuous',
-        recordsPerDay: 'millions',
+        streamingContinuity: '',
+        recordsPerDay: '',
         ...(initialState.source || {}),
       },
       upload: { done: false, schema: [], fileName: '', fileType: '', fileSize: 0 },
@@ -170,7 +170,7 @@ describe('MetadataStep entity target schema', () => {
     expect(screen.queryByRole('option', { name: 'OrderEntity (Order)' })).not.toBeInTheDocument()
   })
 
-  it('renders Data Stream Info in metadata and persists its source settings', async () => {
+  it('renders Data Stream Info in metadata with required empty selections and persists chosen source settings', async () => {
     const user = userEvent.setup()
 
     renderStep()
@@ -182,8 +182,13 @@ describe('MetadataStep entity target schema', () => {
       expect(screen.getByRole('option', { name: 'Thousands' })).toBeInTheDocument()
     })
 
-    const streamContinuitySelect = screen.getByDisplayValue('Continuous')
-    const recordsPerDaySelect = screen.getByDisplayValue('A Few Millions')
+    const streamContinuitySelect = screen.getByRole('combobox', { name: 'Streaming Continuity' })
+    const recordsPerDaySelect = screen.getByRole('combobox', { name: 'Avg Records Per Day' })
+
+    expect(streamContinuitySelect).toHaveValue('')
+    expect(recordsPerDaySelect).toHaveValue('')
+    expect(screen.getByRole('option', { name: 'Select data stream info...' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Select avg records per day...' })).toBeInTheDocument()
 
     await user.selectOptions(streamContinuitySelect, 'every-day')
     await user.selectOptions(recordsPerDaySelect, 'thousands')
@@ -194,6 +199,18 @@ describe('MetadataStep entity target schema', () => {
       expect(persisted.source?.recordsPerDay).toBe('thousands')
     })
 
+  })
+
+  it('marks Data Stream Info fields invalid when they are left unselected', () => {
+    renderStep({
+      source: {
+        streamingContinuity: '',
+        recordsPerDay: '',
+      },
+    })
+
+    expect(screen.getByRole('combobox', { name: 'Streaming Continuity' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('combobox', { name: 'Avg Records Per Day' })).toHaveAttribute('aria-invalid', 'true')
   })
 
   it('accepts only numeric characters in the product code field', async () => {
@@ -259,7 +276,7 @@ describe('MetadataStep entity target schema', () => {
     })
   })
 
-  it('migrates legacy persisted production environments to PROD when the wizard loads', async () => {
+  it('keeps legacy persisted environment strings unselected now that backward compatibility is removed', async () => {
     renderStep({
       metadata: { environment: 'production' },
       source: { kafkaEnv: 'staging' },
@@ -268,10 +285,10 @@ describe('MetadataStep entity target schema', () => {
 
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
-      expect(screen.getByRole('combobox', { name: 'Environment' })).toHaveValue('PROD')
-      expect(persisted.metadata?.environment).toBe('PROD')
-      expect(persisted.source?.kafkaEnv).toBe('CAP')
-      expect(persisted.sink?.sinkKafkaEnv).toBe('PROD')
+      expect(screen.getByRole('combobox', { name: 'Environment' })).toHaveValue('')
+      expect(persisted.metadata?.environment).toBe('production')
+      expect(persisted.source?.kafkaEnv).toBe('staging')
+      expect(persisted.sink?.sinkKafkaEnv).toBe('production')
     })
   })
 
@@ -295,6 +312,10 @@ describe('MetadataStep entity target schema', () => {
         location: '',
         entityName: '',
       },
+      source: {
+        streamingContinuity: '',
+        recordsPerDay: '',
+      },
     })
 
     expect(screen.getByRole('textbox', { name: 'Product Source' })).toHaveAttribute('aria-invalid', 'true')
@@ -302,7 +323,8 @@ describe('MetadataStep entity target schema', () => {
     expect(screen.getByRole('combobox', { name: 'Team' })).toHaveAttribute('aria-invalid', 'true')
     expect(screen.getByRole('combobox', { name: 'Location' })).toHaveAttribute('aria-invalid', 'true')
     expect(screen.getByRole('combobox', { name: 'Entity Name' })).toHaveAttribute('aria-invalid', 'true')
-    expect(screen.getByRole('combobox', { name: 'Streaming Continuity' })).not.toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('combobox', { name: 'Streaming Continuity' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('combobox', { name: 'Avg Records Per Day' })).toHaveAttribute('aria-invalid', 'true')
   })
 
   it('fetches entity schema on selection and persists parsed target fields', async () => {

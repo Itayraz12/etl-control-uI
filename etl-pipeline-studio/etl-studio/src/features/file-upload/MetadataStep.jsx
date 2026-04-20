@@ -200,14 +200,16 @@ export default function MetadataStep() {
           <CardTitle>📊 Data Stream Info</CardTitle>
           <FormRow>
             <FormGroup label="Streaming Continuity" required>
-              <select aria-label="Streaming Continuity" aria-invalid={isInvalid('streaming continuity')} value={src.streamingContinuity || 'continuous'} onChange={e => updateSourceField('streamingContinuity', e.target.value)}>
+              <select aria-label="Streaming Continuity" aria-invalid={isInvalid('streaming continuity')} value={src.streamingContinuity || ''} onChange={e => updateSourceField('streamingContinuity', e.target.value)}>
+                <option value="">Select data stream info...</option>
                 {streamingContinuities.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </FormGroup>
             <FormGroup label="Avg Records Per Day" required>
-              <select aria-label="Avg Records Per Day" aria-invalid={isInvalid('avg records per day')} value={src.recordsPerDay || 'millions'} onChange={e => updateSourceField('recordsPerDay', e.target.value)}>
+              <select aria-label="Avg Records Per Day" aria-invalid={isInvalid('avg records per day')} value={src.recordsPerDay || ''} onChange={e => updateSourceField('recordsPerDay', e.target.value)}>
+                <option value="">Select avg records per day...</option>
                 {recordsPerDay.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}

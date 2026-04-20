@@ -973,7 +973,10 @@ export default function ETLManagementScreen() {
         entityName: '',
         tags: '',
       },
-      source: {},
+      source: {
+        streamingContinuity: '',
+        recordsPerDay: '',
+      },
       upload: {
         done: false,
         schema: [],

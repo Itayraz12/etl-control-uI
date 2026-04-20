@@ -294,6 +294,10 @@ describe('ETLManagementScreen table layout stability', () => {
         location: '',
         environment: '',
       }),
+      source: expect.objectContaining({
+        streamingContinuity: '',
+        recordsPerDay: '',
+      }),
     }))
   }, 10000)
 
