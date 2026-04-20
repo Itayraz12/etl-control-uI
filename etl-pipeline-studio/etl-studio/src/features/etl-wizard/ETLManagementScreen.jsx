@@ -242,7 +242,7 @@ function buildDeploymentRowKey(deploymentRow, fallbackTeamName = 'default') {
   const team = String(deploymentRow?.teamName || fallbackTeamName || '').trim().toLowerCase() || 'default'
   const source = String(deploymentRow?.productSource || deploymentRow?.source || '').trim().toLowerCase()
   const productType = String(deploymentRow?.productType || '').trim().toLowerCase()
-  const environment = String(deploymentRow?.environment || 'production').trim().toLowerCase()
+  const environment = normalizeEnvironmentValue(deploymentRow?.environment, 'PROD').trim().toLowerCase()
 
   return [backendId, team, source, productType, environment].join('::')
 }
@@ -444,7 +444,7 @@ export default function ETLManagementScreen() {
       teamName: getDeploymentTeamName(deploymentRow),
       productSource: deploymentRow.productSource,
       productType: deploymentRow.productType,
-      environment: deploymentRow.environment || 'production',
+      environment: deploymentRow.environment || 'PROD',
       deploymentStatus,
       savedVersion: extraFields.savedVersion ?? deploymentRow.savedVersion,
       deployedVersion: extraFields.deployedVersion ?? deploymentRow.deployedVersion,
@@ -495,7 +495,7 @@ export default function ETLManagementScreen() {
 
     // 3. Fetch the saved YAML for this pipeline, then POST it to the same
     //    deploy endpoint used by the Summary wizard tab.
-    const environment = deploymentRow.environment || 'production';
+    const environment = deploymentRow.environment || 'PROD';
       const deploymentTeamName = getDeploymentTeamName(deploymentRow)
     let yamlText;
     try {
@@ -663,7 +663,7 @@ export default function ETLManagementScreen() {
     const result = await deploymentsService.deleteDeployment({
       ...deploymentRow,
       teamName: getDeploymentTeamName(deploymentRow),
-      environment: deploymentRow.environment || 'production',
+      environment: deploymentRow.environment || 'PROD',
     }, useMock);
 
     if (result?.success !== false) {
@@ -688,7 +688,7 @@ export default function ETLManagementScreen() {
     const result = await deploymentsService.permanentlyDeleteDeployment({
       ...deploymentRow,
       teamName: getDeploymentTeamName(deploymentRow),
-      environment: deploymentRow.environment || 'production',
+      environment: deploymentRow.environment || 'PROD',
     }, useMock);
 
     if (result?.success !== false) {
@@ -732,7 +732,7 @@ export default function ETLManagementScreen() {
     const result = await deploymentsService.stopDeployment({
       ...deploymentRow,
       teamName: getDeploymentTeamName(deploymentRow),
-      environment: deploymentRow.environment || 'production',
+      environment: deploymentRow.environment || 'PROD',
     }, useMock);
 
     if (result?.success !== false) {
@@ -763,7 +763,7 @@ export default function ETLManagementScreen() {
     console.log('[ETLManagementScreen] handleEdit, useMock:', useMock);
 
     try {
-      const environment = dep.environment || state.metadata.environment || 'production';
+      const environment = dep.environment || state.metadata.environment || 'PROD';
       const deploymentTeamName = getDeploymentTeamName(dep)
       const yamlText = await fetchDraftConfiguration({
         productType: dep.productType,
@@ -808,7 +808,7 @@ export default function ETLManagementScreen() {
     setScreenNotice(null);
 
     try {
-      const environment = dep.environment || state.metadata.environment || 'production';
+      const environment = dep.environment || state.metadata.environment || 'PROD';
       const deploymentTeamName = getDeploymentTeamName(dep)
 
       const yamlText = await fetchSavedDraftYaml({
@@ -868,7 +868,7 @@ export default function ETLManagementScreen() {
     setScreenNotice(null);
 
     try {
-      const environment = dep.environment || state.metadata.environment || 'production';
+      const environment = dep.environment || state.metadata.environment || 'PROD';
       const deploymentTeamName = getDeploymentTeamName(dep)
 
       const yamlText = await fetchDraftConfiguration({

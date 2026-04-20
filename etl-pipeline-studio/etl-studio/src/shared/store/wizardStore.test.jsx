@@ -44,9 +44,9 @@ describe('WizardProvider preview boot', () => {
           currentStep: 4,
           completedSteps: [0, 1, 2, 3, 4],
           readOnly: true,
-          metadata: { productType: 'Catalog', environment: 'production' },
-          source: { kafkaEnv: 'staging' },
-          sink: { sinkKafkaEnv: 'production' },
+          metadata: { productType: 'Catalog', environment: 'PROD' },
+          source: { kafkaEnv: 'CAP' },
+          sink: { sinkKafkaEnv: 'PROD' },
         },
       }),
     )

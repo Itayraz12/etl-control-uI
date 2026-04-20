@@ -33,7 +33,7 @@ describe('rabbitmqService', () => {
       port: '5672',
       queue: 'orders.retry',
       exchange: 'etl.exchange',
-      environment: 'production',
+      environment: 'PROD',
     })).resolves.toEqual(expect.objectContaining({
       success: true,
       message: 'RabbitMQ reachable',

@@ -25,7 +25,7 @@ describe('kafkaService', () => {
       headers: { 'Content-Type': 'application/json' },
     }))
 
-    await expect(testKafkaConnection({ topic: 'orders.v1', environment: 'production' })).resolves.toEqual(
+    await expect(testKafkaConnection({ topic: 'orders.v1', environment: 'PROD' })).resolves.toEqual(
       expect.objectContaining({
         success: true,
         message: 'Kafka reachable',
@@ -48,7 +48,7 @@ describe('kafkaService', () => {
       headers: { 'Content-Type': 'text/plain' },
     }))
 
-    await expect(testKafkaConnection({ topic: 'orders.v1', environment: 'production' })).rejects.toThrow('Broker unreachable')
+    await expect(testKafkaConnection({ topic: 'orders.v1', environment: 'PROD' })).rejects.toThrow('Broker unreachable')
   })
 
   it('treats a success=false JSON payload as a failed connection test', async () => {
@@ -57,7 +57,7 @@ describe('kafkaService', () => {
       headers: { 'Content-Type': 'application/json' },
     }))
 
-    await expect(testKafkaConnection({ topic: 'orders.v1', environment: 'production' })).rejects.toThrow('Topic not found')
+    await expect(testKafkaConnection({ topic: 'orders.v1', environment: 'PROD' })).rejects.toThrow('Topic not found')
   })
 })
 

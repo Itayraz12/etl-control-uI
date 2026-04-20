@@ -50,7 +50,7 @@ const baseMockDeployments = [
     teamName: 'data-platform',
     productType: 'Inventory',
     productSource: 'ERP',
-    environment: 'production',
+    environment: 'PROD',
     deploymentStatus: 'running',
     savedVersion: '1.2.0',
     deployedVersion: '1.2.0',
@@ -62,7 +62,7 @@ const baseMockDeployments = [
     teamName: 'data-platform',
     productType: 'Catalog',
     productSource: 'CRM',
-    environment: 'staging',
+    environment: 'CAP',
     deploymentStatus: 'draft',
     savedVersion: '2.0.0',
     deployedVersion: null,
@@ -74,7 +74,7 @@ const baseMockDeployments = [
     teamName: 'data-platform',
     productType: 'Pricing',
     productSource: 'PIM',
-    environment: 'production',
+    environment: 'PROD',
     deploymentStatus: 'running',
     savedVersion: '3.1.0',
     deployedVersion: '3.0.0',
@@ -86,7 +86,7 @@ const baseMockDeployments = [
     teamName: 'data-platform',
     productType: 'Legacy',
     productSource: 'Archive',
-    environment: 'production',
+    environment: 'PROD',
     deploymentStatus: 'deleted',
     previousDeploymentStatus: 'running',
     savedVersion: '0.9.0',
@@ -102,7 +102,7 @@ const mockCopyTextToClipboard = vi.fn(() => Promise.resolve(true))
 
 vi.mock('../../shared/store/wizardStore.jsx', () => ({
   useWizard: () => ({
-    state: { metadata: { environment: 'production' } },
+    state: { metadata: { environment: 'PROD' } },
     actions: mockActions,
   }),
 }))
@@ -484,7 +484,7 @@ describe('ETLManagementScreen table layout stability', () => {
         teamName: 'Team A',
         productType: 'Alpha',
         productSource: 'ERP',
-        environment: 'production',
+        environment: 'PROD',
         deploymentStatus: 'running',
         savedVersion: '1.0.0',
         deployedVersion: '1.0.0',
@@ -496,7 +496,7 @@ describe('ETLManagementScreen table layout stability', () => {
         teamName: 'Team B',
         productType: 'Beta',
         productSource: 'ERP',
-        environment: 'production',
+        environment: 'PROD',
         deploymentStatus: 'running',
         savedVersion: '1.0.0',
         deployedVersion: '1.0.0',
@@ -508,7 +508,7 @@ describe('ETLManagementScreen table layout stability', () => {
         teamName: 'Team A',
         productType: 'Gamma',
         productSource: 'CRM',
-        environment: 'staging',
+        environment: 'CAP',
         deploymentStatus: 'draft',
         savedVersion: '2.0.0',
         deployedVersion: null,
@@ -520,7 +520,7 @@ describe('ETLManagementScreen table layout stability', () => {
         teamName: 'Team B',
         productType: 'Delta',
         productSource: 'CRM',
-        environment: 'staging',
+        environment: 'CAP',
         deploymentStatus: 'draft',
         savedVersion: '2.0.0',
         deployedVersion: null,
@@ -630,7 +630,7 @@ describe('ETLManagementScreen table layout stability', () => {
         productType: 'Catalog',
         productSource: 'CRM',
         teamName: 'data-platform',
-        environment: 'staging',
+        environment: 'CAP',
       }), true)
       expect(screen.getByText('Pipeline deleted. You can find it under the Deleted tab.')).toBeInTheDocument()
     })
@@ -668,7 +668,7 @@ describe('ETLManagementScreen table layout stability', () => {
         productType: 'Inventory',
         productSource: 'ERP',
         teamName: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
       }), true)
       expect(screen.getByText('Pipeline stopped successfully.')).toBeInTheDocument()
       expect(screen.getByText('1 stopped')).toBeInTheDocument()
@@ -701,13 +701,13 @@ describe('ETLManagementScreen table layout stability', () => {
         productType: 'Pricing',
         source: 'PIM',
         team: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
       }, false)
       expect(mockDeployFromYaml).toHaveBeenCalledWith({
         productType: 'Pricing',
         source: 'PIM',
         team: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
         isDeploy: false,
         isSavedVersion: false,
         configurationYaml: 'pipeline: yaml',
@@ -746,14 +746,14 @@ describe('ETLManagementScreen table layout stability', () => {
         productType: 'Pricing',
         source: 'PIM',
         team: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
       }, false)
       expect(mockFetchSavedDraftYaml).not.toHaveBeenCalled()
       expect(mockDeployFromYaml).toHaveBeenCalledWith({
         productType: 'Pricing',
         source: 'PIM',
         team: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
         isDeploy: true,
         isSavedVersion: false,
         configurationYaml: 'pipeline: yaml',
@@ -789,13 +789,13 @@ describe('ETLManagementScreen table layout stability', () => {
         productType: 'Pricing',
         source: 'PIM',
         team: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
       }, false)
       expect(mockDeployFromYaml).toHaveBeenCalledWith({
         productType: 'Pricing',
         source: 'PIM',
         team: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
         isDeploy: true,
         isSavedVersion: true,
         configurationYaml: 'saved: yaml',
@@ -839,7 +839,7 @@ describe('ETLManagementScreen table layout stability', () => {
         productType: 'Legacy',
         productSource: 'Archive',
         teamName: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
       }), true)
       expect(screen.queryByText('Legacy')).not.toBeInTheDocument()
       expect(screen.getByText('Pipeline permanently deleted.')).toBeInTheDocument()
@@ -901,13 +901,13 @@ describe('ETLManagementScreen table layout stability', () => {
         productType: 'Catalog',
         source: 'CRM',
         team: 'data-platform',
-        environment: 'staging',
+        environment: 'CAP',
       }, false)
       expect(mockDeployFromYaml).toHaveBeenCalledWith({
         productType: 'Catalog',
         source: 'CRM',
         team: 'data-platform',
-        environment: 'staging',
+        environment: 'CAP',
         isDeploy: true,
         isSavedVersion: true,
         configurationYaml: 'saved: yaml',
@@ -1105,7 +1105,7 @@ describe('ETLManagementScreen table layout stability', () => {
         teamName: 'data-platform',
         productType: 'Inventory',
         source: 'ERP-Alias',
-        environment: 'production',
+        environment: 'PROD',
         deploymentStatus: 'running',
         savedVersion: '1.0.0',
         deployedVersion: '1.0.0',
@@ -1127,13 +1127,13 @@ describe('ETLManagementScreen table layout stability', () => {
         productType: 'Inventory',
         source: 'ERP-Alias',
         team: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
       }, true)
       expect(mockHydrateWizardStateFromYaml).toHaveBeenCalledWith('saved: yaml', {
         productType: 'Inventory',
         source: 'ERP-Alias',
         teamName: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
       })
     })
 
@@ -1151,7 +1151,7 @@ describe('ETLManagementScreen table layout stability', () => {
         productType: 'Inventory',
         source: 'ERP-Alias',
         team: 'data-platform',
-        environment: 'production',
+        environment: 'PROD',
       }, true)
       expect(mockActions.loadState).toHaveBeenCalledWith(expect.objectContaining({
         navigationMode: 'etl-config',

@@ -23,7 +23,7 @@ describe('deploymentsService', () => {
       productType: 'Catalog',
       source: 'ERP',
       team: 'data-platform',
-      environment: 'production',
+      environment: 'PROD',
       isDeploy: true,
       isSavedVersion: true,
       configurationYaml: 'pipeline: test',
@@ -49,7 +49,7 @@ describe('deploymentsService', () => {
       productType: 'Inventory',
       source: 'CRM',
       team: 'data-platform',
-      environment: 'staging',
+      environment: 'CAP',
       isDeploy: false,
       isSavedVersion: false,
       configurationYaml: 'pipeline: upgrade',
@@ -75,7 +75,7 @@ describe('deploymentsService', () => {
       productType: 'Catalog',
       source: 'ERP',
       team: 'data-platform',
-      environment: 'production',
+      environment: 'PROD',
       isDeploy: true,
       isSavedVersion: true,
       configurationYaml: 'pipeline: test',
@@ -91,7 +91,7 @@ describe('deploymentsService', () => {
       teamName: 'data-platform',
       productSource: 'ERP',
       productType: 'Catalog',
-      environment: 'production',
+      environment: 'PROD',
       savedVersion: '1.0',
     })
 
@@ -118,7 +118,7 @@ describe('deploymentsService', () => {
       teamName: 'data-platform',
       productSource: 'ERP',
       productType: 'Catalog',
-      environment: 'production',
+      environment: 'PROD',
     })
 
     await expect(deleteDeployment('local-draft:data-platform::erp::catalog::PROD', false)).resolves.toEqual({
@@ -154,7 +154,7 @@ describe('deploymentsService', () => {
       productType: 'Catalog',
       productSource: 'CRM',
       teamName: 'data-platform',
-      environment: 'staging',
+      environment: 'CAP',
     }, false)).resolves.toEqual({ success: true })
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -174,7 +174,7 @@ describe('deploymentsService', () => {
       productType: 'Legacy',
       productSource: 'Archive',
       teamName: 'data-platform',
-      environment: 'production',
+      environment: 'PROD',
     }, false)).resolves.toEqual({ success: true })
 
     expect(fetchMock).toHaveBeenCalledWith(

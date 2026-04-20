@@ -54,13 +54,13 @@ function buildState(overrides = {}) {
       productSource: 'ERP',
       productType: 'Inventory',
       location: 'OFFICE',
-      environment: 'production',
+      environment: 'PROD',
       team: 'data-platform',
       entityName: 'Product',
     },
     source: {
       sourceType: 'kafka',
-      kafkaEnv: 'production',
+      kafkaEnv: 'PROD',
       kafkaTopic: 'source_products_raw',
       kafkaOffset: 'earliest',
       format: 'JSON',
@@ -76,7 +76,7 @@ function buildState(overrides = {}) {
     targetSchema: [],
     sink: {
       sinkType: '',
-      sinkKafkaEnv: 'production',
+      sinkKafkaEnv: 'PROD',
     },
   }
 
@@ -115,7 +115,7 @@ describe('canNavigateToWizardStep', () => {
       currentStep: 1,
       source: {
         sourceType: 'kafka',
-        kafkaEnv: 'production',
+        kafkaEnv: 'PROD',
         kafkaTopic: 'source_products_raw',
         kafkaOffset: 'latest',
       },
@@ -139,7 +139,7 @@ describe('canNavigateToWizardStep', () => {
       currentStep: 1,
       source: {
         sourceType: 'kafka',
-        kafkaEnv: 'production',
+        kafkaEnv: 'PROD',
         kafkaTopic: 'source_products_raw',
         kafkaOffset: '',
       },
@@ -154,7 +154,7 @@ describe('canNavigateToWizardStep', () => {
       metadata: {
         productSource: 'ERP',
         productType: '',
-        environment: 'production',
+        environment: 'PROD',
         entityName: '',
         team: '',
         location: '',
@@ -176,7 +176,7 @@ describe('canNavigateToWizardStep', () => {
     const state = buildState({
       source: {
         sourceType: 'kafka',
-        kafkaEnv: 'production',
+        kafkaEnv: 'PROD',
         kafkaTopic: '',
         kafkaOffset: '',
         format: '',
@@ -203,7 +203,7 @@ describe('canNavigateToWizardStep', () => {
       },
       source: {
         sourceType: 'kafka',
-        kafkaEnv: 'production',
+        kafkaEnv: 'PROD',
         kafkaTopic: 'source_products_raw',
         kafkaOffset: 'earliest',
       },
@@ -220,7 +220,7 @@ describe('canNavigateToWizardStep', () => {
     const state = buildState({
       source: {
         sourceType: 'kafka',
-        kafkaEnv: 'production',
+        kafkaEnv: 'PROD',
         kafkaTopic: 'source_products_raw',
         kafkaOffset: 'earliest',
         format: 'CSV',
@@ -269,7 +269,7 @@ describe('canNavigateToWizardStep', () => {
       },
       sink: {
         sinkType: 'kafka',
-        sinkKafkaEnv: 'production',
+        sinkKafkaEnv: 'PROD',
       },
     })
 
@@ -392,7 +392,7 @@ describe('canNavigateToWizardStep', () => {
       currentStep: 6,
       source: {
         sourceType: 'kafka',
-        kafkaEnv: 'production',
+        kafkaEnv: 'PROD',
         kafkaTopic: 'source_products_raw',
         kafkaOffset: '',
       },
@@ -411,13 +411,13 @@ describe('canNavigateToWizardStep', () => {
       metadata: {
         productSource: 'ERP',
         productType: 'Inventory',
-        environment: 'production',
+        environment: 'PROD',
         entityName: 'Product',
         team: 'data-platform',
         location: 'OFFICE',
       },
       filters: [],
-      sink: { sinkType: 'kafka', sinkKafkaEnv: 'production' },
+      sink: { sinkType: 'kafka', sinkKafkaEnv: 'PROD' },
       targetSchema: [{ id: 'targetName', name: 'Target Name', required: true }],
       mappings: [{ src: 'id', tgt: 'targetName' }],
     })
@@ -439,7 +439,7 @@ describe('canNavigateToWizardStep', () => {
       metadata: {
         productSource: 'ERP',
         productType: 'Inventory',
-        environment: 'production',
+        environment: 'PROD',
         entityName: 'Product',
         team: 'data-platform',
         location: 'OFFICE',
@@ -452,7 +452,7 @@ describe('canNavigateToWizardStep', () => {
           subgroups: [],
         },
       ],
-      sink: { sinkType: 'kafka', sinkKafkaEnv: 'production' },
+      sink: { sinkType: 'kafka', sinkKafkaEnv: 'PROD' },
       targetSchema: [{ id: 'targetName', name: 'Target Name', required: true }],
       mappings: [{ src: 'id', tgt: 'targetName' }],
     })
@@ -474,7 +474,7 @@ describe('canNavigateToWizardStep', () => {
       metadata: {
         productSource: 'ERP',
         productType: 'Inventory',
-        environment: 'production',
+        environment: 'PROD',
         entityName: 'Product',
         team: 'data-platform',
         location: 'OFFICE',
@@ -487,7 +487,7 @@ describe('canNavigateToWizardStep', () => {
           subgroups: [],
         },
       ],
-      sink: { sinkType: 'kafka', sinkKafkaEnv: 'production' },
+      sink: { sinkType: 'kafka', sinkKafkaEnv: 'PROD' },
       targetSchema: [{ id: 'targetName', name: 'Target Name', required: true }],
       mappings: [{ src: 'id', tgt: 'targetName' }],
     })
@@ -585,7 +585,7 @@ describe('canNavigateToWizardStep', () => {
       metadata: {
         productSource: 'ERP',
         productType: 'Inventory',
-        environment: 'production',
+        environment: 'PROD',
         entityName: 'Product',
         team: 'data-platform',
         location: 'OFFICE',
@@ -598,7 +598,7 @@ describe('canNavigateToWizardStep', () => {
           subgroups: [],
         },
       ],
-      sink: { sinkType: 'kafka', sinkKafkaEnv: 'production' },
+      sink: { sinkType: 'kafka', sinkKafkaEnv: 'PROD' },
       targetSchema: [{ id: 'targetName', name: 'Target Name', required: true }],
       mappings: [
         {
@@ -635,7 +635,7 @@ describe('canNavigateToWizardStep', () => {
       metadata: {
         productSource: 'ERP',
         productType: 'Inventory',
-        environment: 'production',
+        environment: 'PROD',
         entityName: 'Product',
         team: 'data-platform',
         location: 'OFFICE',
@@ -649,3 +649,4 @@ describe('canNavigateToWizardStep', () => {
     expect(canDeployFromSummaryChecklist(state, undefined, transformers)).toBe(true)
   })
 })
+

@@ -13,14 +13,6 @@ export const ENVIRONMENT_OPTIONS = [
 export const ENVIRONMENTS = ENVIRONMENT_OPTIONS.map(option => option.value)
 export const METADATA_LOCATIONS = CONFIGURED_METADATA_LOCATIONS
 
-const ENVIRONMENT_VALUE_ALIASES = {
-  cap: 'CAP',
-  stage: 'CAP',
-  staging: 'CAP',
-  prod: 'PROD',
-  production: 'PROD',
-}
-
 const ENVIRONMENT_LABELS = {
   CAP: 'CAP',
   PROD: 'PROD',
@@ -30,8 +22,6 @@ function resolveCanonicalEnvironment(value) {
   const rawValue = String(value ?? '').trim()
   if (!rawValue) return ''
 
-  const aliasedValue = ENVIRONMENT_VALUE_ALIASES[rawValue.toLowerCase()]
-  if (aliasedValue) return aliasedValue
 
   const upperCasedValue = rawValue.toUpperCase()
   return ENVIRONMENTS.includes(upperCasedValue) ? upperCasedValue : ''
