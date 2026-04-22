@@ -1,0 +1,237 @@
+================================================================================
+BACKEND AGENT PROMPT — Kafka Simulator: Task Status Endpoint
+================================================================================
+
+You are a backend developer working on the ETL Studio Kafka Simulator service.
+The simulator's start/stop/delete endpoints are already implemented.
+
+Your task is to implement ONE new endpoint:
+
+  GET /simulator/kafka/status/{taskId}
+
+This endpoint is called by the UI every 3 seconds for each running task to
+display live progress (sent count, status badge, and status message).
+
+Do not change any existing endpoints or contracts.
+
+================================================================================
+1. CONTEXT
+================================================================================
+
+When a simulation task is started via POST /simulator/kafka/start, it runs
+as a background job that publishes Kafka messages asynchronously.
+
+The UI has no way to know the task's current progress unless it polls the
+backend. The frontend polls GET /simulator/kafka/status/{taskId} every 3
+seconds for every task whose local status is "running".
+
+The polling loop stops automatically when all tasks are in a terminal state
+(stopped | completed | error).
+
+================================================================================
+2. ENDPOINT SPECIFICATION
+================================================================================
+
+  GET /simulator/kafka/status/{taskId}
+
+Path parameter:
+  taskId  — the UUID returned by POST /simulator/kafka/start
+
+--------------------------------------------------------------------------------
+2.1  Success Response — HTTP 200  (application/json)
+--------------------------------------------------------------------------------
+
+  {
+    "taskId":        string,   // same as the path param
+    "status":        string,   // see status values below
+    "sentCount":     number,   // total messages successfully published so far
+    "statusMessage": string    // short human-readable detail (see examples below)
+  }
+
+Status values:
+  "running"    — task is actively publishing messages
+  "stopped"    — task was manually stopped via POST /stop
+  "completed"  — task finished naturally (totalMessages reached, or once-mode done)
+  "error"      — task encountered a fatal error and stopped itself
+
+statusMessage examples:
+  "42 / 100 sent"                      (bounded task in progress)
+  "1 250 sent (unlimited)"             (unlimited task in progress)
+  "Completed — 100 / 100 sent"         (natural completion)
+  "Stopped at 42 messages"             (manual stop)
+  "Error: connection to broker lost"   (error state)
+
+--------------------------------------------------------------------------------
+2.2  Error Response — HTTP 404  (application/json)
+--------------------------------------------------------------------------------
+
+  { "message": "Task not found: <taskId>" }
+
+Return 404 when the taskId does not exist in the task registry.
+Do NOT return 404 for tasks that are stopped or completed — those still exist
+in the registry and must be retrievable until explicitly deleted.
+
+================================================================================
+3. TASK REGISTRY REQUIREMENTS
+================================================================================
+
+The task registry (in-memory map or persistent store) must track the following
+fields, kept up to date as the background job runs:
+
+  Field            Type      Updated when
+  ───────────────  ────────  ──────────────────────────────────────────────────
+  taskId           string    Set at task creation
+  status           string    Updated on every state transition
+  sentCount        number    Incremented after each successfully published message
+  statusMessage    string    Updated after each burst (or on state transition)
+  totalMessages    number    Set at task creation (from the start request)
+  startedAt        ISO str   Set at task creation
+  stoppedAt        ISO str   Set when task enters stopped/completed/error state
+
+The background publishing loop must acquire a lightweight lock (or use an
+atomic counter) to update sentCount safely from the publishing thread.
+
+================================================================================
+4. STATUS MESSAGE GENERATION RULES
+================================================================================
+
+Generate statusMessage according to the following logic (pseudo-code):
+
+  if status == "running":
+    if totalMessages == -1:
+      statusMessage = "{sentCount} sent (unlimited)"
+    else:
+      statusMessage = "{sentCount} / {totalMessages} sent"
+
+  if status == "completed":
+    statusMessage = "Completed — {sentCount} / {totalMessages} sent"
+
+  if status == "stopped":
+    statusMessage = "Stopped at {sentCount} messages"
+
+  if status == "error":
+    statusMessage = "Error: {errorDetail}"   // errorDetail from the caught exception
+
+================================================================================
+5. INTEGRATION WITH THE PUBLISHING LOOP
+================================================================================
+
+The existing background publishing loop must be modified to:
+
+  a) Increment sentCount atomically after each successful Kafka send.
+
+  b) Recalculate and update statusMessage after each burst
+     (i.e. after publishing messagesPerSecond messages in one tick).
+
+  c) Check after each burst whether sentCount >= totalMessages
+     (when totalMessages != -1). If so:
+       - Set status = "completed"
+       - Set stoppedAt = now()
+       - Update statusMessage using the "completed" rule above
+       - Cancel the scheduled interval and exit the loop cleanly
+
+  d) If intervalSeconds == 0 (once-mode): after the single burst completes,
+     immediately set status = "completed" and exit.
+
+  e) If a Kafka send throws an unrecoverable exception:
+       - Set status = "error"
+       - Set stoppedAt = now()
+       - Set statusMessage = "Error: {exception message}"
+       - Cancel the interval and exit the loop
+
+================================================================================
+6. IMPLEMENTATION NOTES — BY STACK
+================================================================================
+
+If Spring Boot (Java):
+  - Store task state in a ConcurrentHashMap<String, SimulationTask>.
+  - Use AtomicLong for sentCount inside each SimulationTask.
+  - Build the status response in a @GetMapping method — no blocking I/O needed,
+    just a map lookup.
+  - Example:
+
+    @GetMapping("/status/{taskId}")
+    public ResponseEntity<?> getStatus(@PathVariable String taskId) {
+        SimulationTask task = registry.get(taskId);
+        if (task == null) {
+            return ResponseEntity.status(404)
+                .body(Map.of("message", "Task not found: " + taskId));
+        }
+        return ResponseEntity.ok(Map.of(
+            "taskId",        task.getTaskId(),
+            "status",        task.getStatus(),
+            "sentCount",     task.getSentCount(),
+            "statusMessage", task.getStatusMessage()
+        ));
+    }
+
+If Node.js:
+  - Store task state in a Map<string, TaskRecord>.
+  - Use a plain number for sentCount (single-threaded, no atomics needed).
+  - Example:
+
+    router.get('/status/:taskId', (req, res) => {
+      const task = taskRegistry.get(req.params.taskId)
+      if (!task) {
+        return res.status(404).json({ message: `Task not found: ${req.params.taskId}` })
+      }
+      res.json({
+        taskId:        task.taskId,
+        status:        task.status,
+        sentCount:     task.sentCount,
+        statusMessage: task.statusMessage,
+      })
+    })
+
+================================================================================
+7. TESTING REQUIREMENTS
+================================================================================
+
+Provide tests covering:
+
+  1. GET /status/{taskId} — running task
+       → 200, status="running", sentCount >= 0, statusMessage contains "sent"
+
+  2. GET /status/{taskId} — after task completes naturally (intervalSeconds=0)
+       → 200, status="completed", sentCount == totalMessages,
+         statusMessage starts with "Completed"
+
+  3. GET /status/{taskId} — after manual stop via POST /stop
+       → 200, status="stopped", statusMessage contains "Stopped"
+
+  4. GET /status/{taskId} — unknown taskId
+       → 404, body contains "message" field
+
+  5. sentCount increments correctly
+       Start a task with totalMessages=5, messagesPerSecond=5, intervalSeconds=0.
+       Wait for completion. GET /status → sentCount == 5.
+
+  6. Thread/concurrency safety (Spring only)
+       Start two tasks simultaneously and verify each task's sentCount is
+       independent and accurate.
+
+================================================================================
+8. AUTHENTICATION / HEADERS
+================================================================================
+
+Every request from the frontend includes:
+  X-User-Id: <logged-in user id>
+
+Read this header for audit logging if needed. No authentication enforcement
+required at this layer.
+
+================================================================================
+9. SUMMARY
+================================================================================
+
+  Endpoint : GET /simulator/kafka/status/{taskId}
+  Purpose  : Return live task progress for UI polling (every 3 seconds)
+  Response : { taskId, status, sentCount, statusMessage }
+  Errors   : 404 if taskId not found
+  Key work : Update sentCount atomically in the publishing loop +
+             recalculate statusMessage after each burst
+
+================================================================================
+END OF PROMPT
+================================================================================
+

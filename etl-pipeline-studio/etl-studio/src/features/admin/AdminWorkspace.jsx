@@ -5,6 +5,9 @@ import ETLManagementScreen from '../etl-wizard/ETLManagementScreen.jsx'
 import AdminScreen from './AdminScreen.jsx'
 import AdminSideMenu from './AdminSideMenu.jsx'
 import UDFScreen from './UDFScreen.jsx'
+import KafkaSimulatorScreen from './KafkaSimulatorScreen.jsx'
+
+const ADMIN_MODES = ['etl-admin', 'udf-admin', 'simulator']
 
 export default function AdminWorkspace() {
   const { state, actions } = useWizard()
@@ -12,10 +15,17 @@ export default function AdminWorkspace() {
   const isAdminUser = user?.role === 'admin'
 
   const activeMode = useMemo(() => (
-    isAdminUser && ['etl-admin', 'udf-admin'].includes(state.navigationMode)
+    isAdminUser && ADMIN_MODES.includes(state.navigationMode)
       ? state.navigationMode
       : 'etl-management'
   ), [isAdminUser, state.navigationMode])
+
+  function renderContent() {
+    if (activeMode === 'etl-admin') return <AdminScreen />
+    if (activeMode === 'udf-admin') return <UDFScreen />
+    if (activeMode === 'simulator') return <KafkaSimulatorScreen />
+    return <ETLManagementScreen />
+  }
 
   return (
     <div data-testid="admin-workspace" style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
@@ -31,7 +41,7 @@ export default function AdminWorkspace() {
       )}
 
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {activeMode === 'etl-admin' ? <AdminScreen /> : activeMode === 'udf-admin' ? <UDFScreen /> : <ETLManagementScreen />}
+        {renderContent()}
       </div>
     </div>
   )

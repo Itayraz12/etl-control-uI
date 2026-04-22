@@ -1,0 +1,412 @@
+================================================================================
+BACKEND AGENT PROMPT — Kafka Simulator REST API
+================================================================================
+
+You are a backend developer.
+Your task is to implement the Kafka Simulator REST API consumed by the ETL Studio
+frontend UI. The frontend is already built and expects the exact contract described
+below. Do not change the API contract.
+
+================================================================================
+1. CONTEXT
+================================================================================
+
+The ETL Studio UI has a "Simulators" admin page that allows users to publish
+synthetic test messages to a Kafka topic at controlled rates. Each simulation is
+called a "task". The frontend manages tasks row by row: start, stop, and delete.
+
+The user configures per task:
+  - Kafka broker environment (HOME or OFFICE)
+  - Kafka topic name
+  - Message format (json | csv | xml | protobuf | plain)
+  - Sample message payload (a text template)
+  - Messages per second (burst rate)
+  - Total messages to send (-1 = unlimited)
+  - Interval in seconds between bursts (0 = once, then stop)
+
+================================================================================
+2. BASE URL
+================================================================================
+
+All endpoints are rooted at:
+
+  http://<host>:8080/api/simulator/kafka
+
+The frontend service file uses:
+  API_BASE = process.env.VITE_API_BASE  (default: http://localhost:8080/api)
+  SIMULATOR_BASE = ${API_BASE}/simulator/kafka
+
+================================================================================
+3. AUTHENTICATION / HEADERS
+================================================================================
+
+Every request from the frontend includes a custom header:
+
+  X-User-Id: <logged-in user id>
+
+The backend should read this header for audit logging. It does NOT need to
+enforce authentication at this layer (auth is handled upstream).
+
+================================================================================
+4. ENDPOINTS TO IMPLEMENT
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1  POST /simulator/kafka/test-connection
+     Test connectivity to a Kafka broker environment and verify a topic exists
+--------------------------------------------------------------------------------
+
+Request body (application/json):
+  {
+    "environment": string,   // "HOME" or "OFFICE"
+    "topic":       string    // Kafka topic name to verify
+  }
+
+Success response (HTTP 200, application/json):
+  {
+    "success":        true,
+    "brokerAddress":  string,          // resolved bootstrap address, e.g. "localhost:9092"
+    "latencyMs":      number,          // round-trip time to the broker in milliseconds
+    "topicExists":    boolean,         // true if the topic was found on the broker
+    "partitionCount": number | null,   // number of partitions if topic exists, else null
+    "message":        string           // e.g. "Connected to localhost:9092 — topic found (3 partitions)"
+                                       //   or "Connected to localhost:9092 — topic does not exist"
+  }
+
+Error response (HTTP 4xx/5xx, application/json):
+  {
+    "message": string   // e.g. "Connection refused: localhost:9092"
+  }
+
+Behaviour:
+  - Look up the broker bootstrap address for the given environment.
+  - Attempt a lightweight metadata fetch against the broker to verify real
+    connectivity and measure round-trip latency.
+  - After a successful connection, check whether the specified topic exists on
+    the broker (via a metadata or describeTopics call).
+  - If the topic exists, set topicExists=true and populate partitionCount.
+  - If the topic does not exist, set topicExists=false and partitionCount=null.
+    This is NOT an error — return HTTP 200 so the UI can show a warning.
+  - If the environment is unknown, return HTTP 400.
+  - If the broker is unreachable, return HTTP 502 with a descriptive message.
+  - This call must complete within 5 seconds; return HTTP 504 if it times out.
+
+Note: both "environment" and "topic" are required fields.
+  Return HTTP 400 if either is missing or blank.
+
+--------------------------------------------------------------------------------
+4.2  POST /simulator/kafka/start
+     Start a new simulation task
+--------------------------------------------------------------------------------
+
+Request body (application/json):
+  {
+    "topic":             string, // Kafka topic name, e.g. "my-events-topic"
+    "environment":       string, // "HOME" or "OFFICE"
+    "messageFormat":     string, // "json" | "csv" | "xml" | "protobuf" | "plain"
+    "sampleMessage":     string, // payload template (see Section 5)
+    "messagesPerSecond": number, // >= 1, max 10000
+    "totalMessages":     number, // >= 1, or -1 for unlimited
+    "intervalSeconds":   number  // 0 = send once; >0 = repeat every N seconds
+  }
+
+Success response (HTTP 200, application/json):
+  {
+    "taskId":    string,   // unique ID for the created task (UUID recommended)
+    "status":    "running",
+    "startedAt": string    // ISO 8601 UTC timestamp
+  }
+
+Error response (HTTP 4xx/5xx, application/json):
+  {
+    "message": string      // human-readable error description
+  }
+
+Behaviour:
+  - Create a background task that connects to the Kafka broker for the given
+    environment and starts publishing messages to the specified topic.
+  - The task publishes task.messagesPerSecond messages per interval tick.
+  - If task.intervalSeconds == 0: publish one burst of messages then mark the
+    task as "completed" automatically.
+  - If task.intervalSeconds > 0: repeat the burst every intervalSeconds until
+    task.totalMessages have been sent, or indefinitely if totalMessages == -1.
+  - Before publishing each message, substitute placeholders in task.sampleMessage
+    (see Section 5).
+  - Return the taskId immediately; actual publishing happens asynchronously.
+
+--------------------------------------------------------------------------------
+4.2  POST /simulator/kafka/stop/{taskId}
+     Stop a running simulation task
+--------------------------------------------------------------------------------
+
+Path parameter:
+  taskId  — the ID returned by /start
+
+Request body: none
+
+Success response (HTTP 200, application/json):
+  {
+    "taskId":    string,
+    "status":    "stopped",
+    "stoppedAt": string    // ISO 8601 UTC timestamp
+  }
+
+Error response:
+  {
+    "message": string
+  }
+
+Behaviour:
+  - Gracefully stop the background task identified by taskId.
+  - If the task does not exist or is already stopped/completed, return HTTP 404
+    with { "message": "Task not found or already stopped" }.
+
+--------------------------------------------------------------------------------
+4.3  DELETE /simulator/kafka/tasks/{taskId}
+     Delete a simulation task record
+--------------------------------------------------------------------------------
+
+Path parameter:
+  taskId  — the ID returned by /start
+
+Success response (HTTP 200 or 204):
+  { "success": true }          // or empty body for 204
+
+Error response (HTTP 404):
+  { "message": "Task not found" }
+
+Behaviour:
+  - If the task is still running, stop it first, then delete the record.
+  - Remove the task from the in-memory or persistent task store.
+
+--------------------------------------------------------------------------------
+4.4  GET /simulator/kafka/tasks
+     List all known simulation tasks (active + recent)
+--------------------------------------------------------------------------------
+
+Success response (HTTP 200, application/json):
+  [
+    {
+      "taskId":            string,
+      "environment":       string,
+      "topic":             string,
+      "messageFormat":     string,
+      "messagesPerSecond": number,
+      "totalMessages":     number,
+      "intervalSeconds":   number,
+      "status":            string,   // "running" | "stopped" | "completed" | "error"
+      "sentCount":         number,   // messages published so far
+      "startedAt":         string,
+      "stoppedAt":         string | null
+    },
+    ...
+  ]
+
+Behaviour:
+  - Return all tasks created in the current server session (or persisted store).
+  - Order by startedAt descending (newest first).
+  - An empty list [] is a valid response when no tasks exist.
+
+--------------------------------------------------------------------------------
+4.5  GET /simulator/kafka/status/{taskId}
+     Get the current live status of a simulation task (used for UI polling)
+--------------------------------------------------------------------------------
+
+Path parameter:
+  taskId  — the ID returned by /start
+
+Success response (HTTP 200, application/json):
+  {
+    "taskId":        string,
+    "status":        string,   // "running" | "stopped" | "completed" | "error"
+    "sentCount":     number,   // total messages published so far
+    "statusMessage": string    // short human-readable status detail, e.g. "42 / 100 sent"
+  }
+
+Error response (HTTP 404):
+  { "message": "Task not found" }
+
+Behaviour:
+  - The UI polls this endpoint every 3 seconds for each running task.
+  - Return the latest sentCount and status without blocking.
+  - When the task finishes naturally (totalMessages reached, or intervalSeconds==0
+    after one burst), set status to "completed".
+  - The UI will update its row badge and sent counter from this response.
+
+================================================================================
+5. STATUS COMMUNICATION STRATEGY
+================================================================================
+
+The UI uses HTTP polling (every 3 seconds) to receive backend status updates.
+There is intentionally no WebSocket or SSE connection required.
+
+  UI (running task row)
+      │
+      │  GET /simulator/kafka/status/{taskId}   every 3 s
+      ▼
+  Backend task registry
+      │
+      │  returns { status, sentCount, statusMessage }
+      ▼
+  UI updates the row badge + sent counter
+
+The polling loop starts automatically when a task transitions to "running"
+and stops as soon as runningCount drops to 0 (all tasks stopped/completed).
+
+================================================================================
+6. PLACEHOLDER SUBSTITUTION
+================================================================================
+
+Before publishing each individual message, replace the following tokens inside
+the sampleMessage string:
+
+  {{uuid}}   →  a newly generated UUID v4 (unique per message)
+  {{value}}  →  a random numeric value between 1 and 1000 (or configurable)
+  {{now}}    →  current UTC timestamp in ISO 8601 format
+                e.g.  2026-04-22T10:35:00.000Z
+
+The substitution must happen per-message (not once per task), so each published
+message gets a unique {{uuid}} and a fresh {{now}}.
+
+================================================================================
+6. KAFKA BROKER CONFIGURATION
+================================================================================
+
+The frontend passes environment = "HOME" or "OFFICE".
+The backend must maintain a mapping from environment name to Kafka broker
+bootstrap address, for example:
+
+  HOME   →  localhost:9092
+  OFFICE →  kafka.office.internal:9092
+
+These mappings should be externalized in application configuration
+(application.yml, .env, or equivalent), NOT hardcoded.
+
+Example application.yml:
+  kafka:
+    environments:
+      HOME:   localhost:9092
+      OFFICE: kafka.office.internal:9092
+
+The Kafka producer should be created (or reused from a pool) per environment.
+
+================================================================================
+7. MESSAGE FORMAT HANDLING
+================================================================================
+
+The messageFormat field is informational for the backend. The backend publishes
+the sampleMessage string as-is (after placeholder substitution) regardless of
+format. The Kafka message value is always a UTF-8 string.
+
+For "protobuf" format, the sampleMessage contains a base64-encoded binary
+payload. The backend must:
+  1. Decode the base64 string to raw bytes.
+  2. Publish those raw bytes (not the base64 string) as the Kafka message value.
+
+For all other formats (json, csv, xml, plain), publish the UTF-8 string directly.
+
+================================================================================
+8. CONCURRENCY & LIFECYCLE
+================================================================================
+
+- Multiple tasks can run simultaneously (no artificial limit, but respect
+  available system resources).
+- Each task runs in its own thread / async coroutine / scheduled job.
+- A task must stop cleanly when:
+    a) totalMessages have been sent (auto-stop)
+    b) intervalSeconds == 0 after the first burst (auto-stop)
+    c) A /stop or DELETE request is received (manual stop)
+    d) The server shuts down (graceful shutdown)
+- Maintain a task registry (in-memory map is sufficient) to track active tasks.
+- On server restart the task registry is empty (not persisted between restarts,
+  unless the team decides to add persistence later).
+
+================================================================================
+9. ERROR HANDLING
+================================================================================
+
+All error responses must use the shape:
+  { "message": "<human readable description>" }
+
+Status codes:
+  400  Bad Request     — missing required fields or invalid values
+  404  Not Found       — taskId does not exist
+  409  Conflict        — e.g. trying to start a task that is already running
+                          (if task IDs are reused)
+  500  Internal Error  — Kafka producer failure, connection refused, etc.
+
+For Kafka connection failures, include the root cause in the "message" field.
+
+================================================================================
+10. TECHNOLOGY SUGGESTIONS (non-binding)
+================================================================================
+
+The rest of the ETL Studio backend is Spring Boot / Java or Node.js.
+Choose whichever aligns with the existing backend stack.
+
+If Spring Boot:
+  - Use spring-kafka KafkaTemplate for producing messages.
+  - Use @Async or a ScheduledExecutorService for background tasks.
+  - Expose endpoints via @RestController.
+  - Configuration via @ConfigurationProperties for environment→broker mapping.
+
+If Node.js:
+  - Use the `kafkajs` library.
+  - Use setInterval / setTimeout for task scheduling.
+  - Store tasks in a Map<taskId, taskHandle>.
+
+================================================================================
+11. TESTING REQUIREMENTS
+================================================================================
+
+Provide unit/integration tests covering:
+
+  1. POST /test-connection — known environment + existing topic → 200, topicExists=true, partitionCount>=1
+  2. POST /test-connection — known environment + non-existing topic → 200, topicExists=false
+  3. POST /test-connection — unknown environment → 400
+  4. POST /test-connection — broker unreachable → 502
+  5. POST /test-connection — missing topic field → 400
+  6. POST /start — valid payload → 200 with taskId
+  7. POST /start — missing environment field → 400
+  8. POST /start — unknown environment → 400 or 404
+  9. GET  /status/{taskId} — running task → 200 with sentCount incrementing
+ 10. GET  /status/{taskId} — completed task → 200 with status "completed"
+ 11. GET  /status/{taskId} — unknown taskId → 404
+ 12. POST /stop/{taskId} — running task → 200 stopped
+ 13. POST /stop/{taskId} — unknown taskId → 404
+ 14. DELETE /tasks/{taskId} — existing task → 200/204
+ 15. DELETE /tasks/{taskId} — unknown taskId → 404
+ 16. GET /tasks — returns list including started tasks
+ 17. Placeholder substitution — each message gets unique {{uuid}} and {{now}}
+ 18. intervalSeconds == 0 → task auto-completes after one burst, status → "completed"
+  4. POST /start — valid payload → 200 with taskId
+  2. POST /start — missing environment field → 400
+  3. POST /start — unknown environment → 400 or 404
+  4. POST /stop/{taskId} — running task → 200 stopped
+  5. POST /stop/{taskId} — unknown taskId → 404
+  6. DELETE /tasks/{taskId} — existing task → 200/204
+  7. DELETE /tasks/{taskId} — unknown taskId → 404
+  8. GET /tasks — returns list including started tasks
+  9. Placeholder substitution — each message gets unique {{uuid}} and {{now}}
+ 10. intervalSeconds == 0 → task auto-completes after one burst
+
+Use an embedded Kafka (e.g. EmbeddedKafkaBroker for Spring, or kafkajs in-memory
+mock) for integration tests. Do not depend on an external broker in CI.
+
+================================================================================
+12. SUMMARY OF ENDPOINTS
+================================================================================
+
+  METHOD  PATH                                DESCRIPTION
+  ──────  ──────────────────────────────────  ──────────────────────────────────
+  POST    /simulator/kafka/test-connection    Test broker connectivity + topic
+  POST    /simulator/kafka/start              Start a simulation task
+  GET     /simulator/kafka/status/{taskId}    Poll live task status (every 3 s)
+  POST    /simulator/kafka/stop/{taskId}      Stop a running task
+  DELETE  /simulator/kafka/tasks/{taskId}     Delete a task record
+  GET     /simulator/kafka/tasks              List all tasks
+
+================================================================================
+END OF PROMPT
+================================================================================
+

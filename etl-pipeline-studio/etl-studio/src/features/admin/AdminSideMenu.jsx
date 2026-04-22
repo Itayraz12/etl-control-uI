@@ -20,6 +20,12 @@ const MENU_ITEMS = [
     description: 'Review, approve, and delete UDFs',
     icon: '⚙️',
   },
+  {
+    id: 'simulator',
+    label: 'Simulators',
+    description: 'Kafka message simulators for testing',
+    icon: '📡',
+  },
 ]
 
 export default function AdminSideMenu({ activeMode = 'etl-management', onSelect }) {
