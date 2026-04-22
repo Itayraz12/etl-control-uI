@@ -20,7 +20,7 @@ export function normalizeTeamNames(payload) {
 }
 
 export async function fetchTeamNames() {
-  const response = await fetchWithUserId(`${API_BASE}/backend/teamNames`)
+  const response = await fetchWithUserId(`${API_BASE}/teamNames`)
   if (!response.ok) {
     throw new Error(`Failed to fetch team names: HTTP ${response.status}`)
   }

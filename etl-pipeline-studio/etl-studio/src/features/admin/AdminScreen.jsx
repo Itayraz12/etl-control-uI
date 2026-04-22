@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { Card, CardTitle } from '../../shared/components/index.jsx'
 import TeamManagementTable from './TeamManagementTable.jsx'
 import UserManagementTable from './UserManagementTable.jsx'
+import AdminUsersTable from './AdminUsersTable.jsx'
 
 const ADMIN_TABS = [
   { id: 'users', label: 'User Management', description: 'Manage users and team assignments' },
   { id: 'teams', label: 'Team Management', description: 'Manage teams and DevOps ownership' },
+  { id: 'admin-users', label: 'Admin Users', description: 'Grant or revoke admin privileges' },
 ]
 
 export default function AdminScreen() {
@@ -52,8 +54,9 @@ export default function AdminScreen() {
         </div>
       </Card>
 
-      {activeTab === 'users' ? <UserManagementTable /> : <TeamManagementTable />}
+      {activeTab === 'users' && <UserManagementTable />}
+      {activeTab === 'teams' && <TeamManagementTable />}
+      {activeTab === 'admin-users' && <AdminUsersTable />}
     </div>
   )
 }
-

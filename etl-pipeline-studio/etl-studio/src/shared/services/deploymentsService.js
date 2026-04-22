@@ -633,8 +633,8 @@ export async function fetchDeployments(teamName = 'default', useMock = false, { 
 
     try {
       const url = includeAllTeams
-        ? `${API_BASE}/backend/deployments`
-        : `${API_BASE}/backend/deployments?teamName=${encodeURIComponent(teamName)}`;
+        ? `${API_BASE}/deployments`
+        : `${API_BASE}/deployments?teamName=${encodeURIComponent(teamName)}`;
       console.log('🔵 Fetching deployments from:', url);
 
       const response = await fetchWithUserId(url);
@@ -775,7 +775,7 @@ export async function stopDeployment(target, useMock = false) {
   } else {
     try {
       const params = buildDeploymentIdentityParams(deployment)
-      const url = `${API_BASE}/backend/deployments/stop?${params.toString()}`;
+      const url = `${API_BASE}/backend/stop?${params.toString()}`;
       console.log('🔵 Stopping deployment:', id || `${deployment.productSource}/${deployment.productType}`);
       console.log('   URL:', url);
 

@@ -3,7 +3,8 @@ import { fetchWithUserId } from './requestHeaders.js'
 
 const ADMIN_TEAMS_PATH = `${API_BASE}/backend/admin/teams`
 const ADMIN_USERS_PATH = `${API_BASE}/backend/admin/users`
-const ADMIN_UDFS_PATH = `${API_BASE}/backend/admin/udfs`
+const ADMIN_UDFS_PATH  = `${API_BASE}/backend/admin/udfs`
+const ADMIN_SYSTEM_ADMINS_PATH = `${API_BASE}/backend/admin/admin-users`
 
 const VALID_UDF_TYPES = new Set(['transformer', 'filter'])
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-.]+)?(?:\+[0-9A-Za-z-.]+)?$/
@@ -89,7 +90,24 @@ const INITIAL_MOCK_UDFS = [
 
 let mockTeamsStore = INITIAL_MOCK_TEAMS.map(team => ({ ...team }))
 let mockUsersStore = INITIAL_MOCK_USERS.map(user => ({ ...user }))
-let mockUdfsStore = INITIAL_MOCK_UDFS.map(udf => ({ ...udf }))
+let mockUdfsStore  = INITIAL_MOCK_UDFS.map(udf => ({ ...udf }))
+
+const INITIAL_MOCK_SYSTEM_ADMINS = [
+  {
+    id: 'admin-alice',
+    userId: 'alice',
+    createdAt: '2026-01-10T09:00:00.000Z',
+    updatedAt: '2026-03-08T14:20:00.000Z',
+  },
+  {
+    id: 'admin-dave',
+    userId: 'dave',
+    createdAt: '2026-02-14T11:00:00.000Z',
+    updatedAt: '2026-04-01T10:00:00.000Z',
+  },
+]
+
+let mockSystemAdminsStore = INITIAL_MOCK_SYSTEM_ADMINS.map(a => ({ ...a }))
 
 function asTrimmedString(value, fallback = '') {
   if (value == null) return fallback
@@ -276,7 +294,8 @@ function validateNormalizedUdfRecord(udf, existingUdfs = [], previousId = '') {
 export function resetAdminServiceMockData() {
   mockTeamsStore = INITIAL_MOCK_TEAMS.map(team => ({ ...team }))
   mockUsersStore = INITIAL_MOCK_USERS.map(user => ({ ...user }))
-  mockUdfsStore = INITIAL_MOCK_UDFS.map(udf => ({ ...udf }))
+  mockUdfsStore  = INITIAL_MOCK_UDFS.map(udf => ({ ...udf }))
+  mockSystemAdminsStore = INITIAL_MOCK_SYSTEM_ADMINS.map(a => ({ ...a }))
 }
 
 export async function fetchAdminTeams(useMock = true) {
@@ -569,3 +588,89 @@ export async function deleteAdminUser(userId, useMock = true) {
   return { success: true }
 }
 
+// ── System / privileged admin users ──────────────────────────────────────
+// These are the users that hold the "admin" role (distinct from the generic
+// user-to-team assignments managed by the User Management table).
+
+function normalizeSystemAdmin(record, index = 0) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return null
+  const userId = asTrimmedString(record.userId ?? record.userID ?? record.username ?? record.id)
+  if (!userId) return null
+  return {
+    id:        asTrimmedString(record.id ?? record.userId, `admin-${index + 1}`),
+    userId,
+    createdAt: normalizeDateValue(record.createdAt ?? record.dateOfCreate ?? record.created_at),
+    updatedAt: normalizeDateValue(record.updatedAt ?? record.modifiedAt ?? record.dateOfChange ?? record.updated_at),
+  }
+}
+
+function normalizeSystemAdmins(payload) {
+  return extractCollectionPayload(payload)
+    .map((record, index) => normalizeSystemAdmin(record, index))
+    .filter(Boolean)
+}
+
+/**
+ * GET /backend/admin/admin-users
+ * Returns the list of privileged admin users.
+ */
+export async function fetchAdminSystemAdmins(useMock = true) {
+  if (useMock) {
+    await new Promise(resolve => setTimeout(resolve, 80))
+    return mockSystemAdminsStore.map(a => ({ ...a }))
+  }
+
+  const response = await fetchWithUserId(ADMIN_SYSTEM_ADMINS_PATH, {
+    headers: { Accept: 'application/json, text/plain' },
+  })
+  const payload = await ensureOkResponse(response, 'Failed to fetch admin users')
+  return normalizeSystemAdmins(payload)
+}
+
+/**
+ * POST /backend/admin/admin-users
+ * Grants admin privileges to a user.
+ */
+export async function addAdminSystemAdmin({ userId }, useMock = true) {
+  const normalizedUserId = asTrimmedString(userId)
+  if (!normalizedUserId) throw new Error('User ID is required.')
+
+  if (useMock) {
+    await new Promise(resolve => setTimeout(resolve, 80))
+    const existing = mockSystemAdminsStore.find(a => a.userId === normalizedUserId)
+    if (existing) throw new Error(`User "${normalizedUserId}" is already an admin.`)
+    const now = new Date().toISOString()
+    const record = normalizeSystemAdmin({ id: `admin-${normalizedUserId}`, userId: normalizedUserId, createdAt: now, updatedAt: now })
+    mockSystemAdminsStore = [record, ...mockSystemAdminsStore]
+    return record
+  }
+
+  const response = await fetchWithUserId(ADMIN_SYSTEM_ADMINS_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/plain' },
+    body: JSON.stringify({ userId: normalizedUserId }),
+  })
+  const createdPayload = await ensureOkResponse(response, 'Failed to add admin user')
+  return normalizeSystemAdmin(createdPayload) ?? normalizeSystemAdmin({ userId: normalizedUserId })
+}
+
+/**
+ * DELETE /backend/admin/admin-users/{id}
+ * Revokes admin privileges from a user.
+ */
+export async function removeAdminSystemAdmin(id, useMock = true) {
+  const normalizedId = asTrimmedString(id)
+
+  if (useMock) {
+    await new Promise(resolve => setTimeout(resolve, 80))
+    mockSystemAdminsStore = mockSystemAdminsStore.filter(a => a.id !== normalizedId)
+    return { success: true }
+  }
+
+  const response = await fetchWithUserId(`${ADMIN_SYSTEM_ADMINS_PATH}/${encodeURIComponent(normalizedId)}`, {
+    method: 'DELETE',
+    headers: { Accept: 'application/json, text/plain' },
+  })
+  await ensureOkResponse(response, 'Failed to remove admin user')
+  return { success: true }
+}

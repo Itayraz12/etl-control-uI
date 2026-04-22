@@ -492,15 +492,72 @@ Updates only the approval state of an existing UDF.
 Deletes a UDF row.
 
 - Method: `DELETE`
-- Full default URL example: `http://localhost:8080/api/backend/admin/udfs/udf-1`
+- Full default URL example: `http://localhost:8080/api/backend/admin/users/alice`
 - Path params:
   - `id`
 - Headers used by frontend:
   - `Accept: application/json, text/plain`
 - Service: `src/shared/services/adminService.js`
-- Consumed by: `src/features/admin/UDFManagementTable.jsx`
+- Consumed by: `src/features/admin/UserManagementTable.jsx`
 
----
+### GET `/backend/admin/admin-users`
+Returns the list of users with admin (privileged) system access.
+
+- Method: `GET`
+- Full default URL: `http://localhost:8080/api/backend/admin/admin-users`
+- Headers used by frontend:
+  - `Accept: application/json, text/plain`
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/AdminUsersTable.jsx`
+
+Expected response shape:
+
+```json
+[
+  {
+    "id": "admin-alice",
+    "userId": "alice",
+    "createdAt": "2026-01-10T09:00:00.000Z",
+    "updatedAt": "2026-03-08T14:20:00.000Z"
+  }
+]
+```
+
+The frontend also accepts these field aliases when normalizing the payload:
+
+- `userId` / `userID` / `username` / `id`
+- `createdAt` / `dateOfCreate` / `created_at`
+- `updatedAt` / `modifiedAt` / `dateOfChange` / `updated_at`
+
+### POST `/backend/admin/admin-users`
+Grants admin privileges to a user.
+
+- Method: `POST`
+- Full default URL: `http://localhost:8080/api/backend/admin/admin-users`
+- Headers used by frontend:
+  - `Content-Type: application/json`
+  - `Accept: application/json, text/plain`
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/AdminUsersTable.jsx`
+
+Request body:
+
+```json
+{ "userId": "alice" }
+```
+
+### DELETE `/backend/admin/admin-users/{id}`
+Revokes admin privileges from a user.
+
+- Method: `DELETE`
+- Full default URL example: `http://localhost:8080/api/backend/admin/admin-users/admin-alice`
+- Path params:
+  - `id`
+- Headers used by frontend:
+  - `Accept: application/json, text/plain`
+- Service: `src/shared/services/adminService.js`
+- Consumed by: `src/features/admin/AdminUsersTable.jsx`
+
 
 ## Quick List
 

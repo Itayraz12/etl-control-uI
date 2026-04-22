@@ -2,7 +2,7 @@ import { API_BASE } from './appConfig.js'
 import { fetchWithUserId } from './requestHeaders.js'
 import { normalizeEnvironmentValue } from '../types/index.js'
 
-const KAFKA_TEST_CONNECTION_PATH = `${API_BASE}/backend/kafka/test-connection`
+const KAFKA_TEST_CONNECTION_PATH = `${API_BASE}/kafka/test-connection`
 
 export function buildKafkaTestConnectionUrl({ topic, environment }) {
   const url = new URL(KAFKA_TEST_CONNECTION_PATH)
