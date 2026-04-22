@@ -213,7 +213,7 @@ export default function SummaryStep() {
   }, [deployment.isOpen])
 
   useEffect(() => {
-    if (!draftModal?.navigateToManagement) {
+    if (!draftModal?.navigateToManagement || !draftModal?.autoClose) {
       return undefined
     }
 
@@ -549,7 +549,7 @@ ${sinkAdditionalConfigYaml}` : ''}
   const hasChangesComparedToOriginalDraft = !state.originalDraftYaml
     || !originalPipelineSignature
     || originalPipelineSignature !== currentPipelineSignature
-    || originalDraftYaml !== yaml
+    || (!state.originalDraftSignature && originalDraftYaml !== yaml)
 
   const validations = getSummaryValidations(state, targetSchema, transformers, filterOperators)
   const canDeployFromChecklist = canDeployFromSummaryChecklist(state, targetSchema, transformers, filterOperators)
@@ -758,6 +758,17 @@ ${sinkAdditionalConfigYaml}` : ''}
   }
 
   const handleSaveDraft = async () => {
+    if (state.originalDraftYaml && !hasChangesComparedToOriginalDraft) {
+      setDraftModal({
+        title: 'No Changes Detected',
+        icon: '⚠️',
+        accent: 'var(--danger)',
+        message: 'No changes were detected compared to the existing pipeline YAML. The system will not save anything.',
+        navigateToManagement: true,
+      })
+      return
+    }
+
     try {
       setSavingDraft(true)
       await saveDraftConfiguration({
@@ -773,6 +784,7 @@ ${sinkAdditionalConfigYaml}` : ''}
         accent: 'var(--success)',
         message: 'The YAML draft was saved successfully.',
         navigateToManagement: true,
+        autoClose: true,
       })
     } catch (error) {
       setDraftModal({
@@ -1004,6 +1016,7 @@ ${sinkAdditionalConfigYaml}` : ''}
               transform: 'translate(-50%, -50%)',
               background: 'var(--surf)',
               border: '1px solid var(--border)',
+              borderRadius: '12px',
               boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
               zIndex: 1000,
               minWidth: '360px',
@@ -1039,7 +1052,7 @@ ${sinkAdditionalConfigYaml}` : ''}
               justifyContent: 'flex-end',
               background: 'var(--bg)',
             }}>
-              <Btn v="primary" onClick={closeDraftModal}>Close</Btn>
+              <Btn v="primary" onClick={closeDraftModal}>{draftModal.navigateToManagement ? 'OK' : 'Close'}</Btn>
             </div>
           </div>
         </>

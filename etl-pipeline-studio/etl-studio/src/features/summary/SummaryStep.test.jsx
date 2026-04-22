@@ -432,7 +432,7 @@ filters:
 
     render(<SummaryStep />)
 
-    expect(screen.getByRole('button', { name: /save & deploy/i })).toHaveTextContent(' Save & Deploy')
+    expect(screen.getByRole('button', { name: /save & deploy/i })).toHaveTextContent(/Save & Deploy/)
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /save & deploy/i }))
@@ -689,6 +689,47 @@ filters:
         fontWeight: '400',
       })
     })
+  })
+
+  it('shows a "No Changes Detected" modal and does NOT call saveDraftConfiguration when editing an unchanged draft', async () => {
+    // Set originalDraftYaml to a non-empty value so the "edit" path is taken,
+    // and set originalDraftSignature to the current signature so no change is detected.
+    mockWizardState.originalDraftYaml = 'metadata:\n  id: some-id\n'
+    mockWizardState.originalDraftSignature = buildPipelineChangeSignature(mockWizardState)
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save draft/i }))
+      await Promise.resolve()
+    })
+
+    expect(mockSaveDraftConfiguration).not.toHaveBeenCalled()
+    expect(screen.getByText('No Changes Detected')).toBeInTheDocument()
+    expect(screen.getByText(/no changes were detected compared to the existing pipeline yaml/i)).toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }))
+      await Promise.resolve()
+    })
+
+    expect(mockActions.setNavigationMode).toHaveBeenCalledWith('etl-management')
+  })
+
+  it('proceeds with saving when there ARE changes compared to the original draft', async () => {
+    // Set a non-empty original YAML but a different (stale) signature so the state is "changed"
+    mockWizardState.originalDraftYaml = 'metadata:\n  id: some-id\n'
+    mockWizardState.originalDraftSignature = 'stale-signature-that-differs'
+
+    render(<SummaryStep />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save draft/i }))
+      await Promise.resolve()
+    })
+
+    expect(mockSaveDraftConfiguration).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Draft Saved')).toBeInTheDocument()
   })
 
   it('uses a light YAML preview palette when the summary is in light mode', () => {
