@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardTitle, FormRow, FormGroup, Btn, Chip } from '../../shared/components/index.jsx'
-import { METADATA_LOCATIONS } from '../../shared/services/appConfig.js'
+import { ENVIRONMENT_OPTIONS } from '../../shared/types/index.js'
 import { startSimulation, stopSimulation, deleteSimulation, testKafkaConnection, getSimulationStatus } from '../../shared/services/simulatorService.js'
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -466,8 +466,8 @@ export default function KafkaSimulatorScreen() {
               onChange={e => { setBrokerEnv(e.target.value); setConnTest(null) }}
             >
               <option value="">Select environment…</option>
-              {METADATA_LOCATIONS.map(loc => (
-                <option key={loc} value={loc}>{loc}</option>
+              {ENVIRONMENT_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
           </FormGroup>

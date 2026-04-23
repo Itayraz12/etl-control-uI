@@ -11,6 +11,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      '/api/simulator': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+      },
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,

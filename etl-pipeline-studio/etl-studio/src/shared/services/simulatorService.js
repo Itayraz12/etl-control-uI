@@ -1,7 +1,7 @@
-import { API_BASE } from './appConfig.js'
+import { API_BASE_SIM } from './appConfig.js'
 import { fetchWithUserId } from './requestHeaders.js'
 
-const SIMULATOR_BASE = `${API_BASE}/simulator/kafka`
+const SIMULATOR_BASE = `${API_BASE_SIM}/simulator/kafka`
 
 async function readPayload(response) {
   const contentType = response.headers.get('content-type') || ''

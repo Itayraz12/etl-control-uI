@@ -12,6 +12,7 @@ describe('appConfig', () => {
 
   it('falls back to the default API base and package version when env overrides are absent', async () => {
     vi.stubEnv('VITE_API_BASE', '')
+    vi.stubEnv('VITE_API_BASE_SIM', '')
     vi.stubEnv('VITE_APP_VERSION', '')
     vi.stubEnv('VITE_PRODUCT_CODE_LABEL', '')
     vi.stubEnv('VITE_METADATA_LOCATIONS', '')
@@ -21,6 +22,7 @@ describe('appConfig', () => {
 
     const {
       API_BASE,
+      API_BASE_SIM,
       APP_VERSION,
       PRODUCT_CODE_LABEL,
       METADATA_LOCATIONS,
@@ -38,6 +40,7 @@ describe('appConfig', () => {
     } = await loadFreshAppConfig()
 
     expect(API_BASE).toBe('http://localhost:8080/api')
+    expect(API_BASE_SIM).toBe('http://localhost:8083/api')
     expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+/)
     expect(PRODUCT_CODE_LABEL).toBe('Product Code')
     expect(METADATA_LOCATIONS).toEqual(['HOME', 'OFFICE'])
@@ -56,6 +59,7 @@ describe('appConfig', () => {
 
   it('uses external env parameters for API base and version when provided', async () => {
     vi.stubEnv('VITE_API_BASE', 'https://example.internal/api/')
+    vi.stubEnv('VITE_API_BASE_SIM', 'https://sim.internal/api/')
     vi.stubEnv('VITE_APP_VERSION', '9.9.9-rc.1')
     vi.stubEnv('VITE_PRODUCT_CODE_LABEL', 'External Param')
     vi.stubEnv('VITE_METADATA_LOCATIONS', 'remote, branch-office, remote')
@@ -65,6 +69,7 @@ describe('appConfig', () => {
 
     const {
       API_BASE,
+      API_BASE_SIM,
       APP_VERSION,
       PRODUCT_CODE_LABEL,
       METADATA_LOCATIONS,
@@ -83,6 +88,7 @@ describe('appConfig', () => {
     } = await loadFreshAppConfig()
 
     expect(API_BASE).toBe('https://example.internal/api')
+    expect(API_BASE_SIM).toBe('https://sim.internal/api')
     expect(APP_VERSION).toBe('9.9.9-rc.1')
     expect(PRODUCT_CODE_LABEL).toBe('External Param')
     expect(METADATA_LOCATIONS).toEqual(['REMOTE', 'BRANCH-OFFICE'])
@@ -99,6 +105,7 @@ describe('appConfig', () => {
     expect(TARGET_SAKNAY_YAML_KEY).toBe('sendToGoldenPath')
     expect(APP_CONFIG).toEqual({
       apiBase: 'https://example.internal/api',
+      apiBaseSim: 'https://sim.internal/api',
       version: '9.9.9-rc.1',
       productCodeLabel: 'External Param',
       metadataLocations: ['REMOTE', 'BRANCH-OFFICE'],

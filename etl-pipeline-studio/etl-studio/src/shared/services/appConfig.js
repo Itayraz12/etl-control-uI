@@ -1,4 +1,5 @@
 const DEFAULT_API_BASE = 'http://localhost:8080/api'
+const DEFAULT_API_BASE_SIM = 'http://localhost:8083/api'
 const DEFAULT_PRODUCT_CODE_LABEL = 'Product Code'
 const DEFAULT_SHADOW_LABEL = 'SHADOW'
 const DEFAULT_ASG_LABEL = 'ASG'
@@ -95,6 +96,7 @@ function buildYamlAliasKeys({
 }
 
 export const API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE, DEFAULT_API_BASE)
+export const API_BASE_SIM = normalizeApiBase(import.meta.env.VITE_API_BASE_SIM, DEFAULT_API_BASE_SIM)
 export const APP_VERSION = normalizeVersion(import.meta.env.VITE_APP_VERSION, __APP_VERSION__)
 export const PRODUCT_CODE_LABEL = normalizeDisplayLabel(import.meta.env.VITE_PRODUCT_CODE_LABEL, DEFAULT_PRODUCT_CODE_LABEL)
 export const SHADOW_LABEL = normalizeDisplayLabel(import.meta.env.VITE_SHADOW_LABEL, DEFAULT_SHADOW_LABEL)
@@ -119,6 +121,7 @@ export const TARGET_SAKNAY_YAML_KEY = YAML_LABEL_ALIASES.targetSaknayFlag
 
 export const APP_CONFIG = {
   apiBase: API_BASE,
+  apiBaseSim: API_BASE_SIM,
   version: APP_VERSION,
   productCodeLabel: PRODUCT_CODE_LABEL,
   shadowLabel: SHADOW_LABEL,
@@ -131,6 +134,7 @@ export const APP_CONFIG = {
 
 export {
   DEFAULT_API_BASE,
+  DEFAULT_API_BASE_SIM,
   DEFAULT_PRODUCT_CODE_LABEL,
   DEFAULT_SHADOW_LABEL,
   DEFAULT_ASG_LABEL,
