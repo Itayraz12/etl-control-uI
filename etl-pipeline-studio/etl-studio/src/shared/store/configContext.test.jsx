@@ -168,6 +168,7 @@ describe('ConfigProvider metadata prefetching', () => {
     })
 
     expect(fetchFilters).toHaveBeenCalledWith(false, { environment: 'CAP' })
+    expect(fetchTransformers).toHaveBeenCalledWith(false, { environment: 'CAP' })
   })
 
   it('reuses cached filter and transformer definitions when the loaded YAML dependencies are already present', async () => {
@@ -292,6 +293,40 @@ describe('ConfigProvider metadata prefetching', () => {
       expect(fetchFilters).toHaveBeenCalledTimes(2)
       expect(fetchTransformers).toHaveBeenCalledTimes(2)
     })
+  })
+
+  it('refetches transformers when the selected environment changes', async () => {
+    fetchTransformers
+      .mockResolvedValueOnce([
+        { _id: 'tf-upper-cap', name: 'Uppercase' },
+      ])
+      .mockResolvedValueOnce([
+        { _id: 'tf-upper-prod', name: 'Uppercase' },
+      ])
+
+    const view = render(
+      <ConfigProvider>
+        <PrefetchProbe step={STEP_SUMMARY} entityName="Product" environment="CAP" />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchTransformers).toHaveBeenCalledTimes(1)
+    })
+
+    expect(fetchTransformers).toHaveBeenNthCalledWith(1, false, { environment: 'CAP' })
+
+    view.rerender(
+      <ConfigProvider>
+        <PrefetchProbe step={STEP_SUMMARY} entityName="Product" environment="PROD" />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchTransformers).toHaveBeenCalledTimes(2)
+    })
+
+    expect(fetchTransformers).toHaveBeenNthCalledWith(2, false, { environment: 'PROD' })
   })
 })
 

@@ -80,6 +80,17 @@ export function buildFiltersUrl(query = {}, options = {}) {
   return url.toString()
 }
 
+export function buildTransformersUrl(query = {}, options = {}) {
+  const url = buildApiUrl('config/transformers', options)
+  const environment = normalizeEnvironmentValue(query.environment, query.environment ?? '')
+
+  if (environment) {
+    url.searchParams.set('environment', environment)
+  }
+
+  return url.toString()
+}
+
 function extractSchemaVersionFromYaml(yaml = '') {
   const match = String(yaml ?? '').match(/^\s*schemaVersion\s*:\s*(.+)$/m)
   return match?.[1]?.trim() || '1.0'
@@ -658,19 +669,19 @@ export async function fetchSchemaByExample({ example, fileName = '', contentType
  * Returns the transformer list.
  *
  * Mock  → MOCK_TRANSFORMERS (propsSchema already built from additionalProperites)
- * Live  → GET http://localhost:8080/api/config/transformers
+ * Live  → GET http://localhost:8080/api/config/transformers?environment=<CAP|PROD>
  *         propsSchema is built dynamically from additionalProperites so any
  *         new property added on the backend is surfaced in the UI automatically.
  *
  * Expected backend item shape:
  *   { _id, name, description, format, canonize, inputType, additionalProperites }
  */
-export async function fetchTransformers(useMock = true) {
+export async function fetchTransformers(useMock = true, { environment = '' } = {}) {
   if (useMock) {
     await new Promise(r => setTimeout(r, 150))
     return MOCK_TRANSFORMERS
   }
-  const raw = await fetchJson(`${API_BASE}/config/transformers`)
+  const raw = await fetchJson(buildTransformersUrl({ environment }))
   console.log('[configService] raw transformers from API:', JSON.stringify(raw, null, 2))
   return raw.map(t => {
     // API sends "additionalProperties" (correct spelling).

@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildFiltersUrl,
+  buildTransformersUrl,
   buildConfigurationYamlUrl,
   buildSchemaByExampleUrl,
   fetchEntitySchema,
   fetchFilters,
+  fetchTransformers,
   fetchRecordsPerDay,
   fetchStreamingContinuities,
   resetConfigServiceRequestCache,
@@ -70,6 +72,16 @@ describe('configService', () => {
 
     expect(buildFiltersUrl({ environment: '' })).toBe(
       'http://localhost:8080/api/config/filters'
+    )
+  })
+
+  it('builds transformer URLs with a normalized environment query parameter when provided', () => {
+    expect(buildTransformersUrl({ environment: 'prod' })).toBe(
+      'http://localhost:8080/api/config/transformers?environment=PROD'
+    )
+
+    expect(buildTransformersUrl({ environment: '' })).toBe(
+      'http://localhost:8080/api/config/transformers'
     )
   })
 
@@ -301,6 +313,46 @@ describe('configService', () => {
         additionalProperties: { options: ['sku', 'catalog'] },
       }),
     ])
+  })
+
+  it('fetches transformers from the environment-aware transformers endpoint', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([
+      {
+        _id: 'tf-001',
+        name: 'Uppercase',
+        description: 'Upper cases the input value.',
+        inputType: 'SINGLE',
+        additionalProperties: {
+          _required: ['locale'],
+          locale: 'en-US',
+        },
+      },
+    ]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(fetchTransformers(false, { environment: 'cap' })).resolves.toEqual([
+      expect.objectContaining({
+        _id: 'tf-001',
+        name: 'Uppercase',
+        propsSchema: [
+          {
+            key: 'locale',
+            label: 'Locale',
+            type: 'text',
+            default: '',
+            required: true,
+            description: 'en-US',
+          },
+        ],
+      }),
+    ])
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8080/api/config/transformers?environment=CAP',
+      { headers: { 'X-user-ID': 'user-123' } },
+    )
   })
 
   it('deduplicates concurrent entity schema fetches for the same entity but refetches on a later revisit', async () => {

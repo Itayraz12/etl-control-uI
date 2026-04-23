@@ -124,6 +124,11 @@ function buildFilterEnvironmentCacheKey(useMock, environment = '') {
   return `${useMock ? 'mock' : 'live'}::${normalizedEnvironment}`
 }
 
+function buildTransformerEnvironmentCacheKey(useMock, environment = '') {
+  const normalizedEnvironment = String(environment ?? '').trim().toUpperCase() || '__default__'
+  return `${useMock ? 'mock' : 'live'}::${normalizedEnvironment}`
+}
+
 // ── Step indices that need pre-fetched config data ────────────────────────
 export const STEP_METADATA      = 0   // needs entities
 export const STEP_FILTERS       = 3   // needs filter operators
@@ -178,6 +183,7 @@ export function ConfigProvider({ children }) {
   const filterRequestPromiseRef = useRef(null)
   const transformerRequestPromiseRef = useRef(null)
   const loadedFilterEnvironmentKeysRef = useRef(new Set())
+  const loadedTransformerEnvironmentKeysRef = useRef(new Set())
 
   const setMergedFilters = useCallback((nextFilters) => {
     setFilters((currentFilters) => {
@@ -228,11 +234,12 @@ export function ConfigProvider({ children }) {
     return filterRequestPromiseRef.current
   }, [setMergedFilters])
 
-  const loadTransformersIfNeeded = useCallback((useMock, { requiredMappings = [] } = {}) => {
-    const hasAnyTransformers = transformersRef.current.length > 0
+  const loadTransformersIfNeeded = useCallback((useMock, { environment = '', requiredMappings = [] } = {}) => {
+    const environmentCacheKey = buildTransformerEnvironmentCacheKey(useMock, environment)
+    const hasEnvironmentCache = loadedTransformerEnvironmentKeysRef.current.has(environmentCacheKey)
     const hasRequiredTransformerEntries = hasRequiredTransformers(transformersRef.current, requiredMappings)
 
-    if (hasAnyTransformers && hasRequiredTransformerEntries) {
+    if (hasEnvironmentCache && hasRequiredTransformerEntries) {
       return Promise.resolve(transformersRef.current)
     }
 
@@ -242,8 +249,9 @@ export function ConfigProvider({ children }) {
 
     fetchingTransformers.current = true
     setLoadingTransformers(true)
-    transformerRequestPromiseRef.current = fetchTransformers(useMock)
+    transformerRequestPromiseRef.current = fetchTransformers(useMock, { environment })
       .then((nextTransformers) => {
+        loadedTransformerEnvironmentKeysRef.current.add(environmentCacheKey)
         setMergedTransformers(nextTransformers)
         return transformersRef.current
       })
@@ -266,6 +274,7 @@ export function ConfigProvider({ children }) {
         requiredFilters: wizardState?.filters,
       }),
       loadTransformersIfNeeded(useMock, {
+        environment,
         requiredMappings: wizardState?.mappings,
       }),
     ])
@@ -372,6 +381,7 @@ export function ConfigProvider({ children }) {
 
     if (step === STEP_FIELD_MAPPING || step === STEP_SUMMARY) {
       loadTransformersIfNeeded(useMock, {
+        environment,
         requiredMappings,
       }).catch(console.error)
     }
