@@ -1,0 +1,194 @@
+UDF MANAGEMENT API SPECIFICATION
+================================
+
+This document outlines the UDF (User-Defined Function) data structure and REST API endpoints
+required for the backend implementation to support the UDF Management Table in the admin interface.
+
+================================================================================
+UDF DATA STRUCTURE
+================================================================================
+
+Each UDF object has the following properties:
+
+{
+  "id": "string",                    // Unique identifier (e.g., "udf-1")
+  "name": "string",                  // UDF name (e.g., "data_cleaner")
+  "type": "string",                  // Either "transformer" or "filter"
+  "description": "string",           // Description of the UDF functionality
+  "isActive": "boolean",             // Active status flag
+  "isApproved": "boolean",           // Approval status
+  "version": "string",               // Semantic version (e.g., "1.2.0")
+  "filePath": "string",              // Path to the UDF file/code
+  "team": "string",                  // Team responsible for the UDF
+  "dateApproved": "string|null",     // ISO date string or null
+  "createdAt": "string",             // ISO date string
+  "updatedAt": "string"              // ISO date string
+}
+
+================================================================================
+REST API ENDPOINTS
+================================================================================
+
+1. GET /api/backend/admin/udfs
+   Purpose: Fetch all UDFs
+   Method: GET
+   Headers: Content-Type: application/json
+   Response: Array of UDF objects
+
+   Example Response:
+   [
+     {
+       "id": "udf-1",
+       "name": "data_cleaner",
+       "type": "transformer",
+       "description": "Cleans and normalizes data fields",
+       "isActive": true,
+       "isApproved": true,
+       "version": "1.2.0",
+       "filePath": "/path/to/udf/file",
+       "team": "data_team",
+       "dateApproved": "2026-04-10T10:30:00.000Z",
+       "createdAt": "2026-03-18T10:30:00.000Z",
+       "updatedAt": "2026-04-12T10:30:00.000Z"
+     }
+   ]
+
+2. PUT /api/backend/admin/udfs/{udfId}
+   Purpose: Update UDF approval status
+   Method: PUT
+   Headers: Content-Type: application/json
+   URL Parameters: udfId (string)
+   Request Body:
+   {
+     "isApproved": "boolean"     // Required
+   }
+
+   Response: Updated UDF object (200 OK)
+
+   Business Logic:
+   - Update dateApproved to current timestamp if isApproved changes from false to true
+   - Keep existing dateApproved if already set and isApproved remains true
+   - Update updatedAt to current timestamp
+   - Preserve createdAt
+
+3. DELETE /api/backend/admin/udfs/{udfId}
+   Purpose: Delete a UDF
+   Method: DELETE
+   Headers: Content-Type: application/json
+   URL Parameters: udfId (string)
+
+   Response: 204 No Content
+
+================================================================================
+VALIDATION RULES
+================================================================================
+
+- name: Required, non-empty string
+- type: Required, must be either "transformer" or "filter"
+- description: Optional string
+- isActive: Optional boolean, defaults to true
+- isApproved: Required boolean
+- version: Optional string (should follow semantic versioning format like "1.2.0")
+- filePath: Optional string (file system path to UDF code)
+- team: Optional string (team name or identifier)
+
+================================================================================
+ERROR RESPONSES
+================================================================================
+
+HTTP Status Codes:
+- 200: Success
+- 204: No Content (for DELETE)
+- 400: Bad Request (validation errors)
+- 404: Not Found
+- 500: Internal Server Error
+
+Error Response Format:
+{
+  "error": "Error message",
+  "details": "Additional error information"
+}
+
+================================================================================
+DATABASE SCHEMA EXAMPLE (MySQL)
+================================================================================
+
+CREATE TABLE udfs (
+  id VARCHAR(50) PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  type ENUM('transformer', 'filter') NOT NULL,
+  description TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  is_approved BOOLEAN NOT NULL DEFAULT FALSE,
+  version VARCHAR(50),
+  file_path VARCHAR(255),
+  team VARCHAR(255),
+  date_approved TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  INDEX idx_name (name),
+  INDEX idx_type (type),
+  INDEX idx_is_active (is_active),
+  INDEX idx_is_approved (is_approved),
+  INDEX idx_team (team)
+);
+
+================================================================================
+SAMPLE UDF DATA
+================================================================================
+
+Here are some example UDFs for testing:
+
+1. Data Cleaner (Transformer)
+   - name: "data_cleaner"
+   - type: "transformer"
+   - description: "Cleans and normalizes data fields"
+   - isActive: true
+   - isApproved: true
+   - version: "1.2.0"
+   - filePath: "/path/to/udf/file"
+   - team: "data_team"
+
+2. Duplicate Filter (Filter)
+   - name: "duplicate_filter"
+   - type: "filter"
+   - description: "Filters out duplicate records based on key fields"
+   - isActive: true
+   - isApproved: true
+   - version: "2.1.3"
+   - filePath: "/path/to/udf/file"
+   - team: "data_team"
+
+3. Email Normalizer (Transformer)
+   - name: "email_normalizer"
+   - type: "transformer"
+   - description: "Normalizes email addresses to lowercase and validates format"
+   - isActive: true
+   - isApproved: true
+   - version: "1.0.5"
+   - filePath: "/path/to/udf/file"
+   - team: "data_team"
+
+
+================================================================================
+IMPLEMENTATION NOTES
+================================================================================
+
+1. All dates should be stored and returned as ISO 8601 formatted strings
+2. The frontend expects the API to be available at /api/backend/admin/udfs
+3. The dateApproved field should be automatically managed by the backend
+4. UDF names should be unique within the system
+5. UDFs are created through external processes (not via this API)
+6. Only approval status can be updated through the PUT endpoint
+7. Consider implementing soft deletes if audit trails are needed
+8. Add proper authentication/authorization middleware to protect admin endpoints
+9. Implement rate limiting and input sanitization for security
+10. Consider adding pagination for the GET endpoint if many UDFs are expected
+11. Add comprehensive logging for audit purposes
+12. Implement proper database transactions for data consistency
+13. isActive field provides a boolean flag for active/inactive status
+14. filePath should contain the absolute or relative path to the UDF source code file
+15. team field should reference the team responsible for maintaining the UDF
+16. Consider validating filePath exists and is accessible when provided
+17. Consider foreign key constraints for team field if teams are managed in a separate table
