@@ -57,11 +57,11 @@ Fetches available entities.
 - Service: `src/shared/services/configService.js`
 - Consumed by: `src/shared/store/configContext.jsx`
 
-### GET `/backend/schema/entity/{entityName}`
+### GET `/genome/schema/{entityName}`
 Fetches the target/entity schema for the selected entity.
 
 - Method: `GET`
-- Full default URL example: `http://localhost:8080/api/backend/schema/entity/Product`
+- Full default URL example: `http://localhost:8080/api/genome/schema/Product`
 - Path params:
   - `entityName`
 - Service: `src/shared/services/configService.js`
@@ -567,7 +567,7 @@ GET    /backend/teamNames
 GET    /config/transformers
 GET    /config/filters
 GET    /backbone/entities
-GET    /backend/schema/entity/{entityName}
+GET    /genome/schema/{entityName}
 POST   /backend/schemaByExample
 
 GET    /backend/configuration/draft/yaml

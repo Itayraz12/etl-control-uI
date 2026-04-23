@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ConfigProvider, STEP_FILTERS, STEP_METADATA, STEP_SUMMARY, useConfig } from './configContext.jsx'
+import { ConfigProvider, STEP_FIELD_MAPPING, STEP_FILTERS, STEP_METADATA, STEP_SUMMARY, useConfig } from './configContext.jsx'
 
 const fetchEntities = vi.fn()
 const fetchEntitySchema = vi.fn()
@@ -53,6 +53,20 @@ function PrefetchProbe({ step, entityName = '', environment = '', useMock = fals
       })}
     </div>
   )
+}
+
+function EnsureDefinitionsProbe({ wizardState, environment = '', useMock = false, reloadToken = 0, forceReloadTransformers = false, includeMetadataOptions = false }) {
+  const { ensureDefinitionsForWizardState } = useConfig()
+
+  useEffect(() => {
+    ensureDefinitionsForWizardState(wizardState, useMock, {
+      environment,
+      forceReloadTransformers,
+      includeMetadataOptions,
+    })
+  }, [ensureDefinitionsForWizardState, environment, forceReloadTransformers, includeMetadataOptions, reloadToken, useMock, wizardState])
+
+  return <div data-testid="ensure-definitions-probe" />
 }
 
 describe('ConfigProvider metadata prefetching', () => {
@@ -169,6 +183,50 @@ describe('ConfigProvider metadata prefetching', () => {
 
     expect(fetchFilters).toHaveBeenCalledWith(false, { environment: 'CAP' })
     expect(fetchTransformers).toHaveBeenCalledWith(false, { environment: 'CAP' })
+  })
+
+  it('refetches transformers every time the user enters the field mapping step', async () => {
+    fetchTransformers
+      .mockResolvedValueOnce([
+        { _id: 'tf-upper-cap-v1', name: 'Uppercase' },
+      ])
+      .mockResolvedValueOnce([
+        { _id: 'tf-upper-cap-v2', name: 'Uppercase' },
+      ])
+
+    const view = render(
+      <ConfigProvider>
+        <PrefetchProbe step={STEP_FIELD_MAPPING} entityName="Product" environment="CAP" />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchTransformers).toHaveBeenCalledTimes(1)
+    })
+
+    expect(fetchTransformers).toHaveBeenNthCalledWith(1, false, { environment: 'CAP' })
+
+    view.rerender(
+      <ConfigProvider>
+        <PrefetchProbe step={STEP_FILTERS} entityName="Product" environment="CAP" />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchFilters).toHaveBeenCalledTimes(1)
+    })
+
+    view.rerender(
+      <ConfigProvider>
+        <PrefetchProbe step={STEP_FIELD_MAPPING} entityName="Product" environment="CAP" />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchTransformers).toHaveBeenCalledTimes(2)
+    })
+
+    expect(fetchTransformers).toHaveBeenNthCalledWith(2, false, { environment: 'CAP' })
   })
 
   it('reuses cached filter and transformer definitions when the loaded YAML dependencies are already present', async () => {
@@ -327,6 +385,75 @@ describe('ConfigProvider metadata prefetching', () => {
     })
 
     expect(fetchTransformers).toHaveBeenNthCalledWith(2, false, { environment: 'PROD' })
+  })
+
+  it('can force reload transformers when hydrating a loaded configuration for edit', async () => {
+    const wizardState = {
+      mappings: [
+        { transformer: 'Uppercase' },
+      ],
+      filters: [],
+    }
+
+    fetchTransformers.mockResolvedValue([
+      { _id: 'tf-upper', name: 'Uppercase' },
+    ])
+
+    const view = render(
+      <ConfigProvider>
+        <EnsureDefinitionsProbe wizardState={wizardState} environment="CAP" />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchTransformers).toHaveBeenCalledTimes(1)
+    })
+
+    view.rerender(
+      <ConfigProvider>
+        <EnsureDefinitionsProbe
+          wizardState={wizardState}
+          environment="CAP"
+          reloadToken={1}
+          forceReloadTransformers
+        />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchTransformers).toHaveBeenCalledTimes(2)
+    })
+
+    expect(fetchTransformers).toHaveBeenNthCalledWith(2, false, { environment: 'CAP' })
+  })
+
+  it('fetches metadata options (streaming continuities and records per day) when requested during wizard state hydration', async () => {
+    const wizardState = {
+      metadata: {},
+      filters: [],
+      mappings: [],
+    }
+
+    fetchStreamingContinuities.mockResolvedValue([
+      { value: 'continuous', label: 'Continuous' },
+    ])
+    fetchRecordsPerDay.mockResolvedValue([
+      { value: 'millions', label: 'A Few Millions' },
+    ])
+
+    render(
+      <ConfigProvider>
+        <EnsureDefinitionsProbe wizardState={wizardState} includeMetadataOptions />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchStreamingContinuities).toHaveBeenCalledTimes(1)
+      expect(fetchRecordsPerDay).toHaveBeenCalledTimes(1)
+    })
+
+    expect(fetchStreamingContinuities).toHaveBeenCalledWith(false)
+    expect(fetchRecordsPerDay).toHaveBeenCalledWith(false)
   })
 })
 

@@ -820,7 +820,13 @@ export default function ETLManagementScreen() {
         environment,
       });
 
-      await ensureDefinitionsForWizardState(loadedState, useMock, { environment })
+       const loadedEnvironment = loadedState?.metadata?.environment || environment
+
+       await ensureDefinitionsForWizardState(loadedState, useMock, {
+         environment: loadedEnvironment,
+         forceReloadTransformers: true,
+         includeMetadataOptions: true,
+       })
 
       actions.loadState({
         ...loadedState,
@@ -866,38 +872,43 @@ export default function ETLManagementScreen() {
         return;
       }
 
-      const loadedState = hydrateWizardStateFromYaml(yamlText, {
-        productType: dep.productType,
-        source: deploymentSource,
-        teamName: deploymentTeamName,
-        environment,
-      });
+       const loadedState = hydrateWizardStateFromYaml(yamlText, {
+         productType: dep.productType,
+         source: deploymentSource,
+         teamName: deploymentTeamName,
+         environment,
+       });
 
-      await ensureDefinitionsForWizardState(loadedState, useMock, { environment })
+       const loadedEnvironment = loadedState?.metadata?.environment || environment
 
-      const draftKey = buildPreviewStorageKey(dep.id, 'saved');
-      localStorage.setItem(
-        draftKey,
-        JSON.stringify({
-          wizardState: {
-            ...loadedState,
-            navigationMode: 'etl-config',
-            readOnly: true,
-            currentStep: 0,
-            completedSteps: [0, 1, 2, 3, 4, 5, 6],
-          },
-        }),
-      );
+       await ensureDefinitionsForWizardState(loadedState, useMock, {
+         environment: loadedEnvironment,
+         includeMetadataOptions: true,
+       })
 
-      window.open(
-        buildPreviewUrl(dep.id, 'saved'),
-        '_blank',
-      );
-    } catch (error) {
-      console.error('[ETLManagementScreen] handleViewSavedVersion failed:', error);
-      setScreenError(error?.message || 'Failed to load saved draft configuration.');
-    } finally {
-      setActionLoading(a => ({ ...a, [savedVersionActionKey]: false }));
+       const draftKey = buildPreviewStorageKey(dep.id, 'saved');
+       localStorage.setItem(
+         draftKey,
+         JSON.stringify({
+           wizardState: {
+             ...loadedState,
+             navigationMode: 'etl-config',
+             readOnly: true,
+             currentStep: 0,
+             completedSteps: [0, 1, 2, 3, 4, 5, 6],
+           },
+         }),
+       );
+
+       window.open(
+         buildPreviewUrl(dep.id, 'saved'),
+         '_blank',
+       );
+     } catch (error) {
+       console.error('[ETLManagementScreen] handleViewSavedVersion failed:', error);
+       setScreenError(error?.message || 'Failed to load saved draft configuration.');
+     } finally {
+       setActionLoading(a => ({ ...a, [savedVersionActionKey]: false }));
     }
   };
 
@@ -928,22 +939,27 @@ export default function ETLManagementScreen() {
         return;
       }
 
-      const loadedState = hydrateWizardStateFromYaml(yamlText, {
-        productType: dep.productType,
-        source: deploymentSource,
-        teamName: deploymentTeamName,
-        environment,
-      });
+       const loadedState = hydrateWizardStateFromYaml(yamlText, {
+         productType: dep.productType,
+         source: deploymentSource,
+         teamName: deploymentTeamName,
+         environment,
+       });
 
-      await ensureDefinitionsForWizardState(loadedState, useMock, { environment })
+       const loadedEnvironment = loadedState?.metadata?.environment || environment
 
-      const draftKey = buildPreviewStorageKey(dep.id, 'deployed');
-      localStorage.setItem(
-        draftKey,
-        JSON.stringify({
-          wizardState: {
-            ...loadedState,
-            navigationMode: 'etl-config',
+       await ensureDefinitionsForWizardState(loadedState, useMock, {
+         environment: loadedEnvironment,
+         includeMetadataOptions: true,
+       })
+
+       const draftKey = buildPreviewStorageKey(dep.id, 'deployed');
+       localStorage.setItem(
+         draftKey,
+         JSON.stringify({
+           wizardState: {
+             ...loadedState,
+             navigationMode: 'etl-config',
             readOnly: true,
             currentStep: 0,
             completedSteps: [0, 1, 2, 3, 4, 5, 6],

@@ -576,7 +576,7 @@ export async function fetchEntitySchema(entityName, useMock = true) {
       return normalizeSourceSchema(TARGET_FIELDS)
     }
 
-    const response = await fetchWithUserId(`${API_BASE}/backend/schema/entity/${encodeURIComponent(normalizedEntityName)}`, {
+    const response = await fetchWithUserId(`${API_BASE}/genome/schema/${encodeURIComponent(normalizedEntityName)}`, {
       headers: {
         Accept: 'application/json, text/plain',
       },

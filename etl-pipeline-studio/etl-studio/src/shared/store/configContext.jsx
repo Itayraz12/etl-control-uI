@@ -234,51 +234,75 @@ export function ConfigProvider({ children }) {
     return filterRequestPromiseRef.current
   }, [setMergedFilters])
 
-  const loadTransformersIfNeeded = useCallback((useMock, { environment = '', requiredMappings = [] } = {}) => {
-    const environmentCacheKey = buildTransformerEnvironmentCacheKey(useMock, environment)
-    const hasEnvironmentCache = loadedTransformerEnvironmentKeysRef.current.has(environmentCacheKey)
-    const hasRequiredTransformerEntries = hasRequiredTransformers(transformersRef.current, requiredMappings)
+   const loadTransformersIfNeeded = useCallback((useMock, { environment = '', requiredMappings = [], forceReload = false } = {}) => {
+     const environmentCacheKey = buildTransformerEnvironmentCacheKey(useMock, environment)
+     const hasEnvironmentCache = loadedTransformerEnvironmentKeysRef.current.has(environmentCacheKey)
+     const hasRequiredTransformerEntries = hasRequiredTransformers(transformersRef.current, requiredMappings)
 
-    if (hasEnvironmentCache && hasRequiredTransformerEntries) {
-      return Promise.resolve(transformersRef.current)
-    }
+     if (!forceReload && hasEnvironmentCache && hasRequiredTransformerEntries) {
+       return Promise.resolve(transformersRef.current)
+     }
 
-    if (transformerRequestPromiseRef.current) {
-      return transformerRequestPromiseRef.current
-    }
+     if (transformerRequestPromiseRef.current) {
+       return transformerRequestPromiseRef.current
+     }
 
-    fetchingTransformers.current = true
-    setLoadingTransformers(true)
-    transformerRequestPromiseRef.current = fetchTransformers(useMock, { environment })
-      .then((nextTransformers) => {
-        loadedTransformerEnvironmentKeysRef.current.add(environmentCacheKey)
-        setMergedTransformers(nextTransformers)
-        return transformersRef.current
-      })
-      .catch((error) => {
-        throw error
-      })
-      .finally(() => {
-        transformerRequestPromiseRef.current = null
-        fetchingTransformers.current = false
-        setLoadingTransformers(false)
-      })
+     fetchingTransformers.current = true
+     setLoadingTransformers(true)
+     transformerRequestPromiseRef.current = fetchTransformers(useMock, { environment })
+       .then((nextTransformers) => {
+         loadedTransformerEnvironmentKeysRef.current.add(environmentCacheKey)
+         setMergedTransformers(nextTransformers)
+         return transformersRef.current
+       })
+       .catch((error) => {
+         throw error
+       })
+       .finally(() => {
+         transformerRequestPromiseRef.current = null
+         fetchingTransformers.current = false
+         setLoadingTransformers(false)
+       })
 
-    return transformerRequestPromiseRef.current
-  }, [setMergedTransformers])
+     return transformerRequestPromiseRef.current
+   }, [setMergedTransformers])
 
-  const ensureDefinitionsForWizardState = useCallback(async (wizardState = {}, useMock = true, { environment = '' } = {}) => {
-    await Promise.all([
-      loadFiltersIfNeeded(useMock, {
-        environment,
-        requiredFilters: wizardState?.filters,
-      }),
-      loadTransformersIfNeeded(useMock, {
-        environment,
-        requiredMappings: wizardState?.mappings,
-      }),
-    ])
-  }, [loadFiltersIfNeeded, loadTransformersIfNeeded])
+   const loadMetadataOptionsIfNeeded = useCallback((useMock = true) => {
+     setLoadingMetadata(true)
+     return Promise.all([
+       fetchStreamingContinuities(useMock).catch(() => MOCK_STREAMING_CONTINUITIES),
+       fetchRecordsPerDay(useMock).catch(() => MOCK_RECORDS_PER_DAY),
+     ])
+       .then(([nextStreamingContinuities, nextRecordsPerDay]) => {
+         setStreamingContinuities(nextStreamingContinuities)
+         setRecordsPerDay(nextRecordsPerDay)
+         return { streamingContinuities: nextStreamingContinuities, recordsPerDay: nextRecordsPerDay }
+       })
+       .catch(console.error)
+       .finally(() => {
+         setLoadingMetadata(false)
+       })
+   }, [])
+
+   const ensureDefinitionsForWizardState = useCallback(async (wizardState = {}, useMock = true, { environment = '', forceReloadTransformers = false, includeMetadataOptions = false } = {}) => {
+     const promises = [
+       loadFiltersIfNeeded(useMock, {
+         environment,
+         requiredFilters: wizardState?.filters,
+       }),
+       loadTransformersIfNeeded(useMock, {
+         environment,
+         requiredMappings: wizardState?.mappings,
+         forceReload: forceReloadTransformers,
+       }),
+     ]
+
+     if (includeMetadataOptions) {
+       promises.push(loadMetadataOptionsIfNeeded(useMock))
+     }
+
+     await Promise.all(promises)
+   }, [loadFiltersIfNeeded, loadTransformersIfNeeded, loadMetadataOptionsIfNeeded])
 
   // Stable callback: deps are the setter functions (always stable) and the refs
   const prefetchForStep = useCallback((step, useMock, {
@@ -290,6 +314,9 @@ export function ConfigProvider({ children }) {
     const isMetadataStep = step === STEP_METADATA
     const wasMetadataStep = previousStepRef.current === STEP_METADATA
     const isEnteringMetadataStep = isMetadataStep && !wasMetadataStep
+    const isFieldMappingStep = step === STEP_FIELD_MAPPING
+    const wasFieldMappingStep = previousStepRef.current === STEP_FIELD_MAPPING
+    const isEnteringFieldMappingStep = isFieldMappingStep && !wasFieldMappingStep
     const normalizedEntityName = String(entityName ?? '').trim()
 
     if (isEnteringMetadataStep) {
@@ -383,6 +410,7 @@ export function ConfigProvider({ children }) {
       loadTransformersIfNeeded(useMock, {
         environment,
         requiredMappings,
+        forceReload: isEnteringFieldMappingStep,
       }).catch(console.error)
     }
   }, [loadFiltersIfNeeded, loadTransformersIfNeeded])

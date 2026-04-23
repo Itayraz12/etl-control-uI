@@ -379,7 +379,7 @@ describe('configService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:8080/api/backend/schema/entity/Product',
+      'http://localhost:8080/api/genome/schema/Product',
       {
         headers: {
           Accept: 'application/json, text/plain',
@@ -392,7 +392,7 @@ describe('configService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:8080/api/backend/schema/entity/product',
+      'http://localhost:8080/api/genome/schema/product',
       {
         headers: {
           Accept: 'application/json, text/plain',

@@ -1176,7 +1176,7 @@ describe('ETLManagementScreen table layout stability', () => {
   it('loads the original deployed YAML into wizard state when editing a running deployment', async () => {
     const user = userEvent.setup()
     const loadedState = {
-      metadata: { productType: 'Inventory' },
+      metadata: { productType: 'Inventory', environment: 'CAP' },
       filters: [
         {
           id: 'group-0',
@@ -1204,16 +1204,20 @@ describe('ETLManagementScreen table layout stability', () => {
 
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
-    await waitFor(() => {
-      expect(mockFetchDraftConfiguration).toHaveBeenCalledTimes(1)
-      expect(mockEnsureDefinitionsForWizardState).toHaveBeenCalledWith(loadedState, true, { environment: 'CAP' })
-      expect(mockActions.loadState).toHaveBeenCalledWith(expect.objectContaining({
-        navigationMode: 'etl-config',
-        currentStep: 0,
-        originalDraftYaml: 'pipeline: yaml',
-        completedSteps: [0, 1, 2, 3, 4, 5, 6],
-      }))
-    })
+     await waitFor(() => {
+       expect(mockFetchDraftConfiguration).toHaveBeenCalledTimes(1)
+       expect(mockEnsureDefinitionsForWizardState).toHaveBeenCalledWith(loadedState, true, {
+         environment: 'CAP',
+         forceReloadTransformers: true,
+         includeMetadataOptions: true,
+       })
+       expect(mockActions.loadState).toHaveBeenCalledWith(expect.objectContaining({
+         navigationMode: 'etl-config',
+         currentStep: 0,
+         originalDraftYaml: 'pipeline: yaml',
+         completedSteps: [0, 1, 2, 3, 4, 5, 6],
+       }))
+     })
   })
 })
 
