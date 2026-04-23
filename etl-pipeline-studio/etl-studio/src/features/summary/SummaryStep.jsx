@@ -500,9 +500,10 @@ ${inputSectionYaml}${state.upload.schemaName ? `schema:
 output:
   mapping:
 ${state.mappings.map(m => {
+  const targetType = getFieldType(m.tgt, true)
   let mapping = m.src
-    ? `    - inName: ${m.src}\n      outName: ${m.tgt}`
-    : `    - outName: ${m.tgt}`
+    ? `    - inName: ${m.src}\n      outName: ${m.tgt}\n      type: ${targetType}`
+    : `    - outName: ${m.tgt}\n      type: ${targetType}`
   mapping += `\n      sendToGP: true`
   mapping += `\n      ${TARGET_SAKNAY_YAML_KEY}: ${m.tgtMetadata?.sendToSaknay ?? true}`
   const additionalInputs = Array.isArray(m.extraInputs) ? m.extraInputs.map(input => input?.field).filter(Boolean) : []
