@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -30,6 +31,25 @@ vi.mock('./AdminScreen.jsx', () => ({
 
 vi.mock('./UDFScreen.jsx', () => ({
   default: () => <div data-testid="udf-screen-stub">UDF Screen</div>,
+}))
+
+vi.mock('./KafkaSimulatorScreen.jsx', () => ({
+  default: function KafkaSimulatorScreenMock({ isActive = false }) {
+    const [draftValue, setDraftValue] = useState('')
+
+    return (
+      <div
+        data-testid="simulator-screen-stub"
+        data-active={isActive ? 'true' : 'false'}
+      >
+        <input
+          aria-label="Simulator Draft"
+          value={draftValue}
+          onChange={(event) => setDraftValue(event.target.value)}
+        />
+      </div>
+    )
+  },
 }))
 
 describe('AdminWorkspace', () => {
@@ -108,6 +128,34 @@ describe('AdminWorkspace', () => {
 
     expect(screen.getByTestId('udf-screen-stub')).toBeInTheDocument()
     expect(screen.queryByTestId('management-screen-stub')).not.toBeInTheDocument()
+  })
+
+  it('preserves simulator state when switching away to another admin tab and back', async () => {
+    const user = userEvent.setup()
+    mockNavigationMode = 'simulator'
+    mockUser = { role: 'admin' }
+    mockSetNavigationMode.mockReset()
+
+    const { rerender } = render(<AdminWorkspace />)
+
+    const simulatorInput = screen.getByLabelText('Simulator Draft')
+    await user.type(simulatorInput, 'task in progress')
+
+    expect(screen.getByTestId('simulator-screen-stub')).toHaveAttribute('data-active', 'true')
+    expect(simulatorInput).toHaveValue('task in progress')
+
+    mockNavigationMode = 'etl-admin'
+    rerender(<AdminWorkspace />)
+
+    expect(screen.getByTestId('admin-screen-stub')).toBeInTheDocument()
+    expect(screen.getByTestId('simulator-screen-stub')).toHaveAttribute('data-active', 'false')
+    expect(screen.getByLabelText('Simulator Draft')).toHaveValue('task in progress')
+
+    mockNavigationMode = 'simulator'
+    rerender(<AdminWorkspace />)
+
+    expect(screen.getByTestId('simulator-screen-stub')).toHaveAttribute('data-active', 'true')
+    expect(screen.getByLabelText('Simulator Draft')).toHaveValue('task in progress')
   })
 
   it('does not show the side menu to regular users', () => {

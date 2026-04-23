@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { render, screen, waitFor, cleanup } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { WizardProvider, useWizard } from './wizardStore.jsx'
 import { getWizardStorageKeyForUser } from './wizardPersistence.js'
 
@@ -17,6 +18,54 @@ function StateProbe() {
       <div data-testid="sink-kafka-env">{state.sink.sinkKafkaEnv}</div>
       <div data-testid="kafka-topic">{state.source.kafkaTopic}</div>
       <div data-testid="sink-kafka-topic">{state.sink.sinkKafkaTopic}</div>
+      <div data-testid="simulator-broker-env">{state.simulator?.brokerEnv || ''}</div>
+      <div data-testid="simulator-topic">{state.simulator?.topic || ''}</div>
+      <div data-testid="simulator-rows-count">{String(state.simulator?.rows?.length || 0)}</div>
+    </div>
+  )
+}
+
+function SimulatorStateControls() {
+  const { actions } = useWizard()
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => actions.updateSimulator({
+          brokerEnv: 'CAP',
+          topic: 'sim-topic',
+          rows: [
+            {
+              id: 'sim-row-1',
+              messageFormat: 'json',
+              sampleMessage: '{"id":"1"}',
+              messagesPerSecond: 5,
+              totalMessages: 50,
+              intervalSeconds: 5,
+              status: 'idle',
+              statusMessage: '',
+              remoteTaskId: null,
+              sentCount: 0,
+            },
+          ],
+        })}
+      >
+        Seed simulator state
+      </button>
+      <button
+        type="button"
+        onClick={() => actions.loadState({
+          navigationMode: 'etl-config',
+          metadata: { productType: 'Pricing', environment: 'PROD' },
+          source: { kafkaEnv: 'CAP', kafkaTopic: 'orders' },
+          sink: { sinkKafkaEnv: 'PROD', sinkKafkaTopic: 'orders.out' },
+          completedSteps: [0, 1],
+          currentStep: 0,
+        })}
+      >
+        Load edit state
+      </button>
     </div>
   )
 }
@@ -114,6 +163,35 @@ describe('WizardProvider preview boot', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('sink-kafka-topic')).toHaveTextContent('')
+    })
+  })
+
+  it('preserves simulator state when loadState is used for deployment editing without simulator payload', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <WizardProvider user={user}>
+        <SimulatorStateControls />
+        <StateProbe />
+      </WizardProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Seed simulator state' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('simulator-broker-env')).toHaveTextContent('CAP')
+      expect(screen.getByTestId('simulator-topic')).toHaveTextContent('sim-topic')
+      expect(screen.getByTestId('simulator-rows-count')).toHaveTextContent('1')
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Load edit state' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('navigation-mode')).toHaveTextContent('etl-config')
+      expect(screen.getByTestId('product-type')).toHaveTextContent('Pricing')
+      expect(screen.getByTestId('simulator-broker-env')).toHaveTextContent('CAP')
+      expect(screen.getByTestId('simulator-topic')).toHaveTextContent('sim-topic')
+      expect(screen.getByTestId('simulator-rows-count')).toHaveTextContent('1')
     })
   })
 })

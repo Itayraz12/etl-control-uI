@@ -1,4 +1,5 @@
 import { normalizeEnvironmentValue, normalizeFilterGroups, normalizeMetadataLocation } from '../types/index.js'
+import { normalizeSimulatorState } from '../services/simulatorState.js'
 
 export const LEGACY_WIZARD_STORAGE_KEY = 'etl-studio-wizard-draft'
 
@@ -105,6 +106,7 @@ export function buildStateFromPersisted(baseState, persistedState) {
       ...sink,
       sinkKafkaEnv: normalizeEnvironmentValue(sink?.sinkKafkaEnv, metadataEnvironment),
     },
+    simulator: normalizeSimulatorState(persistedState.simulator, baseState.simulator, { resetTransient: true }),
   }
 }
 

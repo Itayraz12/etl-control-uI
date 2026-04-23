@@ -20,13 +20,6 @@ export default function AdminWorkspace() {
       : 'etl-management'
   ), [isAdminUser, state.navigationMode])
 
-  function renderContent() {
-    if (activeMode === 'etl-admin') return <AdminScreen />
-    if (activeMode === 'udf-admin') return <UDFScreen />
-    if (activeMode === 'simulator') return <KafkaSimulatorScreen />
-    return <ETLManagementScreen />
-  }
-
   return (
     <div data-testid="admin-workspace" style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
       {isAdminUser && (
@@ -41,7 +34,20 @@ export default function AdminWorkspace() {
       )}
 
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {renderContent()}
+        {activeMode === 'etl-admin' && <AdminScreen />}
+        {activeMode === 'udf-admin' && <UDFScreen />}
+        {activeMode === 'etl-management' && <ETLManagementScreen />}
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            minHeight: 0,
+            overflow: 'hidden',
+            display: activeMode === 'simulator' ? 'flex' : 'none',
+          }}
+        >
+          <KafkaSimulatorScreen isActive={activeMode === 'simulator'} />
+        </div>
       </div>
     </div>
   )

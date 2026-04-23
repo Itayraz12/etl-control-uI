@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardTitle, FormRow, FormGroup, Btn, Chip } from '../../shared/components/index.jsx'
 import { ENVIRONMENT_OPTIONS } from '../../shared/types/index.js'
 import { startSimulation, stopSimulation, deleteSimulation, testKafkaConnection, getSimulationStatus } from '../../shared/services/simulatorService.js'
+import { useWizard } from '../../shared/store/wizardStore.jsx'
+import { DEFAULT_SIMULATOR_SAMPLES, createEmptySimulatorRow } from '../../shared/services/simulatorState.js'
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -23,29 +25,7 @@ const MESSAGE_FORMATS = [
   { value: 'plain',    label: 'Plain Text'},
 ]
 
-const DEFAULT_SAMPLES = {
-  json:     JSON.stringify({ id: '{{uuid}}', timestamp: '{{now}}', value: '{{value}}' }, null, 2),
-  csv:      '{{uuid}},{{now}},{{value}}',
-  xml:      '<event>\n  <id>{{uuid}}</id>\n  <timestamp>{{now}}</timestamp>\n  <value>{{value}}</value>\n</event>',
-  protobuf: '// Protobuf binary is base64-encoded below\nCgMxMjMQKhj///////8B',
-  plain:    'Event id={{uuid}} at {{now}} value={{value}}',
-}
-
-function createEmptyRow() {
-  return {
-    id: crypto.randomUUID(),
-    messageFormat: 'json',
-    sampleMessage: DEFAULT_SAMPLES.json,
-    messagesPerSecond: 1,
-    totalMessages: 10,
-    intervalSeconds: 1,
-    // runtime state
-    status: 'idle',    // idle | running | stopped | error
-    statusMessage: '',
-    remoteTaskId: null,
-    sentCount: 0,
-  }
-}
+const DEFAULT_SAMPLES = DEFAULT_SIMULATOR_SAMPLES
 
 // ── Status Badge ──────────────────────────────────────────────────────────
 
@@ -359,40 +339,51 @@ function numInputStyle() {
 // ── Main Screen ───────────────────────────────────────────────────────────
 
 export default function KafkaSimulatorScreen() {
-  const [brokerEnv, setBrokerEnv] = useState('')
-  const [topic, setTopic] = useState('')
-  const [rows, setRows] = useState([createEmptyRow()])
-  const [connTest, setConnTest] = useState(null)  // null | { status: 'testing'|'ok'|'error', message, brokerAddress, latencyMs }
+  const { state, actions } = useWizard()
+  const brokerEnv = state.simulator?.brokerEnv ?? ''
+  const topic = state.simulator?.topic ?? ''
+  const rows = state.simulator?.rows ?? [createEmptySimulatorRow()]
+  const connTest = state.simulator?.connTest ?? null
+
+  const updateSimulator = useCallback((patch) => {
+    actions.updateSimulator(patch)
+  }, [actions])
 
   const isTopicValid = Boolean(brokerEnv.trim() && topic.trim())
 
   const handleTestConnection = async () => {
     if (!brokerEnv || !topic.trim()) return
-    setConnTest({ status: 'testing', message: 'Connecting…' })
+    updateSimulator({ connTest: { status: 'testing', message: 'Connecting…' } })
     try {
       const result = await testKafkaConnection(brokerEnv, topic.trim())
-      setConnTest({
+      updateSimulator({ connTest: {
         status: result.topicExists === false ? 'warn' : 'ok',
         message: result.message,
         brokerAddress: result.brokerAddress,
         latencyMs: result.latencyMs,
         topicExists: result.topicExists,
         partitionCount: result.partitionCount,
-      })
+      } })
     } catch (err) {
-      setConnTest({ status: 'error', message: err?.message || 'Connection failed' })
+      updateSimulator({ connTest: { status: 'error', message: err?.message || 'Connection failed' } })
     }
   }
 
-  const addRow = () => setRows(prev => [...prev, createEmptyRow()])
+  const addRow = () => updateSimulator(current => ({
+    rows: [...(current?.rows ?? []), createEmptySimulatorRow()],
+  }))
 
   const updateRow = useCallback((id, patch) => {
-    setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
-  }, [])
+    updateSimulator(current => ({
+      rows: (current?.rows ?? []).map(r => r.id === id ? { ...r, ...patch } : r),
+    }))
+  }, [updateSimulator])
 
   const deleteRow = useCallback((id) => {
-    setRows(prev => prev.filter(r => r.id !== id))
-  }, [])
+    updateSimulator(current => ({
+      rows: (current?.rows ?? []).filter(r => r.id !== id),
+    }))
+  }, [updateSimulator])
 
   const stopAll = async () => {
     const running = rows.filter(r => r.status === 'running')
@@ -463,7 +454,7 @@ export default function KafkaSimulatorScreen() {
             <select
               aria-label="Broker Environment"
               value={brokerEnv}
-              onChange={e => { setBrokerEnv(e.target.value); setConnTest(null) }}
+              onChange={e => updateSimulator({ brokerEnv: e.target.value, connTest: null })}
             >
               <option value="">Select environment…</option>
               {ENVIRONMENT_OPTIONS.map(option => (
@@ -475,7 +466,7 @@ export default function KafkaSimulatorScreen() {
             <input
               aria-label="Kafka Topic"
               value={topic}
-              onChange={e => setTopic(e.target.value)}
+              onChange={e => updateSimulator({ topic: e.target.value })}
               placeholder="e.g. my-events-topic"
             />
           </FormGroup>

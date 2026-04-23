@@ -6,6 +6,7 @@ import {
   serializeWizardState,
 } from './wizardPersistence.js'
 import { normalizeEnvironmentValue, normalizeFilterGroups, normalizeMetadataLocation } from '../types/index.js'
+import { buildDefaultSimulatorState, normalizeSimulatorState } from '../services/simulatorState.js'
 
 function getPreviewStateStorageKey(search = window.location.search) {
   const params = new URLSearchParams(search)
@@ -98,6 +99,8 @@ const initialState = {
     saknayTopic:     '',
     asg:             false,
   },
+
+  simulator: buildDefaultSimulatorState(),
 }
 
 function normalizeMetadataState(metadata = {}) {
@@ -216,6 +219,7 @@ function wizardReducer(state, action) {
         mappings: Array.isArray(payload.mappings) ? payload.mappings : [],
         filters: normalizeFilterGroups(payload.filters),
         sink: normalizeSinkState(payload.sink, normalizeEnvironmentValue(payload?.metadata?.environment)),
+        simulator: normalizeSimulatorState(payload.simulator ?? state.simulator, initialState.simulator),
       })
     }
     case 'UPDATE_METADATA':
@@ -251,6 +255,20 @@ function wizardReducer(state, action) {
           ...state.sink,
           ...action.payload,
         }, state.metadata?.environment),
+      }
+    case 'UPDATE_SIMULATOR':
+      {
+        const nextPatch = typeof action.payload === 'function'
+          ? action.payload(state.simulator)
+          : action.payload
+
+        return {
+          ...state,
+          simulator: normalizeSimulatorState({
+            ...state.simulator,
+            ...nextPatch,
+          }, initialState.simulator),
+        }
       }
     case 'SET_THEME':
       return { ...state, theme: action.payload }
@@ -373,6 +391,7 @@ export function WizardProvider({ children, user = null }) {
     setMappings:    (maps)    => dispatch({ type: 'SET_MAPPINGS',     payload: maps }),
     setFilters:     (filters) => dispatch({ type: 'SET_FILTERS',      payload: filters }),
     updateSink:     (patch)   => dispatch({ type: 'UPDATE_SINK',      payload: patch }),
+    updateSimulator:(patch)   => dispatch({ type: 'UPDATE_SIMULATOR', payload: patch }),
 
     toggleTheme:    ()        => dispatch({ type: 'TOGGLE_THEME' }),
 

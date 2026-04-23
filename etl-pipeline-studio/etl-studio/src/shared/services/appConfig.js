@@ -1,5 +1,5 @@
 const DEFAULT_API_BASE = 'http://localhost:8080/api'
-const DEFAULT_API_BASE_SIM = 'http://localhost:8083/api'
+const DEFAULT_API_BASE_SIM = 'http://localhost:8080/api'
 const DEFAULT_PRODUCT_CODE_LABEL = 'Product Code'
 const DEFAULT_SHADOW_LABEL = 'SHADOW'
 const DEFAULT_ASG_LABEL = 'ASG'
