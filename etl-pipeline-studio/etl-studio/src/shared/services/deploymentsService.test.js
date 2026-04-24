@@ -198,7 +198,7 @@ describe('deploymentsService', () => {
     }, false)).resolves.toEqual({ success: true })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8080/api/backend/deployments/stop?productType=Inventory&source=ERP&team=data-platform&environment=PROD',
+      'http://localhost:8080/api/backend/stop?productType=Inventory&source=ERP&team=data-platform&environment=PROD',
       { method: 'POST', headers: { 'X-user-ID': 'user-123' } },
     )
   })
@@ -212,7 +212,7 @@ describe('deploymentsService', () => {
     await fetchDeployments('data-platform', false)
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8080/api/backend/deployments?teamName=data-platform',
+      'http://localhost:8080/api/deployment/deployments?teamName=data-platform',
       { headers: { 'X-user-ID': 'user-123' } },
     )
   })
@@ -226,7 +226,7 @@ describe('deploymentsService', () => {
     await fetchDeployments('data-platform', false, { includeAllTeams: true })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8080/api/backend/deployments',
+      'http://localhost:8080/api/deployment/deployments',
       { headers: { 'X-user-ID': 'user-123' } },
     )
   })

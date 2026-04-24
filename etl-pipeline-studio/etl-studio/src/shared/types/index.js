@@ -623,6 +623,13 @@ export function normalizeSourceSchema(schema) {
     return normalizeSourceSchemaFromJsonSchema(schema)
   }
 
+  if (schema && typeof schema === 'object' && !Array.isArray(schema)) {
+    const nestedSchema = schema.schema ?? schema.fields ?? schema.data ?? schema.items
+    if (nestedSchema && nestedSchema !== schema) {
+      return normalizeSourceSchema(nestedSchema)
+    }
+  }
+
   if (!Array.isArray(schema)) return []
   return schema
     .map((field, index) => normalizeSchemaField(field, index))

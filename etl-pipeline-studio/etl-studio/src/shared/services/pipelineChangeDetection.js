@@ -59,6 +59,20 @@ function normalizeMapping(mapping = {}) {
   }
 }
 
+function normalizeTargetSchema(targetSchema) {
+  const normalizedFields = Array.isArray(targetSchema)
+    ? targetSchema
+    : Array.isArray(targetSchema?.schema)
+      ? targetSchema.schema
+      : []
+
+  return {
+    title: targetSchema?.title || '',
+    schemaName: targetSchema?.schemaName || '',
+    schema: normalizedFields.map(normalizeSchemaField),
+  }
+}
+
 function normalizeFilterGroup(group = {}) {
   return {
     logic: group.logic || 'AND',
@@ -115,6 +129,7 @@ export function buildPipelineChangeSignature(state = {}) {
         ? state.upload.schema.map(normalizeSchemaField)
         : [],
     },
+    targetSchema: normalizeTargetSchema(state?.targetSchema),
     mappings: Array.isArray(state?.mappings)
       ? state.mappings.map(normalizeMapping)
       : [],

@@ -208,11 +208,11 @@ All live calls use the configured `VITE_API_BASE` value. By default, this is `ht
 | Transformers | GET | `/config/transformers` | |
 | Filter operators | GET | `/config/filters?environment=<CAP\|PROD>` | Environment is forwarded from wizard metadata when selected |
 | Entities | GET | `/backbone/entities` | |
-| Deployments list | GET | `/backend/deployments?teamName=<team>` | |
+| Deployments list | GET | `/deployment/deployments?teamName=<team>` | |
 | Deployment steps | GET | `/backend/deployments/steps` | Returns `[{ id, label }]`; falls back to built-in list on error |
 | Deploy from YAML / Upgrade | POST | `/backend/deployments/deploy?isDeploy=<true|false>` | `Content-Type: text/plain`; raw YAML body; `isDeploy=true` for deploy, `false` for upgrade |
 | Deployment progress | GET | `/backend/deployments/:deploymentId/progress` | SSE stream — see event contract below |
-| Stop deployment | POST | `/backend/deployments/stop?productType=&source=&team=&environment=` | |
+| Stop deployment | POST | `/backend/stop?productType=&source=&team=&environment=` | |
 | Draft YAML (read) | GET | `/backend/configuration/yaml?productType=&source=&team=&environment=` | |
 | Draft YAML (save) | POST | `/backend/configuration/yaml?productType=&source=&team=&environment=` | |
 

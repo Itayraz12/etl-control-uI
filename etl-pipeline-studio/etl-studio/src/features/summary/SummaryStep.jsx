@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+﻿import { useRef, useState, useEffect } from 'react'
 import { useWizard } from "../../shared/store/wizardStore.jsx";
 import { useConfig } from "../../shared/store/configContext.jsx";
 import { Card, CardTitle, ValidationItem, Btn, DeployProgressModal } from '../../shared/components/index.jsx'
@@ -129,6 +129,10 @@ export default function SummaryStep() {
   const srcMeta = SOURCE_TYPES.find(t => t.id === state.source.sourceType)
   const normalizedMetadataEnvironment = normalizeEnvironmentValue(state.metadata.environment, state.metadata.environment)
   const hasSaknayTargets = state.mappings.some(mapping => Boolean(mapping?.tgt) && (mapping?.tgtMetadata?.sendToSaknay ?? true))
+  const explicitOutputSchemaName = String(
+    state.targetSchema?.title ?? state.targetSchema?.schemaName ?? state.targetSchema?.name ?? ''
+  ).trim()
+  const outputSchemaName = explicitOutputSchemaName || String(state.metadata.entityName ?? '').trim()
   const [submitted, setSubmitted] = useState(false)
   const [copying, setCopying] = useState(false)
   const [copiedDash, setCopiedDash] = useState(false)
@@ -295,7 +299,6 @@ export default function SummaryStep() {
 
   // Generate YAML with improved transformer descriptions
   const generateYaml = () => {
-    // Find source and target field types
     const nestedInputMappingYaml = formatInputFieldsYamlSection(sourceSchema, '    ')
     const columnDelimiter = state.source.csvDelimiter == null
       ? ''
@@ -335,16 +338,8 @@ export default function SummaryStep() {
       return [`  ${sourceType}:`, ...details].join('\n')
     })()
     const inputSectionYaml = state.source.format === 'CSV'
-      ? `input:
-  delimited:
-    columnDelimiter: ${quoteYamlDoubleQuoted(columnDelimiter)}${nestedInputMappingYaml ? `
-${nestedInputMappingYaml}` : ''}
-`
-      : `input:
-  convert:${state.source.jsonSplit ? `
-    splitByPath: ${quoteYamlDoubleQuoted(String(state.source.jsonSplit).trim())}` : ''}${nestedInputMappingYaml ? `
-${nestedInputMappingYaml}` : ''}
-`
+      ? `input:\n  delimited:\n    columnDelimiter: ${quoteYamlDoubleQuoted(columnDelimiter)}${nestedInputMappingYaml ? `\n${nestedInputMappingYaml}` : ''}\n`
+      : `input:\n  convert:${state.source.jsonSplit ? `\n    splitByPath: ${quoteYamlDoubleQuoted(String(state.source.jsonSplit).trim())}` : ''}${nestedInputMappingYaml ? `\n${nestedInputMappingYaml}` : ''}\n`
 
     const getFieldType = (fieldName, isTarget = false) => {
       const schema = isTarget ? targetSchema : sourceSchema
@@ -355,13 +350,10 @@ ${nestedInputMappingYaml}` : ''}
     const getHopInputsDescription = (sourceFields, hopIndex) => {
       if (!Array.isArray(sourceFields) || sourceFields.length === 0) return ''
 
-      // First transformer: use source field names directly.
       if (hopIndex === 0) {
         return `[${sourceFields.join(',')}]`
       }
 
-      // Chained transformers: reference prior hop output with unique tokens per source field:
-      // $<sourceFieldName><hopIndex>, e.g. $stockQty1, $stockQty2
       return `[${sourceFields
         .map((src) => {
           const safeSourceName = String(src || 'input').replace(/[^a-zA-Z0-9_]/g, '_')
@@ -370,7 +362,6 @@ ${nestedInputMappingYaml}` : ''}
         .join(',')}]`
     }
 
-    // Get transformations with field details
     const transformations = state.mappings
       .filter(m => m.transformer && m.transformer !== 'none')
       .map(m => {
@@ -379,42 +370,38 @@ ${nestedInputMappingYaml}` : ''}
         const chainWithInputs = transformerChain
           .map((desc, hopIndex) => {
             const fieldsList = getHopInputsDescription(sourceFields, hopIndex)
-            // Split desc into transformer name and props bracket (e.g. "Name[props]" or "Name")
             const bracketStart = desc.indexOf('[')
             const transformerName = bracketStart !== -1 ? desc.slice(0, bracketStart) : desc
-            const propsStr = bracketStart !== -1 ? desc.slice(bracketStart) : '' // e.g. "[logic= a:b?1]"
+            const propsStr = bracketStart !== -1 ? desc.slice(bracketStart) : ''
             const argParts = []
             if (fieldsList) {
               argParts.push(fieldsList)
             } else if (propsStr) {
-              argParts.push('[]') // keep field slot empty when there are no fields but props exist
+              argParts.push('[]')
             }
             if (propsStr) argParts.push(propsStr)
             const transformerCall = argParts.length > 0
               ? `${transformerName}(${argParts.join(',')})`
               : transformerName
-            // For a multi-transformer chain each hop uses the same -> (type, outField) structure
-            // as a single transformer. Intermediate hops emit a named token consumed by the next hop;
-            // the last hop emits the actual target field. Hops are joined by -->.
+
             if (transformerChain.length > 1) {
               const isLast = hopIndex === transformerChain.length - 1
               if (isLast) {
                 const tgtType = getFieldType(m.tgt, true)
                 return `${transformerCall} -> (${tgtType}, ${m.tgt})`
-              } else {
-                const primarySrc = sourceFields[0] || 'input'
-                const safeSrcName = String(primarySrc).replace(/[^a-zA-Z0-9_]/g, '_')
-                const outToken = `$${safeSrcName}${hopIndex + 1}`
-                const srcType = getFieldType(primarySrc, false)
-                return `${transformerCall} -> (${srcType}, ${outToken})`
               }
+
+              const primarySrc = sourceFields[0] || 'input'
+              const safeSrcName = String(primarySrc).replace(/[^a-zA-Z0-9_]/g, '_')
+              const outToken = `$${safeSrcName}${hopIndex + 1}`
+              const srcType = getFieldType(primarySrc, false)
+              return `${transformerCall} -> (${srcType}, ${outToken})`
             }
+
             return transformerCall
           })
           .join(' --> ')
         const tgtType = getFieldType(m.tgt, true)
-        // Single transformer: append the output suffix here.
-        // Multiple transformers: each hop already contains its own -> (type, outField) suffix.
         const expression = transformerChain.length > 1
           ? chainWithInputs
           : `${chainWithInputs} -> (${tgtType}, ${m.tgt})`
@@ -467,8 +454,12 @@ ${nestedInputMappingYaml}` : ''}
       ].join('\n')
     })()
     const metadataLocation = normalizeMetadataLocation(state.metadata.location, normalizedMetadataEnvironment)
-
     const generalFormat = state.source.format === 'CSV' ? 'delimited' : state.source.format
+    const inputSchemaName = String(state.upload.schemaName ?? '').trim()
+    const schemaSectionYaml = (inputSchemaName || outputSchemaName) ? `schema:\n${[
+      inputSchemaName ? `  inputSchema: ${quoteYamlDoubleQuoted(inputSchemaName)}` : '',
+      outputSchemaName ? `  outputSchema: ${quoteYamlDoubleQuoted(String(outputSchemaName).trim())}` : '',
+    ].filter(Boolean).join('\n')}\n` : ''
 
     return `metadata:
   genomeEntity: ${state.metadata.entityName}
@@ -492,12 +483,8 @@ ${state.source.format === 'CSV' && rowDelimiter ? `  split:
 
 source:
 ${sourceSectionYaml}
-${inputSectionYaml}${state.upload.schemaName ? `schema:
-  inputSchema: ${quoteYamlDoubleQuoted(String(state.upload.schemaName).trim())}
-
-` : ''}
-
-output:
+${inputSectionYaml}${schemaSectionYaml ? `${schemaSectionYaml}
+` : ''}output:
   mapping:
 ${state.mappings.map(m => {
   const targetType = getFieldType(m.tgt, true)
@@ -556,7 +543,6 @@ ${sinkAdditionalConfigYaml}` : ''}
   const canDeployFromChecklist = canDeployFromSummaryChecklist(state, targetSchema, transformers, filterOperators)
 
   const handleCreatePipeline = async () => {
-    // Validate required fields
     if (unmappedRequired.length > 0) {
       setErrorModal({
         icon: '❌',
@@ -566,8 +552,7 @@ ${sinkAdditionalConfigYaml}` : ''}
       })
       return
     }
-    
-    // Validate critical config
+
     const sourceType = String(state.source.sourceType || '').trim().toLowerCase()
     const isKafkaSourceIncomplete = sourceType === 'kafka'
       && (!state.source.kafkaTopic || !state.source.kafkaOffset)
@@ -582,11 +567,11 @@ ${sinkAdditionalConfigYaml}` : ''}
           ? 'Please configure your Kafka source settings (type, topic, and offset) and try again.'
           : sourceType === 'rabbitmq'
             ? 'Please configure your RabbitMQ source settings (IP, port, username, password, and queue) and try again.'
-          : 'Please configure your source settings (type and topic) and try again.',
+            : 'Please configure your source settings (type and topic) and try again.',
       })
       return
     }
-    
+
     if (!state.sink.sinkType) {
       setErrorModal({
         icon: '⚠️',
@@ -595,7 +580,7 @@ ${sinkAdditionalConfigYaml}` : ''}
       })
       return
     }
-    
+
     if (state.mappings.length === 0) {
       setErrorModal({
         icon: '⚠️',
@@ -610,41 +595,30 @@ ${sinkAdditionalConfigYaml}` : ''}
       setNoChangesModalOpen(true)
       return
     }
-    
-    // All validations passed — deploy via real backend
+
     setDeployDisabled(true)
 
-    console.log('[SummaryStep] handleCreatePipeline — start')
-
-    // 1. Fetch ordered step list from backend (falls back to built-in list)
     const steps = await fetchDeploymentSteps(false)
-    console.log('[SummaryStep] steps:', steps.length, steps.map(s => s.id))
-
-    // 2. Open the progress modal immediately
     deployment.startDeployment(steps)
 
-    // 3. POST the generated YAML to the backend to create + start the deployment
-    console.log('[SummaryStep] posting YAML to backend...')
     const result = await deployFromYaml({
       productType: state.metadata.productType,
       source: state.metadata.productSource,
       team: state.metadata.team,
-        environment: normalizedMetadataEnvironment,
+      environment: normalizedMetadataEnvironment,
       isDeploy: true,
       configurationYaml: yaml,
     })
-    console.log('[SummaryStep] deployFromYaml result:', JSON.stringify(result))
 
     if (!result || result.success === false) {
       const msg = result?.error || 'Unable to start deployment.'
-      console.warn('[SummaryStep] deploy failed:', msg)
-        setDeploymentStatus({
-          teamName: state.metadata.team,
-          productSource: state.metadata.productSource,
-          productType: state.metadata.productType,
-          environment: normalizedMetadataEnvironment,
-          deploymentStatus: 'failed',
-        })
+      setDeploymentStatus({
+        teamName: state.metadata.team,
+        productSource: state.metadata.productSource,
+        productType: state.metadata.productType,
+        environment: normalizedMetadataEnvironment,
+        deploymentStatus: 'failed',
+      })
       deployment.updateStep(0, { status: 'failed', error: msg })
       deployment.setIsError(true)
       deployment.setErrorMessage(msg)
@@ -652,27 +626,22 @@ ${sinkAdditionalConfigYaml}` : ''}
       return
     }
 
-    // 4. Open SSE stream keyed by the run ID returned by the backend
-    // The backend may use any of these field names for the deployment run ID.
     const deploymentId =
       result?.deploymentId ??
-      result?.id           ??
-      result?.runId        ??
-      result?.run_id       ??
-      result?.jobId        ??
+      result?.id ??
+      result?.runId ??
+      result?.run_id ??
+      result?.jobId ??
       result?.job_id
-    console.log('[SummaryStep] deployFromYaml full result:', JSON.stringify(result))
-    console.log('[SummaryStep] opening SSE stream for deploymentId:', deploymentId)
 
     if (!deploymentId) {
-      console.error('[SummaryStep] backend did not return a deploymentId — cannot track progress. Full result:', result)
-        setDeploymentStatus({
-          teamName: state.metadata.team,
-          productSource: state.metadata.productSource,
-          productType: state.metadata.productType,
-          environment: normalizedMetadataEnvironment,
-          deploymentStatus: 'failed',
-        })
+      setDeploymentStatus({
+        teamName: state.metadata.team,
+        productSource: state.metadata.productSource,
+        productType: state.metadata.productType,
+        environment: normalizedMetadataEnvironment,
+        deploymentStatus: 'failed',
+      })
       deployment.updateStep(0, { status: 'failed', error: 'Server did not return a deployment ID.' })
       deployment.setIsError(true)
       deployment.setErrorMessage('Server did not return a deployment ID. Check the backend response.')
@@ -680,18 +649,16 @@ ${sinkAdditionalConfigYaml}` : ''}
       return
     }
 
-    // ── Shared failure handler ────────────────────────────────────────────
     const handleFailure = (stepIndex, error) => {
       const msg = error || 'Deployment step failed.'
       const idx = typeof stepIndex === 'number' ? stepIndex : 0
-      console.warn('[SummaryStep] failure at step', idx, ':', msg)
-        setDeploymentStatus({
-          teamName: state.metadata.team,
-          productSource: state.metadata.productSource,
-          productType: state.metadata.productType,
-          environment: normalizedMetadataEnvironment,
-          deploymentStatus: 'failed',
-        })
+      setDeploymentStatus({
+        teamName: state.metadata.team,
+        productSource: state.metadata.productSource,
+        productType: state.metadata.productType,
+        environment: normalizedMetadataEnvironment,
+        deploymentStatus: 'failed',
+      })
       deployment.updateStep(idx, { status: 'failed', error: msg })
       deployment.setIsError(true)
       deployment.setErrorMessage(msg)
@@ -700,26 +667,19 @@ ${sinkAdditionalConfigYaml}` : ''}
       deployment.reset()
     }
 
-    // ── SSE progress callbacks ────────────────────────────────────────────
     sseCleanupRef.current = subscribeToDeploymentProgress(deploymentId, {
       onStepStart: ({ stepIndex, label } = {}) => {
-        console.log('[SummaryStep] → step-start', stepIndex, label)
         if (typeof stepIndex !== 'number') {
-          console.warn('[SummaryStep] step-start missing stepIndex:', { stepIndex, label })
           return
         }
         deployment.setCurrentStepIndex(stepIndex)
-        // If the backend provides a label in the SSE event, use it so the modal
-        // shows the real backend step name instead of the fallback/cached label.
         deployment.updateStep(stepIndex, {
           status: 'active',
           ...(label ? { label } : {}),
         })
       },
       onStepComplete: ({ stepIndex, label } = {}) => {
-        console.log('[SummaryStep] → step-complete', stepIndex)
         if (typeof stepIndex !== 'number') {
-          console.warn('[SummaryStep] step-complete missing stepIndex:', { stepIndex })
           return
         }
         deployment.updateStep(stepIndex, {
@@ -733,17 +693,15 @@ ${sinkAdditionalConfigYaml}` : ''}
       },
       onStepFailed: ({ stepIndex, error } = {}) => handleFailure(stepIndex, error),
       onComplete: () => {
-        console.log('[SummaryStep] → deployment-complete')
-          setDeploymentStatus({
-            teamName: state.metadata.team,
-            productSource: state.metadata.productSource,
-            productType: state.metadata.productType,
-            environment: normalizedMetadataEnvironment,
-            deploymentStatus: 'running',
-          })
+        setDeploymentStatus({
+          teamName: state.metadata.team,
+          productSource: state.metadata.productSource,
+          productType: state.metadata.productType,
+          environment: normalizedMetadataEnvironment,
+          deploymentStatus: 'running',
+        })
         deployment.updateStep(steps.length - 1, { status: 'done' })
         deployment.setIsComplete(true)
-        // setIsComplete doesn't trigger onDeploymentComplete — call it directly
         setDeployDisabled(false)
         setTimeout(() => {
           setSubmitted(true)
@@ -751,11 +709,9 @@ ${sinkAdditionalConfigYaml}` : ''}
         }, 500)
       },
       onConnectionError: (msg) => {
-        console.warn('[SummaryStep] → SSE connection error:', msg)
         handleFailure(undefined, msg)
       },
     })
-    console.log('[SummaryStep] SSE stream opened')
   }
 
   const handleSaveDraft = async () => {

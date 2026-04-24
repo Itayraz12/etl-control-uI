@@ -77,6 +77,9 @@ export default function MetadataStep() {
     const entityName = String(metadata.entityName ?? '').trim()
     const previousEntityName = String(previousEntityRef.current ?? '').trim()
     const resolvedEntityName = String(selectedEntitySchemaName ?? '').trim()
+    const selectedEntitySchemaTitle = String(
+      selectedEntitySchema?.title ?? selectedEntitySchema?.schemaName ?? selectedEntitySchema?.name ?? ''
+    ).trim()
 
     if (!entityName) {
       actions.setTargetSchema([])
@@ -102,7 +105,15 @@ export default function MetadataStep() {
       return
     }
 
-    actions.setTargetSchema(schema)
+    actions.setTargetSchema(
+      selectedEntitySchemaTitle
+        ? {
+            title: selectedEntitySchemaTitle,
+            schemaName: selectedEntitySchemaTitle,
+            schema,
+          }
+        : schema
+    )
     if (previousEntityName && previousEntityName !== entityName) {
       actions.setMappings([])
     }

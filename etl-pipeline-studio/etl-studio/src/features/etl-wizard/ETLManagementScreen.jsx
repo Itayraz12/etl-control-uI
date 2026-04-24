@@ -913,7 +913,7 @@ export default function ETLManagementScreen() {
   };
 
   /**
-   * Fetches the deployed YAML from /api/backend/configuration/yaml and
+   * Fetches the deployed YAML from /api/deployment/configuration/draft/yaml and
    * opens a new read-only window with all configuration tabs pre-filled.
    */
   const handleViewDeployedVersion = async (dep) => {

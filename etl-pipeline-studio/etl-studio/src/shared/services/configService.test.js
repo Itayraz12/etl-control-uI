@@ -26,11 +26,11 @@ describe('configService', () => {
 
   it('appends the selected source format to the schema-by-example URL', () => {
     expect(buildSchemaByExampleUrl({ sourceFormat: 'JSON' })).toBe(
-      'http://localhost:8080/api/backend/schemaByExample/JSON'
+      'http://localhost:8080/api/schemaByExample/JSON'
     )
 
     expect(buildSchemaByExampleUrl({ sourceFormat: 'CSV' })).toBe(
-      'http://localhost:8080/api/backend/schemaByExample/CSV'
+      'http://localhost:8080/api/schemaByExample/CSV'
     )
   })
 
@@ -47,7 +47,7 @@ describe('configService', () => {
       team: 'Team A',
       environment: 'PROD',
     })).toBe(
-      'http://localhost:8080/api/backend/configuration/yaml?productType=Inventory&source=ERP&team=Team+A&environment=PROD'
+      'http://localhost:8080/api/deployment/configuration/draft/yaml?productType=Inventory&source=ERP&team=Team+A&environment=PROD'
     )
   })
 
@@ -61,7 +61,7 @@ describe('configService', () => {
       apiBase: '/api',
       origin: 'http://localhost:5173',
     })).toBe(
-      'http://localhost:5173/api/backend/configuration/yaml?productType=Inventory&source=ERP&team=Team+A&environment=CAP'
+      'http://localhost:5173/api/deployment/configuration/draft/yaml?productType=Inventory&source=ERP&team=Team+A&environment=CAP'
     )
   })
 
@@ -357,6 +357,7 @@ describe('configService', () => {
 
   it('deduplicates concurrent entity schema fetches for the same entity but refetches on a later revisit', async () => {
     fetchMock.mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
+      title: 'GenomeProductTitle',
       type: 'object',
       required: ['code'],
       properties: {
@@ -376,6 +377,14 @@ describe('configService', () => {
 
     expect(first).toEqual(second)
     expect(second).toEqual(third)
+    expect(first).toEqual({
+      title: 'GenomeProductTitle',
+      schemaName: 'GenomeProductTitle',
+      schema: expect.arrayContaining([
+        expect.objectContaining({ id: 'code', type: 'string', required: true }),
+        expect.objectContaining({ id: 'price', type: 'number' }),
+      ]),
+    })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,

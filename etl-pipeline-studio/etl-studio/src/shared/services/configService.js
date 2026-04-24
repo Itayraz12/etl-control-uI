@@ -58,7 +58,7 @@ function buildApiUrl(pathname = '', { apiBase = API_BASE, origin } = {}) {
   return new URL(relativeUrl, resolvedOrigin)
 }
 
-export function buildConfigurationYamlUrl(pathname = 'backend/configuration/yaml', query = {}, options = {}) {
+export function buildConfigurationYamlUrl(pathname = 'deployment/configuration/draft/yaml', query = {}, options = {}) {
   const url = buildApiUrl(pathname, options)
   Object.entries(query).forEach(([key, value]) => {
     const normalizedValue = key === 'environment'
@@ -562,7 +562,7 @@ export function extractSchemaNameFromExamplePayload(payload, fallback = '') {
 export function buildSchemaByExampleUrl({ sourceFormat } = {}) {
   const normalizedSourceFormat = String(sourceFormat ?? '').trim()
   return normalizedSourceFormat
-    ? `${API_BASE}/backend/schemaByExample/${encodeURIComponent(normalizedSourceFormat)}`
+    ? `${API_BASE}/schemaByExample/${encodeURIComponent(normalizedSourceFormat)}`
     : `${API_BASE}/backend/schemaByExample`
 }
 
@@ -573,7 +573,11 @@ export async function fetchEntitySchema(entityName, useMock = true) {
   return loadInFlightConfigRequest(cacheKey, async () => {
     if (useMock) {
       await new Promise(r => setTimeout(r, 150))
-      return normalizeSourceSchema(TARGET_FIELDS)
+      return {
+        title: normalizedEntityName || 'MockEntitySchema',
+        schemaName: normalizedEntityName || 'MockEntitySchema',
+        schema: normalizeSourceSchema(TARGET_FIELDS),
+      }
     }
 
     const response = await fetchWithUserId(`${API_BASE}/genome/schema/${encodeURIComponent(normalizedEntityName)}`, {
@@ -610,7 +614,15 @@ export async function fetchEntitySchema(entityName, useMock = true) {
       throw new Error('Entity schema returned no fields')
     }
 
-    return schema
+    const schemaTitle = String(
+      payload?.title ?? extractSchemaNameFromExamplePayload(payload, normalizedEntityName)
+    ).trim() || normalizedEntityName
+
+    return {
+      title: schemaTitle,
+      schemaName: schemaTitle,
+      schema,
+    }
   })
 }
 
@@ -908,7 +920,7 @@ sink:
 `
   }
 
-  const response = await fetchWithUserId(buildConfigurationYamlUrl('backend/configuration/yaml', {
+  const response = await fetchWithUserId(buildConfigurationYamlUrl('deployment/configuration/draft/yaml', {
     productType,
     source,
     team,
@@ -935,7 +947,7 @@ sink:
 export async function saveDraftConfiguration({ productType, source, team, environment, yaml }) {
   const cleanYaml = compactYamlDocument(yaml)
 
-  const response = await fetchWithUserId(buildConfigurationYamlUrl('backend/configuration/yaml', {
+  const response = await fetchWithUserId(buildConfigurationYamlUrl('deployment/configuration/draft/yaml', {
     productType,
     source,
     team,

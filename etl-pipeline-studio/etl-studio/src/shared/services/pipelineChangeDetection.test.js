@@ -115,5 +115,24 @@ describe('buildPipelineChangeSignature', () => {
 
     expect(changedSignature).not.toBe(baseSignature)
   })
+
+  it('changes when the target schema title changes', () => {
+    const baseSignature = buildPipelineChangeSignature(buildState({
+      targetSchema: {
+        title: 'Genome Product Title',
+        schemaName: 'Genome Product Title',
+        schema: [{ id: 'code', name: 'code', type: 'string', required: true }],
+      },
+    }))
+    const changedSignature = buildPipelineChangeSignature(buildState({
+      targetSchema: {
+        title: 'Genome Product Title v2',
+        schemaName: 'Genome Product Title v2',
+        schema: [{ id: 'code', name: 'code', type: 'string', required: true }],
+      },
+    }))
+
+    expect(changedSignature).not.toBe(baseSignature)
+  })
 })
 

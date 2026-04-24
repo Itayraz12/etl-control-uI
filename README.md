@@ -70,9 +70,9 @@ When mock mode is disabled, the app calls `http://localhost:8080/api` endpoints 
 | Transformers | GET | `http://localhost:8080/api/config/transformers` |
 | Filter operators | GET | `http://localhost:8080/api/config/filters` |
 | Entities | GET | `http://localhost:8080/api/backbone/entities` |
-| Deployments | GET | `http://localhost:8080/api/backend/deployments?teamName=<team>` |
-| Draft YAML | GET | `http://localhost:8080/api/backend/configuration/yaml?...` |
-| Save draft YAML | POST | `http://localhost:8080/api/backend/configuration/yaml?...` |
+| Deployments | GET | `http://localhost:8080/api/deployment/deployments?teamName=<team>` |
+| Draft YAML | GET | `http://localhost:8080/api/deployment/configuration/draft/yaml?...` |
+| Save draft YAML | POST | `http://localhost:8080/api/deployment/configuration/draft/yaml?...` |
 
 With mock mode enabled, the UI uses built-in sample data instead of those calls.
 

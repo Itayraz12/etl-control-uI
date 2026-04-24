@@ -374,6 +374,28 @@ describe('SummaryStep save draft behavior', () => {
     expect(yamlPreview).not.toHaveTextContent('type: EQ')
   })
 
+  it('keeps schema names only in the YAML preview', () => {
+    mockWizardState.upload.schemaName = 'CatalogInputSchema'
+    mockWizardState.targetSchema = {
+      title: 'CatalogEntityTitle',
+      schemaName: 'CatalogEntitySchema',
+      schema: [
+        { id: 'sku', name: 'sku', path: 'sku', type: 'string', required: true },
+      ],
+    }
+
+    render(<SummaryStep />)
+
+    expect(screen.queryByText('📦 Schema')).not.toBeInTheDocument()
+    expect(screen.queryByText('inputSchema:')).not.toBeInTheDocument()
+    expect(screen.queryByText('outputSchema:')).not.toBeInTheDocument()
+
+    const yamlPreview = screen.getByTestId('yaml-preview')
+    expect(yamlPreview).toHaveTextContent('schema:')
+    expect(yamlPreview).toHaveTextContent('inputSchema: "CatalogInputSchema"')
+    expect(yamlPreview).toHaveTextContent('outputSchema: "CatalogEntityTitle"')
+  })
+
   it('shows a no-change popup and skips deployment when the edited YAML is unchanged', async () => {
     setPassingValidationChecklist()
     mockWizardState.originalDraftYaml = `metadata:

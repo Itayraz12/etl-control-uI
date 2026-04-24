@@ -101,7 +101,7 @@ Fetches saved draft YAML for preview.
 Fetches editable/current draft YAML.
 
 - Method: `GET`
-- Full default URL: `http://localhost:8080/api/backend/configuration/yaml`
+- Full default URL: `http://localhost:8080/api/deployment/configuration/draft/yaml`
 - Query params:
   - `productType`
   - `source`
@@ -114,7 +114,7 @@ Fetches editable/current draft YAML.
 Saves draft YAML.
 
 - Method: `POST`
-- Full default URL: `http://localhost:8080/api/backend/configuration/yaml`
+- Full default URL: `http://localhost:8080/api/deployment/configuration/draft/yaml`
 - Query params:
   - `productType`
   - `source`
@@ -146,11 +146,11 @@ Tests Kafka connectivity for the selected topic/environment.
 
 ## 5. Deployment APIs
 
-### GET `/backend/deployments`
+### GET `/deployment/deployments`
 Fetches deployments for the management screen.
 
 - Method: `GET`
-- Full default URL: `http://localhost:8080/api/backend/deployments`
+- Full default URL: `http://localhost:8080/api/deployment/deployments`
 - Query params:
   - `teamName`
 - Service: `src/shared/services/deploymentsService.js`
@@ -184,11 +184,11 @@ Fetches deployment step definitions for the progress modal.
   - `src/features/summary/SummaryStep.jsx`
   - `src/features/etl-wizard/ETLManagementScreen.jsx`
 
-### POST `/backend/deployments/stop`
+### POST `/backend/stop`
 Stops a deployment.
 
 - Method: `POST`
-- Full default URL: `http://localhost:8080/api/backend/deployments/stop`
+- Full default URL: `http://localhost:8080/api/backend/stop`
 - Query params:
   - `productType`
   - `source`
@@ -576,10 +576,10 @@ POST   /backend/configuration/yaml
 
 GET    /backend/kafka/test-connection
 
-GET    /backend/deployments
+GET    /deployment/deployments
 POST   /backend/deployments/deploy
 GET    /backend/deployments/steps
-POST   /backend/deployments/stop
+POST   /backend/stop
 DELETE /backend/deployments/delete
 POST   /backend/deployments/{id}/restore
 

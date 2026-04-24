@@ -355,6 +355,34 @@ describe('MetadataStep entity target schema', () => {
     })
   })
 
+  it('persists the entity schema title from genome/schema as target schema metadata', async () => {
+    const user = userEvent.setup()
+    const view = renderStep()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Entity Name' }), 'Product')
+
+    setResolvedEntitySchema('Product', {
+      title: 'Genome Product Title',
+      schema: [
+        { id: 'code', name: 'code', path: 'code', type: 'string', required: true },
+      ],
+    })
+    rerenderStep(view)
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.targetSchema).toMatchObject({
+        title: 'Genome Product Title',
+        schemaName: 'Genome Product Title',
+      })
+      expect(persisted.targetSchema.schema).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'code', type: 'string', required: true }),
+        ])
+      )
+    })
+  })
+
   it('clears stale mappings when the entity changes', async () => {
     const user = userEvent.setup()
     const view = renderStep({

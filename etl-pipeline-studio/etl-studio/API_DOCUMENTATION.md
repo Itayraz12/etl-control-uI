@@ -359,12 +359,12 @@ GET /drafts/draft-12345
 
 ## Deployment Management APIs
 
-### 6. GET /deployments
+### 6. GET /deployment/deployments
 
 List all ETL deployments with filtering and pagination support.
 
 **Method:** `GET`  
-**Path:** `/deployments`  
+**Path:** `/deployment/deployments`  
 **Authentication:** Not required (mock mode)  
 **Status Code:** `200 OK`
 
@@ -375,7 +375,7 @@ List all ETL deployments with filtering and pagination support.
 
 **Request Example:**
 ```
-GET /deployments?status=running&limit=10&offset=0
+GET /deployment/deployments?status=running&limit=10&offset=0
 ```
 
 **Response Example:**
