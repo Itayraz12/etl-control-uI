@@ -170,6 +170,15 @@ describe('MetadataStep entity target schema', () => {
     expect(screen.queryByRole('option', { name: 'OrderEntity (Order)' })).not.toBeInTheDocument()
   })
 
+  it('renders the entity name field before the location field', () => {
+    renderStep()
+
+    const entityNameSelect = screen.getByRole('combobox', { name: 'Entity Name' })
+    const locationSelect = screen.getByRole('combobox', { name: 'Location' })
+
+    expect(entityNameSelect.compareDocumentPosition(locationSelect) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('renders Data Stream Info in metadata with required empty selections and persists chosen source settings', async () => {
     const user = userEvent.setup()
 
@@ -252,6 +261,33 @@ describe('MetadataStep entity target schema', () => {
     await waitFor(() => {
       const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
       expect(persisted.metadata?.location).toBe('OFFICE')
+    })
+  })
+
+  it('keeps a reserved helper area below location and swaps its message by environment', async () => {
+    const user = userEvent.setup()
+
+    renderStep({
+      metadata: {
+        environment: '',
+        location: '',
+      },
+    })
+
+    const helperText = screen.getByTestId('location-helper-text')
+    expect(helperText).toHaveTextContent('Select an environment to choose a location.')
+    expect(helperText).toHaveStyle({ minHeight: '16px' })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Environment' }), 'PROD')
+
+    await waitFor(() => {
+      expect(helperText).toBeEmptyDOMElement()
+    })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Environment' }), 'CAP')
+
+    await waitFor(() => {
+      expect(helperText).toHaveTextContent('Non-production environments are limited to HOME.')
     })
   })
 

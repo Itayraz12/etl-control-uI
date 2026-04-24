@@ -43,6 +43,11 @@ export default function MetadataStep() {
   const isProduction = isProductionEnvironment(metadata.environment)
   const allowedLocations = getAllowedMetadataLocations(metadata.environment)
   const normalizedLocation = normalizeMetadataLocation(metadata.location, metadata.environment)
+  const locationHelperText = !hasEnvironment
+    ? 'Select an environment to choose a location.'
+    : !isProduction
+      ? 'Non-production environments are limited to HOME.'
+      : ''
   const missingRequiredFields = new Set(getMissingMetadataRequiredFields(metadata, src))
   const previousEntityRef = useRef(metadata.entityName)
   const u = (k, v) => actions.updateMetadata({ [k]: v })
@@ -178,6 +183,18 @@ export default function MetadataStep() {
                 ))}
               </select>
             </FormGroup>
+            <FormGroup label="Entity Name" required>
+              <select aria-label="Entity Name" aria-invalid={isInvalid('entity name')} value={metadata.entityName} onChange={e => u('entityName', e.target.value)}>
+                <option value="">Select an entity...</option>
+                {entities.map(ent => (
+                  <option key={ent.id} value={ent.type}>{ent.name}</option>
+                ))}
+              </select>
+              {loadingEntitySchema && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>Loading entity schema…</div>}
+              {!!entitySchemaError && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>{entitySchemaError}</div>}
+            </FormGroup>
+          </FormRow>
+          <FormRow>
             <FormGroup label="Location" required={hasEnvironment}>
               <select
                 aria-label="Location"
@@ -189,20 +206,12 @@ export default function MetadataStep() {
                 {(!hasEnvironment || isProduction) && <option value="">Select a location...</option>}
                 {allowedLocations.map(location => <option key={location} value={location}>{location}</option>)}
               </select>
-              {!hasEnvironment && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>Select an environment to choose a location.</div>}
-              {hasEnvironment && !isProduction && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>Non-production environments are limited to HOME.</div>}
-            </FormGroup>
-          </FormRow>
-          <FormRow>
-            <FormGroup label="Entity Name" required>
-              <select aria-label="Entity Name" aria-invalid={isInvalid('entity name')} value={metadata.entityName} onChange={e => u('entityName', e.target.value)}>
-                <option value="">Select an entity...</option>
-                {entities.map(ent => (
-                  <option key={ent.id} value={ent.type}>{ent.name}</option>
-                ))}
-              </select>
-              {loadingEntitySchema && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>Loading entity schema…</div>}
-              {!!entitySchemaError && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>{entitySchemaError}</div>}
+              <div
+                data-testid="location-helper-text"
+                style={{ marginTop: 6, minHeight: 16, fontSize: 11, lineHeight: '16px', color: 'var(--muted)' }}
+              >
+                {locationHelperText}
+              </div>
             </FormGroup>
           </FormRow>
         </Card>

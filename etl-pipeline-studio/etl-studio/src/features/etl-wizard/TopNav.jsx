@@ -5,7 +5,7 @@ import { APP_VERSION } from '../../shared/services/appConfig.js'
 
 export default function TopNav() {
   const { state, actions } = useWizard()
-  const { user, logout } = useUser()
+  const { logout } = useUser()
   const { readOnly } = state
   const appVersion = `v${APP_VERSION}`
 
@@ -42,7 +42,6 @@ export default function TopNav() {
       >
         ETL<span style={{ color: 'var(--text)' }}>Management</span>
       </button>
-      <Chip c="purple">ENTERPRISE</Chip>
       <span style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
         {appVersion}
       </span>
