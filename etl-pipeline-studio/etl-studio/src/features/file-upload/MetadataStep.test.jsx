@@ -312,6 +312,41 @@ describe('MetadataStep entity target schema', () => {
     })
   })
 
+  it('clears the selected entity and dependent state when the environment changes', async () => {
+    const user = userEvent.setup()
+
+    renderStep({
+      metadata: {
+        environment: 'PROD',
+        entityName: 'Product',
+        location: 'OFFICE',
+      },
+      targetSchema: [{ id: 'code', name: 'code', path: 'code', type: 'string', required: true }],
+      mappings: [
+        {
+          src: 'sourceCode',
+          tgt: 'code',
+          transformer: 'none',
+          extraInputs: [],
+        },
+      ],
+    })
+
+    expect(screen.getByRole('combobox', { name: 'Entity Name' })).toHaveValue('Product')
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Environment' }), 'CAP')
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(screen.getByRole('combobox', { name: 'Entity Name' })).toHaveValue('')
+      expect(persisted.metadata?.environment).toBe('CAP')
+      expect(persisted.metadata?.entityName).toBe('')
+      expect(persisted.metadata?.location).toBe('HOME')
+      expect(persisted.targetSchema).toEqual([])
+      expect(persisted.mappings).toEqual([])
+    })
+  })
+
   it('keeps legacy persisted environment strings unselected now that backward compatibility is removed', async () => {
     renderStep({
       metadata: { environment: 'production' },

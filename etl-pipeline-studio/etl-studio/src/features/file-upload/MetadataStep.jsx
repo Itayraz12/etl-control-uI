@@ -175,6 +175,7 @@ export default function MetadataStep() {
                 onChange={e => actions.updateMetadata({
                   environment: e.target.value,
                   location: normalizeMetadataLocation('', e.target.value),
+                  entityName: '',
                 })}
               >
                 <option value="">select an environment...</option>

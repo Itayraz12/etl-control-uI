@@ -8,7 +8,15 @@ const mockWizardState = {
   interactionMode: 'edit',
   metadata: {
     entityName: '',
+    environment: '',
   },
+}
+const mockConfig = {
+  prefetchForStep,
+  loadingMetadata: false,
+  loadingEntities: false,
+  loadingFilters: false,
+  loadingTransformers: false,
 }
 
 vi.mock('../../shared/store/wizardStore.jsx', () => ({
@@ -24,13 +32,7 @@ vi.mock('../../shared/store/configContext.jsx', () => ({
   STEP_FILTERS: 3,
   STEP_FIELD_MAPPING: 4,
   STEP_SUMMARY: 6,
-  useConfig: () => ({
-    prefetchForStep,
-    loadingMetadata: false,
-    loadingEntities: false,
-    loadingFilters: false,
-    loadingTransformers: false,
-  }),
+  useConfig: () => mockConfig,
 }))
 
 vi.mock('../file-upload/MetadataStep.jsx', () => ({
@@ -66,13 +68,22 @@ describe('WizardShell', () => {
     prefetchForStep.mockReset()
     mockWizardState.currentStep = 0
     mockWizardState.interactionMode = 'edit'
-    mockWizardState.metadata = { entityName: '' }
+    mockWizardState.metadata = { entityName: '', environment: '' }
+    mockConfig.loadingMetadata = false
+    mockConfig.loadingEntities = false
+    mockConfig.loadingFilters = false
+    mockConfig.loadingTransformers = false
   })
 
   it('prefetches config for the active step when the shell renders', () => {
     render(<WizardShell />)
 
-    expect(prefetchForStep).toHaveBeenCalledWith(0, false, { entityName: '' })
+    expect(prefetchForStep).toHaveBeenCalledWith(0, false, {
+      entityName: '',
+      environment: '',
+      requiredFilters: undefined,
+      requiredMappings: undefined,
+    })
   })
 
   it('renders the read-only banner without disabling the shell container', () => {
@@ -86,6 +97,24 @@ describe('WizardShell', () => {
     expect(shell).toHaveAttribute('aria-readonly', 'true')
     expect(shell).not.toHaveAttribute('disabled')
     expect(screen.getByTestId('wizard-shell-step')).toBeInTheDocument()
+  })
+
+  it('keeps the metadata step mounted when only entity options are reloading', () => {
+    mockConfig.loadingEntities = true
+
+    render(<WizardShell />)
+
+    expect(screen.getByTestId('wizard-shell-step')).toBeInTheDocument()
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
+  })
+
+  it('shows the shell loading spinner when the metadata step itself is loading', () => {
+    mockConfig.loadingMetadata = true
+
+    render(<WizardShell />)
+
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(screen.queryByTestId('wizard-shell-step')).not.toBeInTheDocument()
   })
 })
 

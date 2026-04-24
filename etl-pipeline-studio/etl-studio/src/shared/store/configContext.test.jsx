@@ -169,6 +169,47 @@ describe('ConfigProvider metadata prefetching', () => {
     })
   })
 
+  it('refetches entities when the selected metadata environment changes', async () => {
+    fetchEntities
+      .mockResolvedValueOnce([
+        { id: 'ent-cap-1', name: 'CapProductEntity', type: 'Product' },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'ent-prod-1', name: 'ProdProductEntity', type: 'Product' },
+      ])
+
+    const view = render(
+      <ConfigProvider>
+        <PrefetchProbe step={STEP_METADATA} entityName="Product" environment="CAP" />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchEntities).toHaveBeenCalledTimes(1)
+      expect(screen.getByTestId('status')).toHaveTextContent('"entitiesCount":1')
+    })
+
+    expect(fetchEntities).toHaveBeenNthCalledWith(1, false, { environment: 'CAP' })
+    expect(fetchStreamingContinuities).toHaveBeenCalledTimes(1)
+    expect(fetchRecordsPerDay).toHaveBeenCalledTimes(1)
+
+    view.rerender(
+      <ConfigProvider>
+        <PrefetchProbe step={STEP_METADATA} entityName="Product" environment="PROD" />
+      </ConfigProvider>
+    )
+
+    await waitFor(() => {
+      expect(fetchEntities).toHaveBeenCalledTimes(2)
+      expect(screen.getByTestId('status')).toHaveTextContent('"entitiesCount":1')
+    })
+
+    expect(fetchEntities).toHaveBeenNthCalledWith(2, false, { environment: 'PROD' })
+    expect(fetchStreamingContinuities).toHaveBeenCalledTimes(1)
+    expect(fetchRecordsPerDay).toHaveBeenCalledTimes(1)
+    expect(fetchEntitySchema).toHaveBeenCalledTimes(1)
+  })
+
   it('prefetches filter metadata when the user enters the summary step', async () => {
     render(
       <ConfigProvider>

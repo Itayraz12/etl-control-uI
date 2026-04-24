@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  buildEntitiesUrl,
   buildFiltersUrl,
   buildTransformersUrl,
   buildConfigurationYamlUrl,
   buildSchemaByExampleUrl,
+  fetchEntities,
   fetchEntitySchema,
   fetchFilters,
   fetchTransformers,
@@ -82,6 +84,16 @@ describe('configService', () => {
 
     expect(buildTransformersUrl({ environment: '' })).toBe(
       'http://localhost:8080/api/config/transformers'
+    )
+  })
+
+  it('builds entity URLs with a normalized environment query parameter when provided', () => {
+    expect(buildEntitiesUrl({ environment: 'cap' })).toBe(
+      'http://localhost:8080/api/genome/getGenomeEntityList?environment=CAP'
+    )
+
+    expect(buildEntitiesUrl({ environment: '' })).toBe(
+      'http://localhost:8080/api/genome/getGenomeEntityList'
     )
   })
 
@@ -351,6 +363,24 @@ describe('configService', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8080/api/config/transformers?environment=CAP',
+      { headers: { 'X-user-ID': 'user-123' } },
+    )
+  })
+
+  it('fetches entities from the environment-aware entities endpoint', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([
+      { id: 'ent-1', name: 'ProductEntity', type: 'Product' },
+    ]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(fetchEntities(false, { environment: 'prod' })).resolves.toEqual([
+      { id: 'ent-1', name: 'ProductEntity', type: 'Product' },
+    ])
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8080/api/genome/getGenomeEntityList?environment=PROD',
       { headers: { 'X-user-ID': 'user-123' } },
     )
   })

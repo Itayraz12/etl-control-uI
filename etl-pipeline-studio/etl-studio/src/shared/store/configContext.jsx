@@ -129,6 +129,11 @@ function buildTransformerEnvironmentCacheKey(useMock, environment = '') {
   return `${useMock ? 'mock' : 'live'}::${normalizedEnvironment}`
 }
 
+function buildMetadataEnvironmentCacheKey(useMock, environment = '') {
+  const normalizedEnvironment = String(environment ?? '').trim().toUpperCase() || '__default__'
+  return `${useMock ? 'mock' : 'live'}::${normalizedEnvironment}`
+}
+
 // ── Step indices that need pre-fetched config data ────────────────────────
 export const STEP_METADATA      = 0   // needs entities
 export const STEP_FILTERS       = 3   // needs filter operators
@@ -171,6 +176,9 @@ export function ConfigProvider({ children }) {
 
   // Refs track in-flight requests — never trigger re-renders, safe as useCallback deps
   const fetchingMetadata     = useRef(false)
+  const fetchingMetadataKey = useRef('')
+  const handledMetadataKey = useRef('')
+  const metadataRequestId = useRef(0)
   const fetchingEntities     = useRef(false)
   const fetchingEntitySchemaKey = useRef('')
   const handledEntitySchemaKey = useRef('')
@@ -318,12 +326,20 @@ export function ConfigProvider({ children }) {
     const wasFieldMappingStep = previousStepRef.current === STEP_FIELD_MAPPING
     const isEnteringFieldMappingStep = isFieldMappingStep && !wasFieldMappingStep
     const normalizedEntityName = String(entityName ?? '').trim()
+    const metadataEnvironmentKey = buildMetadataEnvironmentCacheKey(useMock, environment)
 
     if (isEnteringMetadataStep) {
+      handledMetadataKey.current = ''
       handledEntitySchemaKey.current = ''
     }
 
     if (!isMetadataStep && wasMetadataStep) {
+      metadataRequestId.current += 1
+      fetchingMetadata.current = false
+      fetchingMetadataKey.current = ''
+      handledMetadataKey.current = ''
+      setLoadingMetadata(false)
+      setLoadingEntities(false)
       entitySchemaRequestId.current += 1
       fetchingEntitySchemaKey.current = ''
       handledEntitySchemaKey.current = ''
@@ -332,26 +348,51 @@ export function ConfigProvider({ children }) {
 
     previousStepRef.current = step
 
-    if (isEnteringMetadataStep && !fetchingMetadata.current) {
-      fetchingMetadata.current = true
+    const shouldLoadMetadataOptions = isEnteringMetadataStep
+    const shouldReloadEntitiesForEnvironment = isMetadataStep
+      && !isEnteringMetadataStep
+      && handledMetadataKey.current !== metadataEnvironmentKey
+
+    if ((shouldLoadMetadataOptions || shouldReloadEntitiesForEnvironment) && fetchingMetadataKey.current !== metadataEnvironmentKey) {
+      handledMetadataKey.current = metadataEnvironmentKey
+      fetchingMetadataKey.current = metadataEnvironmentKey
+      const currentRequestId = metadataRequestId.current + 1
+      metadataRequestId.current = currentRequestId
+      const shouldShowMetadataLoader = shouldLoadMetadataOptions
+      fetchingMetadata.current = shouldShowMetadataLoader
       fetchingEntities.current = true
-      setLoadingMetadata(true)
+      setLoadingMetadata(shouldShowMetadataLoader)
       setLoadingEntities(true)
-      Promise.all([
-        fetchEntities(useMock),
-        fetchStreamingContinuities(useMock).catch(() => MOCK_STREAMING_CONTINUITIES),
-        fetchRecordsPerDay(useMock).catch(() => MOCK_RECORDS_PER_DAY),
-      ])
+      const metadataRequest = shouldLoadMetadataOptions
+        ? Promise.all([
+            fetchEntities(useMock, { environment }),
+            fetchStreamingContinuities(useMock).catch(() => MOCK_STREAMING_CONTINUITIES),
+            fetchRecordsPerDay(useMock).catch(() => MOCK_RECORDS_PER_DAY),
+          ])
+        : fetchEntities(useMock, { environment }).then(nextEntities => [nextEntities, null, null])
+
+      metadataRequest
         .then(([nextEntities, nextStreamingContinuities, nextRecordsPerDay]) => {
+          if (metadataRequestId.current !== currentRequestId) return
           setEntities(nextEntities)
-          setStreamingContinuities(nextStreamingContinuities)
-          setRecordsPerDay(nextRecordsPerDay)
+          if (nextStreamingContinuities) {
+            setStreamingContinuities(nextStreamingContinuities)
+          }
+          if (nextRecordsPerDay) {
+            setRecordsPerDay(nextRecordsPerDay)
+          }
         })
         .catch(console.error)
         .finally(() => {
+          if (metadataRequestId.current !== currentRequestId) return
           fetchingMetadata.current = false
           fetchingEntities.current = false
-          setLoadingMetadata(false)
+          if (fetchingMetadataKey.current === metadataEnvironmentKey) {
+            fetchingMetadataKey.current = ''
+          }
+          if (shouldShowMetadataLoader) {
+            setLoadingMetadata(false)
+          }
           setLoadingEntities(false)
         })
     }

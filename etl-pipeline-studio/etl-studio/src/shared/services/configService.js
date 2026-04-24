@@ -15,7 +15,7 @@ import { fetchWithUserId } from './requestHeaders.js'
 // Live endpoints:
 //   Transformers : GET http://localhost:8080/api/config/transformers
 //   Filters      : GET http://localhost:8080/api/config/filters
-//   Entities     : GET http://localhost:8080/api/backbone/entities
+//   Entities     : GET http://localhost:8080/api/genome/getGenomeEntityList
 //
 // Transformer shape (backend contract):
 //   { _id, name, description, format, canonize, inputType, additionalProperties }
@@ -82,6 +82,17 @@ export function buildFiltersUrl(query = {}, options = {}) {
 
 export function buildTransformersUrl(query = {}, options = {}) {
   const url = buildApiUrl('config/transformers', options)
+  const environment = normalizeEnvironmentValue(query.environment, query.environment ?? '')
+
+  if (environment) {
+    url.searchParams.set('environment', environment)
+  }
+
+  return url.toString()
+}
+
+export function buildEntitiesUrl(query = {}, options = {}) {
+  const url = buildApiUrl('genome/getGenomeEntityList', options)
   const environment = normalizeEnvironmentValue(query.environment, query.environment ?? '')
 
   if (environment) {
@@ -736,17 +747,18 @@ export async function fetchFilters(useMock = true, { environment = '' } = {}) {
  * Returns the entity list.
  *
  * Mock → MOCK_ENTITIES
- * Live → GET http://localhost:8080/api/backbone/entities
+ * Live → GET http://localhost:8080/api/genome/getGenomeEntityList?environment=<CAP|PROD>
  */
-export async function fetchEntities(useMock = true) {
-  const cacheKey = `entities::${useMock ? 'mock' : 'live'}`
+export async function fetchEntities(useMock = true, { environment = '' } = {}) {
+  const normalizedEnvironment = normalizeEnvironmentValue(environment, environment ?? '')
+  const cacheKey = `entities::${useMock ? 'mock' : 'live'}::${normalizedEnvironment || '__default__'}`
 
   return loadInFlightConfigRequest(cacheKey, async () => {
     if (useMock) {
       await new Promise(r => setTimeout(r, 150))
       return MOCK_ENTITIES
     }
-    return fetchJson(`${API_BASE}/backbone/entities`)
+    return fetchJson(buildEntitiesUrl({ environment: normalizedEnvironment }))
   })
 }
 
