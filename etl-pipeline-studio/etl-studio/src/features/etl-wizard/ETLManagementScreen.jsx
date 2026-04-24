@@ -503,7 +503,7 @@ export default function ETLManagementScreen() {
     )));
   };
 
-  const runManagementDeploymentAction = async (deploymentRow, mode, { isSavedVersion = false } = {}) => {
+  const runManagementDeploymentAction = async (deploymentRow, mode, { isSavedVersion = false, isDeployVersion = false } = {}) => {
     const actionCopy = MANAGEMENT_DEPLOYMENT_COPY[mode] || MANAGEMENT_DEPLOYMENT_COPY.deploy;
     const isDeploy = mode !== 'upgrade';
     const rowKey = getDeploymentRowKey(deploymentRow);
@@ -534,33 +534,11 @@ export default function ETLManagementScreen() {
     // 2. Open the progress modal immediately — all steps shown as 'pending'
     deployment.startDeployment(steps);
 
-    // 3. Fetch the saved YAML for this pipeline, then POST it to the same
-    //    deploy endpoint used by the Summary wizard tab.
+    // 3. Trigger the selected deployment action directly. The backend resolves
+    //    the saved vs deployed configuration using the request params.
     const environment = deploymentRow.environment || 'PROD';
       const deploymentTeamName = getDeploymentTeamName(deploymentRow)
-    let yamlText;
-    try {
-      console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] fetching ${isSavedVersion ? 'saved' : 'deployed'} YAML for`, deploymentRow.productType, '/', deploymentRow.productSource);
-      const fetchYaml = isSavedVersion ? fetchSavedDraftYaml : fetchDraftConfiguration
-      yamlText = await fetchYaml({
-        productType: deploymentRow.productType,
-        source: deploymentRow.productSource,
-          team: deploymentTeamName,
-        environment,
-      }, false);
-    } catch (fetchErr) {
-      const msg = fetchErr?.message || 'Failed to fetch pipeline configuration.';
-      console.error(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] fetchDraftConfiguration failed:`, msg);
-      showActionError(msg);
-      return;
-    }
-
-    if (!yamlText) {
-      showActionError('No saved YAML configuration found for this pipeline.');
-      return;
-    }
-
-    console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] posting YAML to deploy endpoint...`);
+    console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] triggering action endpoint...`);
     const result = await deployFromYaml({
       productType: deploymentRow.productType,
       source: deploymentRow.productSource,
@@ -568,7 +546,8 @@ export default function ETLManagementScreen() {
       environment,
       isDeploy,
       isSavedVersion,
-      configurationYaml: yamlText,
+      isDeployVersion,
+      ...(isDeploy ? { configurationYaml: '' } : {}),
     });
     console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] deployFromYaml result:`, JSON.stringify(result));
 
@@ -679,7 +658,7 @@ export default function ETLManagementScreen() {
     const hasDeployedVersion = String(deploymentRow?.deployedVersion ?? '').trim() !== ''
 
     if (!hasDeployedVersion) {
-      await runManagementDeploymentAction(deploymentRow, 'deploy', { isSavedVersion: true });
+      await runManagementDeploymentAction(deploymentRow, 'deploy', { isSavedVersion: true, isDeployVersion: false });
       return;
     }
 
@@ -692,7 +671,7 @@ export default function ETLManagementScreen() {
       return;
     }
 
-    await runManagementDeploymentAction(deploymentRow, 'deploy', { isSavedVersion: false });
+    await runManagementDeploymentAction(deploymentRow, 'deploy', { isSavedVersion: false, isDeployVersion: false });
   };
 
   const handleDelete = async (deploymentRow) => {
@@ -913,7 +892,7 @@ export default function ETLManagementScreen() {
   };
 
   /**
-   * Fetches the deployed YAML from /api/deployment/configuration/draft/yaml and
+   * Fetches the deployed YAML from /api/deployment/configuration/yaml and
    * opens a new read-only window with all configuration tabs pre-filled.
    */
   const handleViewDeployedVersion = async (dep) => {
@@ -1765,7 +1744,7 @@ export default function ETLManagementScreen() {
                 const target = deployVersionDialog?.deploymentRow
                 setDeployVersionDialog(null)
                 if (target) {
-                  await runManagementDeploymentAction(target, 'deploy', { isSavedVersion: true })
+                  await runManagementDeploymentAction(target, 'deploy', { isSavedVersion: true, isDeployVersion: false })
                 }
               }}
               style={{
@@ -1804,7 +1783,7 @@ export default function ETLManagementScreen() {
                 const target = deployVersionDialog?.deploymentRow
                 setDeployVersionDialog(null)
                 if (target) {
-                  await runManagementDeploymentAction(target, 'deploy', { isSavedVersion: false })
+                  await runManagementDeploymentAction(target, 'deploy', { isSavedVersion: false, isDeployVersion: true })
                 }
               }}
               style={{

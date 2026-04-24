@@ -49,7 +49,7 @@ describe('configService', () => {
       team: 'Team A',
       environment: 'PROD',
     })).toBe(
-      'http://localhost:8080/api/deployment/configuration/draft/yaml?productType=Inventory&source=ERP&team=Team+A&environment=PROD'
+      'http://localhost:8080/api/deployment/configuration/yaml?productType=Inventory&source=ERP&team=Team+A&environment=PROD'
     )
   })
 
@@ -63,7 +63,7 @@ describe('configService', () => {
       apiBase: '/api',
       origin: 'http://localhost:5173',
     })).toBe(
-      'http://localhost:5173/api/deployment/configuration/draft/yaml?productType=Inventory&source=ERP&team=Team+A&environment=CAP'
+      'http://localhost:5173/api/deployment/configuration/yaml?productType=Inventory&source=ERP&team=Team+A&environment=CAP'
     )
   })
 

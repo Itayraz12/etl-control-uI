@@ -710,12 +710,8 @@ describe('ETLManagementScreen table layout stability', () => {
         { id: 'validate', label: 'Validate' },
         { id: 'deploy', label: 'Deploy' },
       ])
-      expect(mockFetchDraftConfiguration).toHaveBeenCalledWith({
-        productType: 'Pricing',
-        source: 'PIM',
-        team: 'data-platform',
-        environment: 'PROD',
-      }, false)
+      expect(mockFetchDraftConfiguration).not.toHaveBeenCalled()
+      expect(mockFetchSavedDraftYaml).not.toHaveBeenCalled()
       expect(mockDeployFromYaml).toHaveBeenCalledWith({
         productType: 'Pricing',
         source: 'PIM',
@@ -723,7 +719,6 @@ describe('ETLManagementScreen table layout stability', () => {
         environment: 'PROD',
         isDeploy: false,
         isSavedVersion: false,
-        configurationYaml: 'pipeline: yaml',
       })
       expect(mockSubscribeToDeploymentProgress).toHaveBeenCalledWith('dep-run-1', expect.any(Object))
     })
@@ -755,12 +750,7 @@ describe('ETLManagementScreen table layout stability', () => {
     await user.click(screen.getByRole('button', { name: 'Deploy deployed version' }))
 
     await waitFor(() => {
-      expect(mockFetchDraftConfiguration).toHaveBeenCalledWith({
-        productType: 'Pricing',
-        source: 'PIM',
-        team: 'data-platform',
-        environment: 'PROD',
-      }, false)
+      expect(mockFetchDraftConfiguration).not.toHaveBeenCalled()
       expect(mockFetchSavedDraftYaml).not.toHaveBeenCalled()
       expect(mockDeployFromYaml).toHaveBeenCalledWith({
         productType: 'Pricing',
@@ -769,7 +759,8 @@ describe('ETLManagementScreen table layout stability', () => {
         environment: 'PROD',
         isDeploy: true,
         isSavedVersion: false,
-        configurationYaml: 'pipeline: yaml',
+        isDeployVersion: true,
+        configurationYaml: '',
       })
     })
   })
@@ -798,12 +789,8 @@ describe('ETLManagementScreen table layout stability', () => {
     await user.click(screen.getByRole('button', { name: 'Deploy saved version' }))
 
     await waitFor(() => {
-      expect(mockFetchSavedDraftYaml).toHaveBeenCalledWith({
-        productType: 'Pricing',
-        source: 'PIM',
-        team: 'data-platform',
-        environment: 'PROD',
-      }, false)
+      expect(mockFetchSavedDraftYaml).not.toHaveBeenCalled()
+      expect(mockFetchDraftConfiguration).not.toHaveBeenCalled()
       expect(mockDeployFromYaml).toHaveBeenCalledWith({
         productType: 'Pricing',
         source: 'PIM',
@@ -811,7 +798,8 @@ describe('ETLManagementScreen table layout stability', () => {
         environment: 'PROD',
         isDeploy: true,
         isSavedVersion: true,
-        configurationYaml: 'saved: yaml',
+        isDeployVersion: false,
+        configurationYaml: '',
       })
     })
   })
@@ -910,12 +898,8 @@ describe('ETLManagementScreen table layout stability', () => {
     await user.click(deployButton)
 
     await waitFor(() => {
-      expect(mockFetchSavedDraftYaml).toHaveBeenCalledWith({
-        productType: 'Catalog',
-        source: 'CRM',
-        team: 'data-platform',
-        environment: 'CAP',
-      }, false)
+      expect(mockFetchSavedDraftYaml).not.toHaveBeenCalled()
+      expect(mockFetchDraftConfiguration).not.toHaveBeenCalled()
       expect(mockDeployFromYaml).toHaveBeenCalledWith({
         productType: 'Catalog',
         source: 'CRM',
@@ -923,7 +907,8 @@ describe('ETLManagementScreen table layout stability', () => {
         environment: 'CAP',
         isDeploy: true,
         isSavedVersion: true,
-        configurationYaml: 'saved: yaml',
+        isDeployVersion: false,
+        configurationYaml: '',
       })
       expect(screen.getByText('Kafka broker was unavailable')).toBeInTheDocument()
       expect(screen.getByText('1 failed')).toBeInTheDocument()

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { deleteDeployment, deployFromYaml, fetchDeployments, permanentlyDeleteDeployment, resetDeploymentsServiceRequestCache, setDeploymentStatus, stopDeployment, upsertSavedDraftDeployment } from './deploymentsService.js'
+import { deleteDeployment, deployFromYaml, fetchDeploymentSteps, fetchDeployments, permanentlyDeleteDeployment, resetDeploymentsServiceRequestCache, setDeploymentStatus, stopDeployment, upsertSavedDraftDeployment } from './deploymentsService.js'
 import { writePersistedActiveUser } from '../store/userSessionPersistence.js'
 
 describe('deploymentsService', () => {
@@ -32,7 +32,7 @@ describe('deploymentsService', () => {
       deploymentId: 'run-123',
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/deployments/deploy?productType=Catalog&source=ERP&team=data-platform&environment=PROD&isDeploy=true&isSavedVersion=true', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/deployment/action/deploy?productType=Catalog&source=ERP&team=data-platform&environment=PROD&isDeployVersion=false', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain', 'X-user-ID': 'user-123' },
       body: 'pipeline: test',
@@ -58,15 +58,68 @@ describe('deploymentsService', () => {
       deploymentId: 'run-upgrade-1',
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/backend/deployments/deploy?productType=Inventory&source=CRM&team=data-platform&environment=CAP&isDeploy=false&isSavedVersion=false', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/deployment/action/upgrade?productType=Inventory&source=CRM&team=data-platform&environment=CAP&isDeploy=false&isSavedVersion=false', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain', 'X-user-ID': 'user-123' },
       body: 'pipeline: upgrade',
     })
   })
 
+  it('can trigger a deploy action with an explicit empty yaml body', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, deploymentId: 'run-direct-1' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(deployFromYaml({
+      productType: 'Analytics',
+      source: 'GitLab',
+      team: 'Team A',
+      environment: 'PROD',
+      isDeploy: true,
+      isSavedVersion: true,
+      configurationYaml: '',
+    })).resolves.toEqual({
+      success: true,
+      deploymentId: 'run-direct-1',
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/deployment/action/deploy?productType=Analytics&source=GitLab&team=Team+A&environment=PROD&isDeployVersion=false', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain', 'X-user-ID': 'user-123' },
+      body: '',
+    })
+  })
+
+  it('can trigger a deploy action with isDeployVersion=true when requested', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, deploymentId: 'run-direct-version-1' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(deployFromYaml({
+      productType: 'Analytics',
+      source: 'GitLab',
+      team: 'Team A',
+      environment: 'PROD',
+      isDeploy: true,
+      isSavedVersion: false,
+      isDeployVersion: true,
+      configurationYaml: '',
+    })).resolves.toEqual({
+      success: true,
+      deploymentId: 'run-direct-version-1',
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/deployment/action/deploy?productType=Analytics&source=GitLab&team=Team+A&environment=PROD&isDeployVersion=true', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain', 'X-user-ID': 'user-123' },
+      body: '',
+    })
+  })
+
   it('returns a user-friendly 404 failure with backend detail', async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ message: 'No static resource api/backend/deployments/deploy.' }), {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ message: 'No static resource api/deployment/action/deploy.' }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
     }))
@@ -81,7 +134,7 @@ describe('deploymentsService', () => {
       configurationYaml: 'pipeline: test',
     })).resolves.toEqual({
       success: false,
-      error: 'The deployment API endpoint was not found. Verify that the backend server is running and that POST /api/backend/deployments/deploy is available. Backend response: No static resource api/backend/deployments/deploy.',
+      error: 'The deployment API endpoint was not found. Verify that the backend server is running and that POST /api/deployment/action/deploy is available. Backend response: No static resource api/deployment/action/deploy.',
     })
   })
 
@@ -198,8 +251,28 @@ describe('deploymentsService', () => {
     }, false)).resolves.toEqual({ success: true })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8080/api/backend/stop?productType=Inventory&source=ERP&team=data-platform&environment=PROD',
+      'http://localhost:8080/api/deployment/action/stop?productType=Inventory&source=ERP&team=data-platform&environment=PROD',
       { method: 'POST', headers: { 'X-user-ID': 'user-123' } },
+    )
+  })
+
+  it('fetches deployment steps from the deployment action steps endpoint', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([
+      { id: 'validate', label: 'Validate' },
+      { id: 'deploy', label: 'Deploy' },
+    ]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(fetchDeploymentSteps(false)).resolves.toEqual([
+      { id: 'validate', label: 'Validate' },
+      { id: 'deploy', label: 'Deploy' },
+    ])
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8080/api/deployment/action/steps',
+      { headers: { 'X-user-ID': 'user-123' } },
     )
   })
 

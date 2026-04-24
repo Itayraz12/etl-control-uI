@@ -511,6 +511,7 @@ filters:
       team: 'data-platform',
       environment: 'production',
       isDeploy: true,
+      isDeployVersion: false,
       configurationYaml: expect.stringContaining('productType: Catalog'),
     }))
     expect(mockDeployFromYaml.mock.calls[0][0].configurationYaml).toContain('genomeEntity: product')

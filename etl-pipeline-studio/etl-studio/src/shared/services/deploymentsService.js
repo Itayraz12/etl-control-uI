@@ -170,8 +170,10 @@ function applyDeploymentStatusOverrides(rows, teamName) {
  * POSTs the generated YAML to the backend to create and immediately start a
  * new deployment, or re-deploy an upgrade, using deployment identity request params.
  *
- * Backend endpoint: POST /api/backend/deployments/deploy
- * Content-Type: text/plain (raw YAML)
+ * Backend endpoints:
+ *   Deploy  → POST /api/deployment/action/deploy
+ *   Upgrade → POST /api/deployment/action/upgrade
+ * Content-Type: text/plain (raw YAML) when configurationYaml is provided
  *
  * Expected response: { success: true, deploymentId: "run-uuid-..." }
  *
@@ -184,25 +186,39 @@ export async function deployFromYaml({
   environment = 'PROD',
   isDeploy = true,
   isSavedVersion = true,
+  isDeployVersion = false,
   configurationYaml,
 }) {
   try {
+    const isDeployAction = Boolean(isDeploy)
+    const actionPath = isDeployAction ? 'deploy' : 'upgrade'
+    const actionParams = isDeployAction
+      ? {
+          isDeployVersion: Boolean(isDeployVersion),
+        }
+      : {
+          isDeploy: Boolean(isDeploy),
+          isSavedVersion: Boolean(isSavedVersion),
+        }
     const params = buildDeploymentIdentityParams({
       productType,
       source,
       team,
       environment,
-    }, {
-      isDeploy: Boolean(isDeploy),
-      isSavedVersion: Boolean(isSavedVersion),
-    })
-    const url = `${API_BASE}/backend/deployments/deploy?${params.toString()}`
+    }, actionParams)
+    const url = `${API_BASE}/deployment/action/${actionPath}?${params.toString()}`
     console.log('[deploymentsService] deployFromYaml →', url)
-    const response = await fetchWithUserId(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: configurationYaml,
-    })
+    const hasConfigurationYaml = configurationYaml !== undefined && configurationYaml !== null
+    const requestInit = hasConfigurationYaml
+      ? {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: configurationYaml,
+        }
+      : {
+          method: 'POST',
+        }
+    const response = await fetchWithUserId(url, requestInit)
 
     if (!response.ok) {
       let backendMessage = ''
@@ -218,7 +234,7 @@ export async function deployFromYaml({
 
       if (response.status === 404) {
         throw new Error(
-          'The deployment API endpoint was not found. Verify that the backend server is running and that POST /api/backend/deployments/deploy is available.'
+          `The deployment API endpoint was not found. Verify that the backend server is running and that POST /api/deployment/action/${actionPath} is available.`
           + (backendMessage ? ` Backend response: ${backendMessage}` : '')
         )
       }
@@ -259,11 +275,12 @@ const FALLBACK_DEPLOYMENT_STEPS = [
  * Fetches the ordered list of deployment steps to display in the progress modal.
  * Always tries the backend first; falls back to FALLBACK_DEPLOYMENT_STEPS on
  * any error or empty response.
+ * Backend endpoint: GET /api/deployment/action/steps
  * Expected response: Array<{ id: string, label: string }>
  */
 export async function fetchDeploymentSteps(useMock = false) {
   try {
-    const response = await fetchWithUserId(`${API_BASE}/backend/deployments/steps`)
+    const response = await fetchWithUserId(`${API_BASE}/deployment/action/steps`)
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const data = await response.json()
     if (Array.isArray(data) && data.length > 0) {
@@ -775,7 +792,7 @@ export async function stopDeployment(target, useMock = false) {
   } else {
     try {
       const params = buildDeploymentIdentityParams(deployment)
-      const url = `${API_BASE}/backend/stop?${params.toString()}`;
+       const url = `${API_BASE}/deployment/action/stop?${params.toString()}`;
       console.log('🔵 Stopping deployment:', id || `${deployment.productSource}/${deployment.productType}`);
       console.log('   URL:', url);
 

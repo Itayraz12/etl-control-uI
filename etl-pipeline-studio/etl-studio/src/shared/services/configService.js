@@ -58,7 +58,7 @@ function buildApiUrl(pathname = '', { apiBase = API_BASE, origin } = {}) {
   return new URL(relativeUrl, resolvedOrigin)
 }
 
-export function buildConfigurationYamlUrl(pathname = 'deployment/configuration/draft/yaml', query = {}, options = {}) {
+export function buildConfigurationYamlUrl(pathname = 'deployment/configuration/yaml', query = {}, options = {}) {
   const url = buildApiUrl(pathname, options)
   Object.entries(query).forEach(([key, value]) => {
     const normalizedValue = key === 'environment'
@@ -932,7 +932,7 @@ sink:
 `
   }
 
-  const response = await fetchWithUserId(buildConfigurationYamlUrl('deployment/configuration/draft/yaml', {
+  const response = await fetchWithUserId(buildConfigurationYamlUrl('deployment/configuration/yaml', {
     productType,
     source,
     team,
@@ -959,7 +959,7 @@ sink:
 export async function saveDraftConfiguration({ productType, source, team, environment, yaml }) {
   const cleanYaml = compactYamlDocument(yaml)
 
-  const response = await fetchWithUserId(buildConfigurationYamlUrl('deployment/configuration/draft/yaml', {
+  const response = await fetchWithUserId(buildConfigurationYamlUrl('deployment/configuration/yaml', {
     productType,
     source,
     team,

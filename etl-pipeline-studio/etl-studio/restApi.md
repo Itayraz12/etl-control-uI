@@ -101,7 +101,7 @@ Fetches saved draft YAML for preview.
 Fetches editable/current draft YAML.
 
 - Method: `GET`
-- Full default URL: `http://localhost:8080/api/deployment/configuration/draft/yaml`
+- Full default URL: `http://localhost:8080/api/deployment/configuration/yaml`
 - Query params:
   - `productType`
   - `source`
@@ -114,7 +114,7 @@ Fetches editable/current draft YAML.
 Saves draft YAML.
 
 - Method: `POST`
-- Full default URL: `http://localhost:8080/api/deployment/configuration/draft/yaml`
+- Full default URL: `http://localhost:8080/api/deployment/configuration/yaml`
 - Query params:
   - `productType`
   - `source`

@@ -607,6 +607,7 @@ ${sinkAdditionalConfigYaml}` : ''}
       team: state.metadata.team,
       environment: normalizedMetadataEnvironment,
       isDeploy: true,
+      isDeployVersion: false,
       configurationYaml: yaml,
     })
 
