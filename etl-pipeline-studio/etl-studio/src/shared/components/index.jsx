@@ -47,13 +47,14 @@ const BTN_VARIANTS = {
   accent2:   (h)    => ({ background: h ? '#6d28d9' : 'var(--accent2)', color: '#fff' }),
 }
 
-export function Btn({ children, v = 'primary', sm, onClick, disabled, style = {} }) {
+export function Btn({ children, v = 'primary', sm, onClick, disabled, style = {}, ...props }) {
   const [hov, setHov] = useState(false)
   const variant = BTN_VARIANTS[v] || BTN_VARIANTS.primary
   const variantStyle = typeof variant === 'function' ? variant(hov && !disabled, disabled) : variant
 
   return (
     <button
+      {...props}
       disabled={disabled}
       onClick={onClick}
       onMouseEnter={() => setHov(true)}

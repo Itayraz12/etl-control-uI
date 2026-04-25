@@ -39,7 +39,7 @@ describe('deploymentsService', () => {
     })
   })
 
-  it('uses the shared deploy endpoint with isDeploy=false for upgrade calls', async () => {
+  it('uses the upgrade endpoint without legacy upgrade query flags', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, deploymentId: 'run-upgrade-1' }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -58,7 +58,7 @@ describe('deploymentsService', () => {
       deploymentId: 'run-upgrade-1',
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/deployment/action/upgrade?productType=Inventory&source=CRM&team=data-platform&environment=CAP&isDeploy=false&isSavedVersion=false', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/api/deployment/action/upgrade?productType=Inventory&source=CRM&team=data-platform&environment=CAP', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain', 'X-user-ID': 'user-123' },
       body: 'pipeline: upgrade',

@@ -718,7 +718,6 @@ describe('ETLManagementScreen table layout stability', () => {
         team: 'data-platform',
         environment: 'PROD',
         isDeploy: false,
-        isSavedVersion: false,
       })
       expect(mockSubscribeToDeploymentProgress).toHaveBeenCalledWith('dep-run-1', expect.any(Object))
     })

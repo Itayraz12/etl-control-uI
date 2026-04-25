@@ -21,7 +21,11 @@ export function createEmptySimulatorRow() {
   }
 }
 
-export function normalizeSimulatorRow(row = {}) {
+function normalizeSimulatorPlanField(value) {
+  return value == null ? '' : String(value).trim()
+}
+
+export function normalizeSimulatorRow(row = {}, { resetTransient = false } = {}) {
   const messageFormat = typeof row?.messageFormat === 'string' && row.messageFormat.trim()
     ? row.messageFormat.trim()
     : 'json'
@@ -39,11 +43,15 @@ export function normalizeSimulatorRow(row = {}) {
     messagesPerSecond: Number.isFinite(Number(row?.messagesPerSecond)) ? Math.max(1, Number(row.messagesPerSecond)) : defaultRow.messagesPerSecond,
     totalMessages: Number.isFinite(Number(row?.totalMessages)) ? Number(row.totalMessages) : defaultRow.totalMessages,
     intervalSeconds: Number.isFinite(Number(row?.intervalSeconds)) ? Number(row.intervalSeconds) : defaultRow.intervalSeconds,
-    status: typeof row?.status === 'string' && row.status.trim() ? row.status.trim() : defaultRow.status,
-    statusMessage: row?.statusMessage == null ? '' : String(row.statusMessage),
-    remoteTaskId: row?.remoteTaskId == null || row.remoteTaskId === '' ? null : String(row.remoteTaskId),
-    sentCount: Number.isFinite(Number(row?.sentCount)) ? Math.max(0, Number(row.sentCount)) : 0,
-    _loading: row?._loading === true,
+    status: resetTransient
+      ? defaultRow.status
+      : (typeof row?.status === 'string' && row.status.trim() ? row.status.trim() : defaultRow.status),
+    statusMessage: resetTransient ? '' : (row?.statusMessage == null ? '' : String(row.statusMessage)),
+    remoteTaskId: resetTransient
+      ? null
+      : (row?.remoteTaskId == null || row.remoteTaskId === '' ? null : String(row.remoteTaskId)),
+    sentCount: resetTransient ? 0 : (Number.isFinite(Number(row?.sentCount)) ? Math.max(0, Number(row.sentCount)) : 0),
+    _loading: resetTransient ? false : row?._loading === true,
   }
 }
 
@@ -59,9 +67,9 @@ export function buildDefaultSimulatorState() {
 export function normalizeSimulatorState(simulator = {}, fallbackState = buildDefaultSimulatorState(), { resetTransient = false } = {}) {
   const safeState = simulator && typeof simulator === 'object' ? simulator : {}
   const rows = Array.isArray(safeState.rows)
-    ? safeState.rows.map(normalizeSimulatorRow)
+    ? safeState.rows.map(row => normalizeSimulatorRow(row, { resetTransient }))
     : Array.isArray(fallbackState.rows)
-      ? fallbackState.rows.map(normalizeSimulatorRow)
+      ? fallbackState.rows.map(row => normalizeSimulatorRow(row, { resetTransient }))
       : []
 
   const connTest = safeState.connTest && typeof safeState.connTest === 'object' && (!resetTransient || safeState.connTest.status !== 'testing')
@@ -80,6 +88,63 @@ export function normalizeSimulatorState(simulator = {}, fallbackState = buildDef
     topic: safeState.topic == null ? String(fallbackState.topic ?? '') : String(safeState.topic),
     rows: rows.length > 0 ? rows : [createEmptySimulatorRow()],
     connTest,
+  }
+}
+
+export function buildSimulationPlanPayload({ id = '', name = '', simulator = {} } = {}) {
+  const normalizedSimulator = normalizeSimulatorState(simulator, buildDefaultSimulatorState(), { resetTransient: true })
+
+  return {
+    id: normalizeSimulatorPlanField(id),
+    name: normalizeSimulatorPlanField(name),
+    brokerEnv: normalizedSimulator.brokerEnv,
+    topic: normalizedSimulator.topic,
+    rows: normalizedSimulator.rows.map(row => ({
+      id: row.id,
+      messageFormat: row.messageFormat,
+      sampleMessage: row.sampleMessage,
+      messagesPerSecond: row.messagesPerSecond,
+      totalMessages: row.totalMessages,
+      intervalSeconds: row.intervalSeconds,
+    })),
+  }
+}
+
+export function normalizeSimulationPlanSummary(plan = {}) {
+  return {
+    id: normalizeSimulatorPlanField(plan?.id ?? plan?.planId),
+    name: normalizeSimulatorPlanField(plan?.name ?? plan?.planName),
+  }
+}
+
+export function normalizeSimulationPlans(plans = []) {
+  return (Array.isArray(plans) ? plans : [])
+    .map(normalizeSimulationPlanSummary)
+    .filter(plan => plan.id || plan.name)
+    .sort((left, right) => {
+      const leftKey = `${left.name.toLowerCase()}::${left.id.toLowerCase()}`
+      const rightKey = `${right.name.toLowerCase()}::${right.id.toLowerCase()}`
+      return leftKey.localeCompare(rightKey)
+    })
+}
+
+export function normalizeSimulationPlanDetails(plan = {}) {
+  const sourcePlan = plan?.plan && typeof plan.plan === 'object' ? plan.plan : plan
+  const simulatorSource = sourcePlan?.simulator && typeof sourcePlan.simulator === 'object'
+    ? sourcePlan.simulator
+    : sourcePlan
+  const normalizedSimulator = normalizeSimulatorState({
+    brokerEnv: simulatorSource?.brokerEnv ?? simulatorSource?.environment ?? '',
+    topic: simulatorSource?.topic ?? '',
+    rows: simulatorSource?.rows ?? simulatorSource?.tasks ?? [],
+    connTest: null,
+  }, buildDefaultSimulatorState(), { resetTransient: true })
+
+  return {
+    ...normalizeSimulationPlanSummary(sourcePlan),
+    brokerEnv: normalizedSimulator.brokerEnv,
+    topic: normalizedSimulator.topic,
+    rows: normalizedSimulator.rows,
   }
 }
 

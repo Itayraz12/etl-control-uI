@@ -168,7 +168,7 @@ function applyDeploymentStatusOverrides(rows, teamName) {
 
 /**
  * POSTs the generated YAML to the backend to create and immediately start a
- * new deployment, or re-deploy an upgrade, using deployment identity request params.
+ * new deployment, or trigger an upgrade, using deployment identity request params.
  *
  * Backend endpoints:
  *   Deploy  → POST /api/deployment/action/deploy
@@ -196,10 +196,7 @@ export async function deployFromYaml({
       ? {
           isDeployVersion: Boolean(isDeployVersion),
         }
-      : {
-          isDeploy: Boolean(isDeploy),
-          isSavedVersion: Boolean(isSavedVersion),
-        }
+      : {}
     const params = buildDeploymentIdentityParams({
       productType,
       source,

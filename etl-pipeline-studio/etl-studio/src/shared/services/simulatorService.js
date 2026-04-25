@@ -1,7 +1,13 @@
 import { API_BASE_SIM } from './appConfig.js'
 import { fetchWithUserId } from './requestHeaders.js'
+import {
+  buildSimulationPlanPayload,
+  normalizeSimulationPlanDetails,
+  normalizeSimulationPlans,
+} from './simulatorState.js'
 
 const SIMULATOR_BASE = `${API_BASE_SIM}/simulator/kafka`
+const SIMULATOR_TASK_PLANS_BASE = `${SIMULATOR_BASE}/task-plans`
 
 async function readPayload(response) {
   const contentType = response.headers.get('content-type') || ''
@@ -18,6 +24,26 @@ function normalizeMessage(payload, fallback) {
     if (m != null) return String(m).trim() || fallback
   }
   return fallback
+}
+
+function buildSimulationPlanReferenceParams({ id = '', name = '' } = {}) {
+  const params = new URLSearchParams()
+  const normalizedId = String(id ?? '').trim()
+  const normalizedName = String(name ?? '').trim()
+
+  if (!normalizedId && !normalizedName) {
+    throw new Error('Enter a plan ID or plan name.')
+  }
+
+  if (normalizedId) {
+    params.set('id', normalizedId)
+  }
+
+  if (normalizedName) {
+    params.set('name', normalizedName)
+  }
+
+  return params
 }
 
 /**
@@ -127,6 +153,68 @@ export async function getSimulationStatus(taskId) {
     sentCount:     payload?.sentCount     ?? 0,
     statusMessage: payload?.statusMessage ?? payload?.message ?? '',
   }
+}
+
+export async function getSimulationPlans() {
+  const response = await fetchWithUserId(SIMULATOR_TASK_PLANS_BASE, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  })
+  const payload = await readPayload(response)
+  if (!response.ok) {
+    throw new Error(normalizeMessage(payload, `Failed to fetch saved task plans (${response.status})`))
+  }
+
+  const plans = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.plans)
+      ? payload.plans
+      : []
+
+  return normalizeSimulationPlans(plans)
+}
+
+export async function saveSimulationPlan({ id = '', name = '', simulator = {} } = {}) {
+  const body = buildSimulationPlanPayload({ id, name, simulator })
+  const response = await fetchWithUserId(SIMULATOR_TASK_PLANS_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const payload = await readPayload(response)
+  if (!response.ok) {
+    throw new Error(normalizeMessage(payload, `Failed to save task plan (${response.status})`))
+  }
+
+  return normalizeSimulationPlanDetails(payload?.plan ?? payload ?? body)
+}
+
+export async function getSimulationPlan({ id = '', name = '' } = {}) {
+  const params = buildSimulationPlanReferenceParams({ id, name })
+  const response = await fetchWithUserId(`${SIMULATOR_TASK_PLANS_BASE}/resolve?${params.toString()}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  })
+  const payload = await readPayload(response)
+  if (!response.ok) {
+    throw new Error(normalizeMessage(payload, `Failed to load task plan (${response.status})`))
+  }
+
+  return normalizeSimulationPlanDetails(payload)
+}
+
+export async function deleteSimulationPlan({ id = '', name = '' } = {}) {
+  const params = buildSimulationPlanReferenceParams({ id, name })
+  const response = await fetchWithUserId(`${SIMULATOR_TASK_PLANS_BASE}/resolve?${params.toString()}`, {
+    method: 'DELETE',
+    headers: { Accept: 'application/json' },
+  })
+  const payload = await readPayload(response)
+  if (!response.ok) {
+    throw new Error(normalizeMessage(payload, `Failed to delete task plan (${response.status})`))
+  }
+
+  return { success: true, payload }
 }
 
 /**

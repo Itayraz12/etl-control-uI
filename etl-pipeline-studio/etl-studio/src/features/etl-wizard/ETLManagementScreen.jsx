@@ -534,8 +534,9 @@ export default function ETLManagementScreen() {
     // 2. Open the progress modal immediately — all steps shown as 'pending'
     deployment.startDeployment(steps);
 
-    // 3. Trigger the selected deployment action directly. The backend resolves
-    //    the saved vs deployed configuration using the request params.
+    // 3. Trigger the selected deployment action directly. Deploy requests may
+    //    still select which version to run; upgrades are resolved by the backend
+    //    from the deployment identity alone.
     const environment = deploymentRow.environment || 'PROD';
       const deploymentTeamName = getDeploymentTeamName(deploymentRow)
     console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] triggering action endpoint...`);
@@ -545,8 +546,7 @@ export default function ETLManagementScreen() {
       team: deploymentTeamName,
       environment,
       isDeploy,
-      isSavedVersion,
-      isDeployVersion,
+      ...(isDeploy ? { isSavedVersion, isDeployVersion } : {}),
       ...(isDeploy ? { configurationYaml: '' } : {}),
     });
     console.log(`[handle${mode === 'upgrade' ? 'Upgrade' : 'Deploy'}] deployFromYaml result:`, JSON.stringify(result));
@@ -615,7 +615,7 @@ export default function ETLManagementScreen() {
         deployment.updateStep(steps.length - 1, { status: 'done' });
         deployment.setIsComplete(true);
         updateDeploymentRowStatus(deploymentRow, 'running', {
-          deployedVersion: isSavedVersion
+          deployedVersion: mode === 'upgrade' || isSavedVersion
             ? (deploymentRow.savedVersion ?? deploymentRow.deployedVersion)
             : deploymentRow.deployedVersion,
         });

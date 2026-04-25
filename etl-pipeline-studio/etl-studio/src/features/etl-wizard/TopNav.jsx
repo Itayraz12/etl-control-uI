@@ -5,9 +5,10 @@ import { APP_VERSION } from '../../shared/services/appConfig.js'
 
 export default function TopNav() {
   const { state, actions } = useWizard()
-  const { logout } = useUser()
+  const { user, logout } = useUser()
   const { readOnly } = state
   const appVersion = `v${APP_VERSION}`
+  const isAdminUser = user?.role === 'admin'
 
   function handleBrandClick() {
     if (readOnly) return
@@ -45,6 +46,11 @@ export default function TopNav() {
       <span style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
         {appVersion}
       </span>
+      {isAdminUser && (
+        <Chip c="blue" style={{ fontWeight: 700, letterSpacing: '0.04em' }}>
+          ADMIN
+        </Chip>
+      )}
       {readOnly && (
         <Chip c="amber" style={{ fontWeight: 700, letterSpacing: '0.04em' }}>
            VIEW ONLY

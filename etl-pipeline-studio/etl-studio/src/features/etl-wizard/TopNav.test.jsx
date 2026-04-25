@@ -22,6 +22,22 @@ vi.mock('../../shared/store/userContext.jsx', () => ({
 }))
 
 describe('TopNav', () => {
+  it('shows an admin badge when an admin user is logged in', () => {
+    mockUser = { role: 'admin', userRoleHeader: 'admin' }
+
+    render(<TopNav />)
+
+    expect(screen.getByText('ADMIN')).toBeInTheDocument()
+  })
+
+  it('does not show the admin badge for regular users', () => {
+    mockUser = { role: 'regular', userRoleHeader: '' }
+
+    render(<TopNav />)
+
+    expect(screen.queryByText('ADMIN')).not.toBeInTheDocument()
+  })
+
   it('does not render the raw user-role header in the shared header', () => {
     mockUser = { role: 'admin', userRoleHeader: 'admin' }
 

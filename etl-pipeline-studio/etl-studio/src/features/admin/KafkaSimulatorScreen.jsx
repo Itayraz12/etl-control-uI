@@ -1,7 +1,17 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardTitle, FormRow, FormGroup, Btn, Chip } from '../../shared/components/index.jsx'
 import { ENVIRONMENT_OPTIONS } from '../../shared/types/index.js'
-import { startSimulation, stopSimulation, deleteSimulation, testKafkaConnection, getSimulationStatus } from '../../shared/services/simulatorService.js'
+import {
+  startSimulation,
+  stopSimulation,
+  deleteSimulation,
+  testKafkaConnection,
+  getSimulationStatus,
+  getSimulationPlan,
+  getSimulationPlans,
+  saveSimulationPlan,
+  deleteSimulationPlan,
+} from '../../shared/services/simulatorService.js'
 import { useWizard } from '../../shared/store/wizardStore.jsx'
 import { DEFAULT_SIMULATOR_SAMPLES, createEmptySimulatorRow } from '../../shared/services/simulatorState.js'
 
@@ -26,6 +36,22 @@ const MESSAGE_FORMATS = [
 ]
 
 const DEFAULT_SAMPLES = DEFAULT_SIMULATOR_SAMPLES
+
+function resolveNextPlanId(savedPlans = [], currentPlanId = '') {
+  const normalizedCurrentPlanId = String(currentPlanId ?? '').trim()
+  if (normalizedCurrentPlanId) return normalizedCurrentPlanId
+
+  const highestKnownIndex = (Array.isArray(savedPlans) ? savedPlans : [])
+    .map(plan => String(plan?.id ?? '').trim())
+    .map((id) => {
+      const match = id.match(/(\d+)$/)
+      return match ? Number(match[1]) : null
+    })
+    .filter(index => Number.isFinite(index))
+    .reduce((maxIndex, index) => Math.max(maxIndex, index), 0)
+
+  return String(highestKnownIndex + 1)
+}
 
 // ── Status Badge ──────────────────────────────────────────────────────────
 
@@ -338,18 +364,143 @@ function numInputStyle() {
 
 // ── Main Screen ───────────────────────────────────────────────────────────
 
-export default function KafkaSimulatorScreen() {
+export default function KafkaSimulatorScreen({ isActive = true }) {
   const { state, actions } = useWizard()
   const brokerEnv = state.simulator?.brokerEnv ?? ''
   const topic = state.simulator?.topic ?? ''
   const rows = state.simulator?.rows ?? [createEmptySimulatorRow()]
   const connTest = state.simulator?.connTest ?? null
+  const [currentPlanId, setCurrentPlanId] = useState('')
+  const [planNameInput, setPlanNameInput] = useState('')
+  const [savedPlans, setSavedPlans] = useState([])
+  const [plansLoading, setPlansLoading] = useState(false)
+  const [planAction, setPlanAction] = useState('')
+  const [planFeedback, setPlanFeedback] = useState(null)
+  const hasLoadedPlansRef = useRef(false)
 
   const updateSimulator = useCallback((patch) => {
     actions.updateSimulator(patch)
   }, [actions])
 
   const isTopicValid = Boolean(brokerEnv.trim() && topic.trim())
+  const isLoadingPlan = planAction === 'load'
+  const isSavingPlan = planAction === 'save'
+  const isDeletingPlan = planAction === 'delete'
+
+  const refreshSavedPlans = useCallback(async () => {
+    setPlansLoading(true)
+    try {
+      const plans = await getSimulationPlans()
+      setSavedPlans(plans)
+      return plans
+    } catch (err) {
+      setPlanFeedback({
+        tone: 'error',
+        text: err?.message || 'Failed to load saved test plans.',
+      })
+      return []
+    } finally {
+      setPlansLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isActive || hasLoadedPlansRef.current) return
+    hasLoadedPlansRef.current = true
+    refreshSavedPlans()
+  }, [isActive, refreshSavedPlans])
+
+  const handleSavePlan = async () => {
+    const planName = planNameInput.trim()
+    const planId = resolveNextPlanId(savedPlans, currentPlanId)
+
+    if (!planName) {
+      setPlanFeedback({ tone: 'error', text: 'Enter a plan name before saving.' })
+      return
+    }
+
+    setPlanAction('save')
+    try {
+      const savedPlan = await saveSimulationPlan({
+        id: planId,
+        name: planName,
+        simulator: state.simulator,
+      })
+      setCurrentPlanId(savedPlan.id || planId)
+      setPlanNameInput(savedPlan.name || planName)
+      await refreshSavedPlans()
+      setPlanFeedback({
+        tone: 'success',
+        text: `Saved test plan ${savedPlan.name || savedPlan.id || planName || planId}.`,
+      })
+    } catch (err) {
+      setPlanFeedback({ tone: 'error', text: err?.message || 'Failed to save test plan.' })
+    } finally {
+      setPlanAction('')
+    }
+  }
+
+  const handleLoadPlan = async (planRef = {}) => {
+    const planId = String(planRef?.id ?? currentPlanId).trim()
+    const planName = String(planRef?.name ?? planNameInput).trim()
+
+    if (!planId && !planName) {
+      setPlanFeedback({ tone: 'error', text: 'Select a saved plan to load.' })
+      return
+    }
+
+    setPlanAction('load')
+    try {
+      const loadedPlan = await getSimulationPlan({ id: planId, name: planName })
+      updateSimulator({
+        brokerEnv: loadedPlan.brokerEnv,
+        topic: loadedPlan.topic,
+        rows: loadedPlan.rows,
+        connTest: null,
+      })
+      setCurrentPlanId(loadedPlan.id || planId)
+      setPlanNameInput(loadedPlan.name || planName)
+      setPlanFeedback({
+        tone: 'success',
+        text: `Loaded test plan ${loadedPlan.name || loadedPlan.id || planName || planId}.`,
+      })
+    } catch (err) {
+      setPlanFeedback({ tone: 'error', text: err?.message || 'Failed to load test plan.' })
+    } finally {
+      setPlanAction('')
+    }
+  }
+
+  const handleDeletePlan = async (planRef = {}) => {
+    const planId = String(planRef?.id ?? '').trim()
+    const planName = String(planRef?.name ?? '').trim()
+
+    if (!planId && !planName) {
+      setPlanFeedback({ tone: 'error', text: 'Select a saved plan to delete.' })
+      return
+    }
+
+    setPlanAction('delete')
+    try {
+      await deleteSimulationPlan({ id: planId, name: planName })
+      if (planId && planId === currentPlanId) {
+        setCurrentPlanId('')
+      }
+      const remainingPlans = await refreshSavedPlans()
+      const deletedLoadedPlanName = planNameInput.trim() && planNameInput.trim() === planName
+      if (deletedLoadedPlanName && !(remainingPlans || []).some(plan => plan.id === planId || plan.name === planName)) {
+        setPlanNameInput(planName)
+      }
+      setPlanFeedback({
+        tone: 'success',
+        text: `Deleted test plan ${planName || planId}.`,
+      })
+    } catch (err) {
+      setPlanFeedback({ tone: 'error', text: err?.message || 'Failed to delete test plan.' })
+    } finally {
+      setPlanAction('')
+    }
+  }
 
   const handleTestConnection = async () => {
     if (!brokerEnv || !topic.trim()) return
@@ -445,6 +596,110 @@ export default function KafkaSimulatorScreen() {
           </Btn>
         )}
       </div>
+
+      <Card>
+        <CardTitle>💾 Saved Test Plans</CardTitle>
+        <FormRow>
+          <FormGroup label="Plan Name">
+            <input
+              aria-label="Plan Name"
+              value={planNameInput}
+              onChange={e => setPlanNameInput(e.target.value)}
+              placeholder="e.g. Nightly smoke test"
+            />
+          </FormGroup>
+        </FormRow>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Btn
+            v="secondary"
+            sm
+            disabled={plansLoading || isSavingPlan || isLoadingPlan || isDeletingPlan}
+            onClick={refreshSavedPlans}
+          >
+            {plansLoading ? '⏳ Refreshing…' : '↻ Refresh Plans'}
+          </Btn>
+          <Btn
+            sm
+            disabled={plansLoading || isLoadingPlan || isSavingPlan || isDeletingPlan}
+            onClick={handleSavePlan}
+          >
+            {isSavingPlan ? '⏳ Saving…' : '💾 Save Plan'}
+          </Btn>
+        </div>
+
+        {planFeedback && (
+          <div
+            role="status"
+            style={{
+              marginTop: 10,
+              fontSize: 12,
+              color: planFeedback.tone === 'error' ? 'var(--danger)' : 'var(--success)',
+            }}
+          >
+            {planFeedback.text}
+          </div>
+        )}
+
+        <div style={{ marginTop: 16, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border)', background: 'var(--surf2)' }}>
+                <Th>Plan Name</Th>
+                <Th style={{ width: 220, textAlign: 'right' }}>Actions</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {plansLoading ? (
+                <tr>
+                  <td colSpan={2} style={{ padding: '18px 20px', color: 'var(--muted)', fontSize: 12 }}>
+                    Loading saved test plans…
+                  </td>
+                </tr>
+              ) : savedPlans.length === 0 ? (
+                <tr>
+                  <td colSpan={2} style={{ padding: '18px 20px', color: 'var(--muted)', fontSize: 12 }}>
+                    No saved test plans found yet.
+                  </td>
+                </tr>
+              ) : (
+                savedPlans.map(plan => (
+                  <tr key={`${plan.id || plan.name}`} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={tdStyle({ fontWeight: 600 })}>{plan.name || '—'}</td>
+                    <td style={tdStyle({ textAlign: 'right' })}>
+                      <div style={{ display: 'inline-flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <Btn
+                          v="secondary"
+                          sm
+                          disabled={isSavingPlan || isLoadingPlan || isDeletingPlan}
+                          aria-label={`Load plan ${plan.name || plan.id}`}
+                          onClick={() => {
+                            setCurrentPlanId(plan.id)
+                            setPlanNameInput(plan.name)
+                            handleLoadPlan(plan)
+                          }}
+                        >
+                          📂 Load
+                        </Btn>
+                        <Btn
+                          v="ghost"
+                          sm
+                          disabled={isSavingPlan || isLoadingPlan || isDeletingPlan}
+                          aria-label={`Delete plan ${plan.name || plan.id}`}
+                          onClick={() => handleDeletePlan(plan)}
+                          style={{ color: 'var(--danger)' }}
+                        >
+                          🗑 Delete
+                        </Btn>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       {/* Broker Config */}
       <Card>
