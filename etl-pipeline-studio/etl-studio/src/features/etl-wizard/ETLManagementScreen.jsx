@@ -389,7 +389,10 @@ export default function ETLManagementScreen() {
   async function refreshDeployments() {
     setLoading(true);
     try {
-      const data = await deploymentsService.fetchDeployments(teamName, useMock, { includeAllTeams: isAdminUser });
+      const data = await deploymentsService.fetchDeployments(teamName, useMock, {
+        includeAllTeams: isAdminUser,
+        forceRefresh: true,
+      });
       setDeployments(data);
       return data;
     } finally {

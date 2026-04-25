@@ -211,7 +211,7 @@ describe('deploymentsService', () => {
     }, false)).resolves.toEqual({ success: true })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8080/api/backend/deployments/delete?productType=Catalog&source=CRM&team=data-platform&environment=CAP&isPermanent=false',
+      'http://localhost:8080/api/deployments/delete?productType=Catalog&source=CRM&team=data-platform&environment=CAP&isPermanent=false',
       { method: 'DELETE', headers: { 'X-user-ID': 'user-123' } },
     )
   })
@@ -231,7 +231,7 @@ describe('deploymentsService', () => {
     }, false)).resolves.toEqual({ success: true })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8080/api/backend/deployments/delete?productType=Legacy&source=Archive&team=data-platform&environment=PROD&isPermanent=true',
+      'http://localhost:8080/api/deployments/delete?productType=Legacy&source=Archive&team=data-platform&environment=PROD&isPermanent=true',
       { method: 'DELETE', headers: { 'X-user-ID': 'user-123' } },
     )
   })
@@ -361,6 +361,64 @@ describe('deploymentsService', () => {
       expect.objectContaining({
         id: 'dep-1',
         deploymentStatus: 'failed',
+      }),
+    ])
+  })
+
+  it('clears a stale local override when the backend reports the deployment as running again', async () => {
+    setDeploymentStatus({
+      teamName: 'data-platform',
+      productSource: 'ERP',
+      productType: 'Catalog',
+      environment: 'production',
+      deploymentStatus: 'failed',
+    })
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([
+      {
+        id: 'dep-1',
+        teamName: 'data-platform',
+        productSource: 'ERP',
+        productType: 'Catalog',
+        environment: 'production',
+        deploymentStatus: 'running',
+        savedVersion: '1.0',
+        deployedVersion: '1.0',
+        lastStatusChange: Date.now() + 10_000,
+      },
+    ]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(fetchDeployments('data-platform', false)).resolves.toEqual([
+      expect.objectContaining({
+        id: 'dep-1',
+        deploymentStatus: 'running',
+      }),
+    ])
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([
+      {
+        id: 'dep-1',
+        teamName: 'data-platform',
+        productSource: 'ERP',
+        productType: 'Catalog',
+        environment: 'production',
+        deploymentStatus: 'running',
+        savedVersion: '1.0',
+        deployedVersion: '1.0',
+        lastStatusChange: Date.now() + 20_000,
+      },
+    ]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(fetchDeployments('data-platform', false, { forceRefresh: true })).resolves.toEqual([
+      expect.objectContaining({
+        id: 'dep-1',
+        deploymentStatus: 'running',
       }),
     ])
   })

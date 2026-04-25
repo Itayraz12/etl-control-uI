@@ -447,7 +447,7 @@ describe('ETLManagementScreen table layout stability', () => {
     const { rerender } = render(<ETLManagementScreen />)
 
     await waitFor(() => {
-      expect(mockFetchDeployments).toHaveBeenCalledWith('data-platform', true, { includeAllTeams: false })
+      expect(mockFetchDeployments).toHaveBeenCalledWith('data-platform', true, { includeAllTeams: false, forceRefresh: true })
     })
 
     mockFetchDeployments.mockClear()
@@ -456,7 +456,7 @@ describe('ETLManagementScreen table layout stability', () => {
     rerender(<ETLManagementScreen />)
 
     await waitFor(() => {
-      expect(mockFetchDeployments).toHaveBeenCalledWith('data-platform', true, { includeAllTeams: true })
+      expect(mockFetchDeployments).toHaveBeenCalledWith('data-platform', true, { includeAllTeams: true, forceRefresh: true })
     })
   })
 

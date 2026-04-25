@@ -80,6 +80,45 @@ function writeDeploymentStatusOverrides(overrides) {
   } catch {}
 }
 
+function normalizeStatusChangeTimestamp(value) {
+  if (value instanceof Date) {
+    const time = value.getTime()
+    return Number.isNaN(time) ? null : time
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+
+  const rawValue = String(value ?? '').trim()
+  if (!rawValue) return null
+
+  const parsedTime = Date.parse(rawValue)
+  return Number.isNaN(parsedTime) ? null : parsedTime
+}
+
+function shouldClearDeploymentStatusOverride(row, override) {
+  const backendStatus = String(row?.deploymentStatus ?? '').trim().toLowerCase()
+  const overrideStatus = String(override?.deploymentStatus ?? '').trim().toLowerCase()
+
+  if (!backendStatus || !overrideStatus || backendStatus === overrideStatus) {
+    return false
+  }
+
+  if (backendStatus === 'running') {
+    return true
+  }
+
+  const backendTimestamp = normalizeStatusChangeTimestamp(row?.lastStatusChange)
+  const overrideTimestamp = normalizeStatusChangeTimestamp(override?.lastStatusChange)
+
+  if (backendTimestamp != null && overrideTimestamp != null) {
+    return backendTimestamp >= overrideTimestamp
+  }
+
+  return false
+}
+
 /**
  * Creates or updates a local-only draft deployment entry that is merged into
  * the management table until the backend returns a matching record.
@@ -142,8 +181,9 @@ export function setDeploymentStatus({ teamName, productSource, productType, envi
 
 function applyDeploymentStatusOverrides(rows, teamName) {
   const overrides = readDeploymentStatusOverrides()
+  let didChangeOverrides = false
 
-  return rows.map(row => {
+  const resolvedRows = rows.map(row => {
     const overrideKey = buildDeploymentStatusOverrideKey({
       teamName: row.teamName || teamName,
       productSource: row.productSource,
@@ -154,6 +194,12 @@ function applyDeploymentStatusOverrides(rows, teamName) {
 
     if (!override) return row
 
+    if (shouldClearDeploymentStatusOverride(row, override)) {
+      delete overrides[overrideKey]
+      didChangeOverrides = true
+      return row
+    }
+
     return {
       ...row,
       deploymentStatus: override.deploymentStatus ?? row.deploymentStatus,
@@ -162,6 +208,12 @@ function applyDeploymentStatusOverrides(rows, teamName) {
       lastStatusChange: override.lastStatusChange ?? row.lastStatusChange,
     }
   })
+
+  if (didChangeOverrides) {
+    writeDeploymentStatusOverrides(overrides)
+  }
+
+  return resolvedRows
 }
 
 
@@ -858,7 +910,7 @@ export async function deleteDeployment(target, useMock = false, isPermanent = fa
   } else {
     try {
       const params = buildDeleteRequestParams(deployment, isPermanent)
-      const url = `${API_BASE}/backend/deployments/delete?${params.toString()}`;
+      const url = `${API_BASE}/backend/deployments/action/delete?${params.toString()}`;
       console.log('🔵 Deleting deployment:', id || `${deployment.productSource}/${deployment.productType}`);
       console.log('   URL:', url);
 
