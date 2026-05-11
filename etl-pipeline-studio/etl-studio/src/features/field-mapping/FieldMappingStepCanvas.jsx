@@ -69,6 +69,7 @@ const CANVAS_NODE_BOUND_HEIGHT = NODE_HEIGHT + 28
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2
 const ZOOM_STEP = 0.25
+const AUTO_MAP_MIN_SCORE = 70
 
 function clampZoom(nextZoom) {
   const roundedZoom = Math.round(nextZoom * 100) / 100
@@ -1012,64 +1013,6 @@ export default function FieldMappingStep() {
 
     if (candidateSources.length === 0 || candidateTargets.length === 0) return
 
-    const nextNodes = [...existingNodes]
-    const nextEdges = [...existingEdges]
-    const sourceNodeIds = {}
-    const targetNodeIds = {}
-    const yGap = NODE_ROW_GAP
-    const sourceBaseY = existingNodes.filter(n => n.type === 'source').length
-      ? Math.max(...existingNodes.filter(n => n.type === 'source').map(n => n.y)) + yGap
-      : 30
-    const targetBaseY = existingNodes.filter(n => n.type === 'target').length
-      ? Math.max(...existingNodes.filter(n => n.type === 'target').map(n => n.y)) + yGap
-      : 80
-
-    candidateSources.forEach((field, idx) => {
-      const existingNode = existingNodes.find(n => n.type === 'source' && n.fieldId === field.id)
-      if (existingNode) {
-        sourceNodeIds[field.id] = existingNode.id
-        return
-      }
-
-      const nodeId = `src-${field.id}-${Date.now()}-${Math.random()}`
-      nextNodes.push({
-        id: nodeId,
-        name: getSourceFieldLabel(field),
-        emoji: '📄',
-        type: 'source',
-        fieldId: field.id,
-        isRequired: field.required,
-        x: 40,
-        y: sourceBaseY + idx * yGap,
-        sendToSaknay: true,
-        expression: '',
-      })
-      sourceNodeIds[field.id] = nodeId
-    })
-
-    candidateTargets.forEach((field, idx) => {
-      const existingNode = existingNodes.find(n => n.type === 'target' && n.fieldId === field.id)
-      if (existingNode) {
-        targetNodeIds[field.id] = existingNode.id
-        return
-      }
-
-      const nodeId = `tgt-${field.id}-${Date.now()}-${Math.random()}`
-      nextNodes.push({
-        id: nodeId,
-        name: getTargetFieldLabel(field),
-        emoji: '🎯',
-        type: 'target',
-        fieldId: field.id,
-        isRequired: field.required,
-        x: 650,
-        y: targetBaseY + idx * yGap,
-        sendToSaknay: true,
-        expression: '',
-      })
-      targetNodeIds[field.id] = nodeId
-    })
-
     const sourceByType = {}
     const targetByType = {}
     candidateSources.forEach(field => {
@@ -1082,7 +1025,7 @@ export default function FieldMappingStep() {
     })
 
     const matchedTargets = new Set()
-    const mappedSources = new Set()
+    const qualifiedMatches = []
 
     Object.keys(sourceByType).forEach(type => {
       if (!targetByType[type]) return
@@ -1100,39 +1043,82 @@ export default function FieldMappingStep() {
           }
         })
 
-        if (bestMatch) {
+        if (bestMatch && bestScore > AUTO_MAP_MIN_SCORE) {
           matchedTargets.add(bestMatch.id)
-          mappedSources.add(srcField.id)
-          nextEdges.push({
-            from: sourceNodeIds[srcField.id],
-            to: targetNodeIds[bestMatch.id],
-            fromType: 'source',
-            toType: 'target',
-            transformer: 'none',
-            extraInputs: [],
-            extraInputTargets: {},
-          })
+          qualifiedMatches.push({ srcField, tgtField: bestMatch })
         }
       })
     })
 
-    Object.keys(sourceByType).forEach(type => {
-      sourceByType[type].forEach(srcField => {
-        if (mappedSources.has(srcField.id)) return
-        const availableTarget = targetByType[type]?.find(field => !matchedTargets.has(field.id))
-        if (!availableTarget) return
+    if (qualifiedMatches.length === 0) return
 
-        matchedTargets.add(availableTarget.id)
-        mappedSources.add(srcField.id)
-        nextEdges.push({
-          from: sourceNodeIds[srcField.id],
-          to: targetNodeIds[availableTarget.id],
-          fromType: 'source',
-          toType: 'target',
-          transformer: 'none',
-          extraInputs: [],
-            extraInputTargets: {},
-        })
+    const nextNodes = [...existingNodes]
+    const nextEdges = [...existingEdges]
+    const sourceNodeIds = {}
+    const targetNodeIds = {}
+    const yGap = NODE_ROW_GAP
+    const sourceBaseY = existingNodes.filter(n => n.type === 'source').length
+      ? Math.max(...existingNodes.filter(n => n.type === 'source').map(n => n.y)) + yGap
+      : 30
+    const targetBaseY = existingNodes.filter(n => n.type === 'target').length
+      ? Math.max(...existingNodes.filter(n => n.type === 'target').map(n => n.y)) + yGap
+      : 80
+
+    qualifiedMatches.forEach(({ srcField }, idx) => {
+      const existingNode = existingNodes.find(n => n.type === 'source' && n.fieldId === srcField.id)
+      if (existingNode) {
+        sourceNodeIds[srcField.id] = existingNode.id
+        return
+      }
+
+      const nodeId = `src-${srcField.id}-${Date.now()}-${Math.random()}`
+      nextNodes.push({
+        id: nodeId,
+        name: getSourceFieldLabel(srcField),
+        emoji: '📄',
+        type: 'source',
+        fieldId: srcField.id,
+        isRequired: srcField.required,
+        x: 40,
+        y: sourceBaseY + idx * yGap,
+        sendToSaknay: true,
+        expression: '',
+      })
+      sourceNodeIds[srcField.id] = nodeId
+    })
+
+    qualifiedMatches.forEach(({ tgtField }, idx) => {
+      const existingNode = existingNodes.find(n => n.type === 'target' && n.fieldId === tgtField.id)
+      if (existingNode) {
+        targetNodeIds[tgtField.id] = existingNode.id
+        return
+      }
+
+      const nodeId = `tgt-${tgtField.id}-${Date.now()}-${Math.random()}`
+      nextNodes.push({
+        id: nodeId,
+        name: getTargetFieldLabel(tgtField),
+        emoji: '🎯',
+        type: 'target',
+        fieldId: tgtField.id,
+        isRequired: tgtField.required,
+        x: 650,
+        y: targetBaseY + idx * yGap,
+        sendToSaknay: true,
+        expression: '',
+      })
+      targetNodeIds[tgtField.id] = nodeId
+    })
+
+    qualifiedMatches.forEach(({ srcField, tgtField }) => {
+      nextEdges.push({
+        from: sourceNodeIds[srcField.id],
+        to: targetNodeIds[tgtField.id],
+        fromType: 'source',
+        toType: 'target',
+        transformer: 'none',
+        extraInputs: [],
+        extraInputTargets: {},
       })
     })
 

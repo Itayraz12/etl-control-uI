@@ -1002,7 +1002,7 @@ export default function ETLManagementScreen() {
       title: 'Delete deployment?',
       message: `Delete ${getDeploymentSourceValue(dep)} / ${dep.productType}? This will move the pipeline to the Deleted tab.`,
       tone: 'danger',
-      icon: '🗑️',
+      icon: '️',
       confirmLabel: 'Delete',
       confirmVariant: 'danger',
       onConfirm: async () => {
@@ -1017,7 +1017,7 @@ export default function ETLManagementScreen() {
       title: 'Delete permanently?',
       message: 'This will delete this pipeline permantly , are you sure you want to continue?',
       tone: 'danger',
-      icon: '🗑️',
+      icon: '️',
       confirmLabel: 'Delete permanently',
       confirmVariant: 'danger',
       onConfirm: async () => {
@@ -1123,7 +1123,7 @@ export default function ETLManagementScreen() {
             type="text"
             value={filterText}
             onChange={e => setFilterText(e.target.value)}
-            placeholder="🔍 Filter deployments..."
+            placeholder=" Filter deployments..."
             style={{
               flex: 1,
               padding: '8px 12px',
@@ -1296,7 +1296,7 @@ export default function ETLManagementScreen() {
               color: 'var(--muted)',
               minHeight: 260,
             }}>
-              <div style={{ fontSize: 32 }}>🔍</div>
+              <div style={{ fontSize: 32 }}></div>
               <div style={{ fontSize: 14 }}>No deployments match "{filterText}"</div>
               <Btn v="secondary" sm onClick={() => setFilterText('')}>
                 Clear filter
@@ -1314,7 +1314,7 @@ export default function ETLManagementScreen() {
               color: 'var(--muted)',
               minHeight: 260,
             }}>
-              <div style={{ fontSize: 30 }}>📑</div>
+              <div style={{ fontSize: 30 }}></div>
               <div style={{ fontSize: 14 }}>No pipelines in the {MANAGEMENT_TABS.find(tab => tab.id === activeTab)?.label || 'selected'} tab.</div>
             </div>
           ) : (
@@ -1437,7 +1437,7 @@ export default function ETLManagementScreen() {
                             <Tooltip
                               content={actionLoading[savedVersionActionKey]
                                 ? '⏳ Loading configuration…'
-                                : '👁 Open saved version preview'}
+                                : ' Open saved version preview'}
                               placement="top"
                               maxWidth={220}
                               bubbleStyle={{ whiteSpace: 'nowrap' }}
@@ -1474,7 +1474,7 @@ export default function ETLManagementScreen() {
                             <Tooltip
                               content={actionLoading[deployedVersionActionKey]
                                 ? '⏳ Loading configuration…'
-                                : '👁 Open deployed version preview'}
+                                : ' Open deployed version preview'}
                               placement="top"
                               maxWidth={240}
                               bubbleStyle={{ whiteSpace: 'nowrap' }}
@@ -1733,7 +1733,7 @@ export default function ETLManagementScreen() {
           isOpen={Boolean(deployVersionDialog)}
           title={deployVersionDialog?.title}
           message={deployVersionDialog?.message}
-          icon="🚀"
+          icon=""
           tone="accent"
           cancelLabel="Cancel"
           onCancel={() => setDeployVersionDialog(null)}
@@ -1867,7 +1867,7 @@ export default function ETLManagementScreen() {
         }}>
           {/* Header */}
           <div style={{ padding: '10px 20px 10px', textAlign: 'center', flexShrink: 0 }}>
-            <div style={{ fontSize: 64, marginBottom: 10 }}>🎉</div>
+            <div style={{ fontSize: 64, marginBottom: 10 }}></div>
             <h2 style={{
               fontSize: 26, fontWeight: 800, marginBottom: 8,
               background: 'linear-gradient(135deg,#4f6ef7,#7c3aed)',
@@ -1905,7 +1905,7 @@ export default function ETLManagementScreen() {
           {/* Grafana dashboard card */}
           <Card style={{ width: '100%', maxWidth: 460, textAlign: 'left', marginBottom: 24 }} p="18px 22px">
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--accent)' }}>
-              📊 Grafana Dashboard
+               Grafana Dashboard
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -1928,7 +1928,7 @@ export default function ETLManagementScreen() {
                   transition: 'all 0.2s', whiteSpace: 'nowrap',
                 }}
               >
-                {successCopied ? '✓ Copied' : '📋 Copy'}
+                {successCopied ? '✓ Copied' : ' Copy'}
               </button>
             </div>
             <a
@@ -1945,7 +1945,7 @@ export default function ETLManagementScreen() {
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.color = 'white'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--accent)'; }}
             >
-              🔗 Open in Grafana
+               Open in Grafana
             </a>
           </Card>
 

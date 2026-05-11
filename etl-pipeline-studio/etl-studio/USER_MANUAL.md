@@ -854,7 +854,7 @@ Repositions nodes into a cleaner layout.
 Use this after manually moving nodes or building a larger graph.
 
 ### `⚡ Map All Fields`
-Automatically maps matching fields.
+Automatically maps matching fields whose similarity score is above 70.
 
 Use this for a quick first-pass mapping.
 

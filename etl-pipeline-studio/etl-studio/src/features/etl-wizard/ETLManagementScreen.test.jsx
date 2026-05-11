@@ -422,7 +422,7 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByText('Pricing')).toBeInTheDocument()
     })
 
-    const filterInput = screen.getByPlaceholderText('🔍 Filter deployments...')
+    const filterInput = screen.getByPlaceholderText(' Filter deployments...')
     await user.type(filterInput, 'ERP running')
 
     await waitFor(() => {
@@ -588,7 +588,7 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByText('Inventory')).toBeInTheDocument()
     })
 
-    const filterInput = screen.getByPlaceholderText('🔍 Filter deployments...')
+    const filterInput = screen.getByPlaceholderText(' Filter deployments...')
     await user.type(filterInput, 'ERP deleted')
 
     await waitFor(() => {
@@ -608,7 +608,7 @@ describe('ETLManagementScreen table layout stability', () => {
       expect(screen.getByText('Pricing')).toBeInTheDocument()
     })
 
-    const filterInput = screen.getByPlaceholderText('🔍 Filter deployments...')
+    const filterInput = screen.getByPlaceholderText(' Filter deployments...')
     await user.type(filterInput, '13 mar 2026')
 
     await waitFor(() => {
@@ -1010,7 +1010,7 @@ describe('ETLManagementScreen table layout stability', () => {
     await user.hover(savedVersionButton)
 
     const savedTooltip = await screen.findByRole('tooltip')
-    expect(savedTooltip).toHaveTextContent('👁 Open saved version preview')
+    expect(savedTooltip).toHaveTextContent(' Open saved version preview')
     expect(savedTooltip).toHaveStyle({
       bottom: 'calc(100% + 8px)',
       left: '50%',
@@ -1026,7 +1026,7 @@ describe('ETLManagementScreen table layout stability', () => {
     await user.hover(deployedVersionButton)
 
     const deployedTooltip = await screen.findByRole('tooltip')
-    expect(deployedTooltip).toHaveTextContent('👁 Open deployed version preview')
+    expect(deployedTooltip).toHaveTextContent(' Open deployed version preview')
     expect(deployedTooltip).toHaveStyle({
       bottom: 'calc(100% + 8px)',
       left: '50%',

@@ -386,7 +386,7 @@ describe('SummaryStep save draft behavior', () => {
 
     render(<SummaryStep />)
 
-    expect(screen.queryByText('📦 Schema')).not.toBeInTheDocument()
+    expect(screen.queryByText(' Schema')).not.toBeInTheDocument()
     expect(screen.queryByText('inputSchema:')).not.toBeInTheDocument()
     expect(screen.queryByText('outputSchema:')).not.toBeInTheDocument()
 

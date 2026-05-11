@@ -973,6 +973,39 @@ describe('FieldMappingStep transformer modal regression', () => {
     confirmSpy.mockRestore()
   })
 
+  it('maps only field pairs whose similarity score is strictly higher than 70', async () => {
+    const user = userEvent.setup()
+
+    renderWithPersistedMappings(
+      [],
+      {
+        schema: [
+          { id: 'productName', name: 'productName', path: 'productName', type: 'string' },
+          { id: 'abOrder', name: 'abOrder', path: 'abOrder', type: 'string' },
+        ],
+        fileName: 'sample.json',
+        fileType: 'application/json',
+        fileSize: 123,
+      },
+      [
+        { id: 'name', name: 'name', path: 'name', type: 'string', required: false },
+        { id: 'abValue', name: 'abValue', path: 'abValue', type: 'string', required: false },
+      ],
+    )
+
+    await user.click(screen.getByRole('button', { name: '⚡ Map All Fields' }))
+
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem(WIZARD_STORAGE_KEY) || '{}')
+      expect(persisted.mappings).toEqual([
+        expect.objectContaining({
+          src: 'productName',
+          tgt: 'name',
+        }),
+      ])
+    })
+  })
+
   it('opens the target field context menu on right click and persists Saknay/expression edits', async () => {
     const user = userEvent.setup()
 
